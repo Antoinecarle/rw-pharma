@@ -10,7 +10,7 @@ import {
 import { CheckCircle, ArrowRight, BarChart3, Truck, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useState } from 'react'
-import ConfirmDialog from '@/components/ConfirmDialog'
+import FinalAllocationConfirmationModal from '@/components/allocations/FinalAllocationConfirmationModal'
 import type { MonthlyProcess, Allocation } from '@/types/database'
 
 interface AllocationReviewStepProps {
@@ -75,6 +75,20 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
       existing.totalQty += a.allocated_quantity
     } else {
       wholesalerSummary.set(key, { name: w?.name ?? '', code: w?.code ?? '?', count: 1, totalQty: a.allocated_quantity })
+    }
+  }
+
+  // Group by customer
+  const customerSummary = new Map<string, { name: string; code: string; count: number; totalQty: number }>()
+  for (const a of allocations ?? []) {
+    const key = a.customer_id
+    const c = a.customer as unknown as { name: string; code: string } | undefined
+    const existing = customerSummary.get(key)
+    if (existing) {
+      existing.count++
+      existing.totalQty += a.allocated_quantity
+    } else {
+      customerSummary.set(key, { name: c?.name ?? '', code: c?.code ?? '?', count: 1, totalQty: a.allocated_quantity })
     }
   }
 
@@ -216,16 +230,19 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         </div>
       )}
 
-      <ConfirmDialog
+      <FinalAllocationConfirmationModal
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Confirmer les allocations ?"
-        description={`${proposedCount} allocations seront confirmees. Le taux de couverture est de ${fulfillmentRate}%.`}
+        proposedCount={proposedCount}
+        totalAllocations={allocations?.length ?? 0}
+        totalRequested={totalRequested}
+        totalAllocated={totalAllocated}
+        fulfillmentRate={fulfillmentRate}
+        wholesalerSummary={[...wholesalerSummary.values()]}
+        customerSummary={[...customerSummary.values()]}
         onConfirm={() => confirmMut.mutate()}
+        onBack={() => { setConfirmOpen(false); onBack?.() }}
         loading={confirmMut.isPending}
-        variant="default"
-        confirmLabel="Confirmer les allocations"
-        loadingLabel="Confirmation..."
       />
     </div>
   )

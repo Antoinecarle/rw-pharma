@@ -20,6 +20,7 @@ import {
 import { Plus, Pencil, Trash2, Search, ClipboardList, Calendar, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import ProductCombobox from '@/components/quotas/ProductCombobox'
 
 const PAGE_SIZE = 50
 
@@ -192,13 +193,6 @@ export default function QuotasPage() {
     d.setDate(1)
     return d.toISOString().slice(0, 10)
   })
-
-  const [productSearch, setProductSearch] = useState('')
-  const filteredProducts = products?.filter((p) => {
-    if (!productSearch) return true
-    const s = productSearch.toLowerCase()
-    return p.name.toLowerCase().includes(s) || p.cip13.includes(s)
-  }).slice(0, 50)
 
   const currentMonthLabel = new Date(monthFilter).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 
@@ -400,28 +394,11 @@ export default function QuotasPage() {
             </div>
             <div className="space-y-2">
               <Label>Produit *</Label>
-              <Input
-                placeholder="Rechercher un produit (CIP13, nom)..."
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                className="mb-2"
-              />
-              <Select
+              <ProductCombobox
+                products={products ?? []}
                 value={form.product_id}
                 onValueChange={(v) => setForm({ ...form, product_id: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selectionner un produit" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredProducts?.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      <span className="font-mono text-xs text-muted-foreground mr-2">{p.cip13}</span>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
             <div className="space-y-2">
               <Label>Mois *</Label>
