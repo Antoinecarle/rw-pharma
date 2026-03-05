@@ -48,6 +48,13 @@ interface CustomerDocuments {
   notes?: string
 }
 
+interface AllocationPrefs {
+  priority_level?: number
+  max_allocation_pct?: number
+  preferred_expiry_months?: number
+  notes?: string
+}
+
 const emptyCustomer: CustomerInsert = {
   name: '',
   code: null,
@@ -55,6 +62,7 @@ const emptyCustomer: CustomerInsert = {
   contact_email: null,
   is_top_client: false,
   allocation_preferences: {},
+  documents: null,
   excel_column_mapping: {},
   metadata: {},
 }
@@ -82,6 +90,7 @@ export default function CustomersPage() {
   const [editing, setEditing] = useState<Customer | null>(null)
   const [form, setForm] = useState<CustomerInsert>(emptyCustomer)
   const [docs, setDocs] = useState<CustomerDocuments>({})
+  const [prefs, setPrefs] = useState<AllocationPrefs>({})
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   const { data: customers, isLoading } = useQuery({
@@ -101,7 +110,8 @@ export default function CustomersPage() {
     mutationFn: async (c: CustomerInsert & { id?: string }) => {
       const payload = {
         ...c,
-        metadata: { ...c.metadata, documents: docs },
+        documents: docs,
+        allocation_preferences: prefs,
       }
       if (c.id) {
         const { id, ...rest } = payload
@@ -136,6 +146,7 @@ export default function CustomersPage() {
     setEditing(null)
     setForm(emptyCustomer)
     setDocs({})
+    setPrefs({})
     setDialogOpen(true)
   }
 
@@ -148,10 +159,12 @@ export default function CustomersPage() {
       contact_email: c.contact_email,
       is_top_client: c.is_top_client,
       allocation_preferences: c.allocation_preferences,
+      documents: c.documents,
       excel_column_mapping: c.excel_column_mapping,
       metadata: c.metadata,
     })
-    setDocs((c.metadata as Record<string, unknown>)?.documents as CustomerDocuments ?? {})
+    setDocs((c.documents as CustomerDocuments) ?? (c.metadata as Record<string, unknown>)?.documents as CustomerDocuments ?? {})
+    setPrefs((c.allocation_preferences as AllocationPrefs) ?? {})
     setDialogOpen(true)
   }
 
@@ -163,7 +176,7 @@ export default function CustomersPage() {
   const countryName = (code: string | null) => COUNTRIES.find(c => c.code === code)?.name ?? code ?? '-'
 
   const hasDocuments = (c: Customer) => {
-    const d = (c.metadata as Record<string, unknown>)?.documents as CustomerDocuments | undefined
+    const d = (c.documents as CustomerDocuments | null) ?? (c.metadata as Record<string, unknown>)?.documents as CustomerDocuments | undefined
     return d && (d.wda_number || d.gdp_number)
   }
 
@@ -302,9 +315,10 @@ export default function CustomersPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <Tabs defaultValue="general" className="space-y-4">
-              <TabsList className="w-full grid grid-cols-2">
+              <TabsList className="w-full grid grid-cols-3">
                 <TabsTrigger value="general">General</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
+                <TabsTrigger value="preferences">Preferences</TabsTrigger>
               </TabsList>
 
               <TabsContent value="general" className="space-y-4">
@@ -425,6 +439,70 @@ export default function CustomersPage() {
                     onChange={(e) => setDocs({ ...docs, notes: e.target.value || undefined })}
                     placeholder="Notes sur le client..."
                     rows={3}
+                  />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="preferences" className="space-y-4">
+                <div className="rounded-lg border border-dashed p-4 bg-muted/30">
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Star className="h-4 w-4" />
+                    Preferences d'allocation (priorite, limites, expiry minimum)
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Niveau de priorite (1-5)</Label>
+                  <div className="flex items-center gap-2">
+                    {[1, 2, 3, 4, 5].map(level => (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() => setPrefs({ ...prefs, priority_level: level })}
+                        className={`w-9 h-9 rounded-md text-sm font-medium border transition-colors ${
+                          (prefs.priority_level ?? 3) === level
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-border hover:bg-muted'
+                        }`}
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">1 = haute priorite, 5 = basse priorite</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>% max du stock alloue</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={prefs.max_allocation_pct ?? ''}
+                        onChange={(e) => setPrefs({ ...prefs, max_allocation_pct: e.target.value ? Number(e.target.value) : undefined })}
+                        placeholder="Ex: 30"
+                      />
+                      <span className="text-sm text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Expiry minimum (mois)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={prefs.preferred_expiry_months ?? ''}
+                      onChange={(e) => setPrefs({ ...prefs, preferred_expiry_months: e.target.value ? Number(e.target.value) : undefined })}
+                      placeholder="Ex: 6"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Notes d'allocation</Label>
+                  <Textarea
+                    value={prefs.notes ?? ''}
+                    onChange={(e) => setPrefs({ ...prefs, notes: e.target.value || undefined })}
+                    placeholder="Notes specifiques pour l'allocation..."
+                    rows={2}
                   />
                 </div>
               </TabsContent>

@@ -18,6 +18,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Pencil, Trash2, ShieldAlert, FileSpreadsheet, Pill, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import ExcelImport from '@/components/ExcelImport'
@@ -33,6 +34,7 @@ const emptyProduct: ProductInsert = {
   pfht: null,
   laboratory: null,
   is_ansm_blocked: false,
+  expiry_dates: null,
   metadata: {},
 }
 
@@ -65,6 +67,7 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductInsert>(emptyProduct)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [expiryText, setExpiryText] = useState('')
 
   const { data: products, isLoading } = useQuery({
     queryKey: ['products', search, labFilter, ansm, page],
@@ -139,6 +142,7 @@ export default function ProductsPage() {
   const openCreate = () => {
     setEditing(null)
     setForm(emptyProduct)
+    setExpiryText('')
     setDialogOpen(true)
   }
 
@@ -152,14 +156,23 @@ export default function ProductsPage() {
       pfht: p.pfht,
       laboratory: p.laboratory,
       is_ansm_blocked: p.is_ansm_blocked,
+      expiry_dates: p.expiry_dates,
       metadata: p.metadata,
     })
+    setExpiryText(Array.isArray(p.expiry_dates) ? p.expiry_dates.join(', ') : '')
     setDialogOpen(true)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    upsert.mutate(editing ? { ...form, id: editing.id } : form)
+    const parsedExpiry = expiryText.trim()
+      ? expiryText.split(/[,\n]+/).map(d => d.trim()).filter(Boolean).map(d => {
+          const mmYyyy = d.match(/^(\d{2})\/(\d{4})$/)
+          return mmYyyy ? `${mmYyyy[2]}-${mmYyyy[1]}` : d
+        })
+      : null
+    const payload = { ...form, expiry_dates: parsedExpiry }
+    upsert.mutate(editing ? { ...payload, id: editing.id } : payload)
   }
 
   const totalPages = Math.ceil((products?.count ?? 0) / PAGE_SIZE)
@@ -406,6 +419,16 @@ export default function ProductsPage() {
                 onChange={(e) => setForm({ ...form, eunb: e.target.value || null })}
                 className="font-mono"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Dates d'expiration</Label>
+              <Textarea
+                value={expiryText}
+                onChange={(e) => setExpiryText(e.target.value)}
+                placeholder="2025-06, 2025-09 ou 06/2025, 09/2025"
+                rows={2}
+              />
+              <p className="text-xs text-muted-foreground">Format : YYYY-MM ou MM/YYYY, separes par virgules</p>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">

@@ -34,6 +34,7 @@ export interface Product {
   pfht: number | null
   laboratory: string | null
   is_ansm_blocked: boolean
+  expiry_dates: string[] | null
   metadata: Record<string, unknown>
   created_at: string
   updated_at: string
@@ -78,6 +79,7 @@ export interface Customer {
   contact_email: string | null
   is_top_client: boolean
   allocation_preferences: Record<string, unknown>
+  documents: Record<string, unknown> | null
   excel_column_mapping: Record<string, unknown>
   metadata: Record<string, unknown>
   created_at: string
