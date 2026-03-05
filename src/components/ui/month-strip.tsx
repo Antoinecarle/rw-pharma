@@ -31,9 +31,6 @@ export default function MonthStrip({ value, onChange, months, className = '' }: 
     return new Date(m).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' })
   }
 
-  const formatMonthFull = (m: string) => {
-    return new Date(m).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
-  }
 
   return (
     <div className={`flex items-center gap-1 ${className}`}>

@@ -27,14 +27,14 @@ const emptyWholesaler: WholesalerInsert = {
 
 function CardSkeleton() {
   return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start gap-4">
-          <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
+    <Card className="border-border/60">
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
           <div className="flex-1 space-y-2">
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-3.5 w-20" />
+            <Skeleton className="h-3.5 w-36" />
           </div>
         </div>
       </CardContent>
@@ -42,12 +42,12 @@ function CardSkeleton() {
   )
 }
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 20 },
+const cardVariants: import('framer-motion').Variants = {
+  hidden: { opacity: 0, y: 12 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.06, type: 'spring', stiffness: 300, damping: 25 },
+    transition: { delay: i * 0.04, duration: 0.25 },
   }),
 }
 
@@ -133,60 +133,49 @@ export default function WholesalersPage() {
   const driveUrlValid = !form.drive_folder_url || isValidUrl(form.drive_folder_url)
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-5 max-w-7xl mx-auto animate-fade-in">
+    <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-6xl mx-auto animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <motion.div
-            className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center"
-            whileHover={{ scale: 1.1, rotate: 5 }}
-            transition={{ type: 'spring', stiffness: 400 }}
-          >
-            <Truck className="h-5 w-5 text-blue-600" />
-          </motion.div>
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
+            <Truck className="h-4 w-4 text-blue-600" />
+          </div>
           <div>
-            <h2 className="text-xl md:text-2xl font-bold">Grossistes</h2>
-            <p className="text-sm text-muted-foreground">{wholesalers?.length ?? 0} grossistes francais partenaires</p>
+            <h2 className="text-lg md:text-xl font-semibold tracking-tight">Grossistes</h2>
+            <p className="text-[12px] text-muted-foreground">{wholesalers?.length ?? 0} partenaires francais</p>
           </div>
         </div>
-        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-          <Button onClick={openCreate} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Ajouter
-          </Button>
-        </motion.div>
+        <Button size="sm" onClick={openCreate} className="gap-1.5 text-[13px] h-8">
+          <Plus className="h-3.5 w-3.5" />
+          Ajouter
+        </Button>
       </div>
 
-      {/* Cards grid */}
+      {/* Cards */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
       ) : !wholesalers?.length ? (
-        <Card>
-          <CardContent className="flex flex-col items-center py-16 gap-3">
-            <motion.div
-              className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center"
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
-            >
-              <Building2 className="h-8 w-8 text-muted-foreground" />
-            </motion.div>
+        <Card className="border-border/60">
+          <CardContent className="flex flex-col items-center py-14 gap-2.5">
+            <div className="h-12 w-12 rounded-xl bg-muted/50 flex items-center justify-center">
+              <Building2 className="h-6 w-6 text-muted-foreground/50" />
+            </div>
             <div className="text-center">
-              <p className="font-semibold">Aucun grossiste</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Ajoutez vos grossistes francais partenaires (Alliance, CERP, OCP...)
+              <p className="font-medium text-[13px]">Aucun grossiste</p>
+              <p className="text-[12px] text-muted-foreground mt-0.5">
+                Ajoutez vos grossistes francais (Alliance, CERP, OCP...)
               </p>
             </div>
-            <Button size="sm" onClick={openCreate} className="mt-2 gap-1.5">
-              <Plus className="h-4 w-4" />
+            <Button size="sm" onClick={openCreate} className="mt-1 gap-1.5 text-[12px] h-7">
+              <Plus className="h-3 w-3" />
               Ajouter un grossiste
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <AnimatePresence mode="popLayout">
             {wholesalers.map((w, i) => (
               <motion.div
@@ -195,67 +184,61 @@ export default function WholesalersPage() {
                 variants={cardVariants}
                 initial="hidden"
                 animate="visible"
-                exit={{ opacity: 0, scale: 0.95 }}
+                exit={{ opacity: 0, scale: 0.97 }}
                 layout
-                whileHover={{ y: -4 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               >
-                <Card className="group hover:shadow-lg hover:shadow-black/5 transition-shadow duration-300">
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-4">
-                      <motion.div
-                        className="h-11 w-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm"
-                        whileHover={{ rotate: 10 }}
-                      >
-                        <Truck className="h-5 w-5 text-white" />
-                      </motion.div>
+                <Card className="group hover:shadow-md hover:shadow-black/[0.03] transition-all duration-200 border-border/60 hover:border-border">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                        <Truck className="h-4 w-4 text-blue-600" />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold truncate">{w.name}</h3>
+                          <h3 className="font-medium text-[13px] truncate">{w.name}</h3>
                           {w.code && (
-                            <Badge variant="secondary" className="font-mono text-xs shrink-0">{w.code}</Badge>
+                            <Badge variant="secondary" className="font-mono text-[10px] h-5 px-1.5 shrink-0">{w.code}</Badge>
                           )}
                         </div>
 
-                        <div className="mt-2 space-y-1.5">
+                        <div className="mt-2 space-y-1">
                           {w.contact_email && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Mail className="h-3.5 w-3.5 shrink-0" />
+                            <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                              <Mail className="h-3 w-3 shrink-0" />
                               <span className="truncate">{w.contact_email}</span>
                             </div>
                           )}
                           {w.drive_folder_url && (
-                            <motion.a
+                            <a
                               href={w.drive_folder_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-sm text-primary hover:underline group/link"
-                              whileHover={{ x: 2 }}
+                              className="flex items-center gap-1.5 text-[12px] text-primary hover:underline group/link"
                             >
-                              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                              <FolderOpen className="h-3 w-3 shrink-0" />
                               Google Drive
-                              <ExternalLink className="h-3 w-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
-                            </motion.a>
+                              <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                            </a>
                           )}
                           {!w.contact_email && !w.drive_folder_url && (
-                            <p className="text-sm text-muted-foreground italic">Aucun contact configure</p>
+                            <p className="text-[12px] text-muted-foreground/50 italic">Aucun contact</p>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(w)}>
-                              <Pencil className="h-3.5 w-3.5" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(w)}>
+                              <Pencil className="h-3 w-3" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>Modifier</TooltipContent>
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(w.id)}>
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteId(w.id)}>
+                              <Trash2 className="h-3 w-3 text-destructive" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>Supprimer</TooltipContent>
@@ -270,83 +253,78 @@ export default function WholesalersPage() {
         </div>
       )}
 
-      {/* Create/Edit Dialog */}
+      {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                <Truck className="h-4 w-4 text-blue-600" />
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <div className="h-7 w-7 rounded-md bg-blue-50 flex items-center justify-center">
+                <Truck className="h-3.5 w-3.5 text-blue-600" />
               </div>
               {editing ? 'Modifier le grossiste' : 'Nouveau grossiste'}
             </DialogTitle>
-            <DialogDescription>
-              {editing ? 'Modifiez les informations du grossiste' : 'Ajoutez un nouveau grossiste francais partenaire'}
+            <DialogDescription className="text-[13px]">
+              {editing ? 'Modifiez les informations du grossiste' : 'Ajoutez un nouveau grossiste francais'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Nom *</Label>
+          <form onSubmit={handleSubmit} className="space-y-3.5">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-[13px]">Nom *</Label>
                 <Input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="Alliance Healthcare"
                   required
+                  className="text-[13px] h-9"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Code</Label>
+              <div className="space-y-1.5">
+                <Label className="text-[13px]">Code</Label>
                 <Input
                   value={form.code ?? ''}
                   onChange={(e) => setForm({ ...form, code: e.target.value || null })}
                   placeholder="AHC"
-                  className="font-mono uppercase"
+                  className="font-mono uppercase text-[13px] h-9"
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Email de contact</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[13px]">Email de contact</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
                 <Input
                   type="email"
                   value={form.contact_email ?? ''}
                   onChange={(e) => setForm({ ...form, contact_email: e.target.value || null })}
                   placeholder="contact@grossiste.fr"
-                  className="pl-9"
+                  className="pl-9 text-[13px] h-9"
                 />
               </div>
             </div>
-
-            {/* URL input with validation preview */}
-            <div className="space-y-2">
-              <Label>URL Google Drive</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[13px]">URL Google Drive</Label>
               <div className="relative">
-                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
                 <Input
                   value={form.drive_folder_url ?? ''}
                   onChange={(e) => setForm({ ...form, drive_folder_url: e.target.value || null })}
                   placeholder="https://drive.google.com/..."
-                  className={`pl-9 pr-10 ${form.drive_folder_url && !driveUrlValid ? 'border-red-300 focus-visible:ring-red-400' : ''}`}
+                  className={`pl-9 pr-10 text-[13px] h-9 ${form.drive_folder_url && !driveUrlValid ? 'border-red-300 focus-visible:ring-red-400' : ''}`}
                 />
                 {form.drive_folder_url && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
                     {driveUrlValid ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                     ) : (
-                      <span className="text-xs text-red-500 font-medium">URL invalide</span>
+                      <span className="text-[10px] text-red-500 font-medium">Invalide</span>
                     )}
                   </div>
                 )}
               </div>
               {form.drive_folder_url && driveUrlValid && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2"
-                >
-                  <FolderOpen className="h-3.5 w-3.5 text-primary shrink-0" />
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/30 rounded-md px-2.5 py-1.5">
+                  <FolderOpen className="h-3 w-3 text-primary shrink-0" />
                   <span className="truncate">{form.drive_folder_url}</span>
                   <a
                     href={form.drive_folder_url}
@@ -356,15 +334,14 @@ export default function WholesalersPage() {
                   >
                     Ouvrir
                   </a>
-                </motion.div>
+                </div>
               )}
             </div>
-
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+              <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px]">
                 Annuler
               </Button>
-              <Button type="submit" disabled={upsert.isPending}>
+              <Button type="submit" size="sm" disabled={upsert.isPending} className="text-[13px]">
                 {upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Creer'}
               </Button>
             </DialogFooter>
@@ -376,7 +353,7 @@ export default function WholesalersPage() {
         open={!!deleteId}
         onOpenChange={() => setDeleteId(null)}
         title="Supprimer le grossiste"
-        description="Cette action est irreversible. Le grossiste et ses quotas associes seront supprimes."
+        description="Cette action est irreversible. Le grossiste et ses quotas seront supprimes."
         onConfirm={() => deleteId && deleteMut.mutate(deleteId)}
         loading={deleteMut.isPending}
       />

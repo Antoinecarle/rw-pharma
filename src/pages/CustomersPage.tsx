@@ -74,7 +74,7 @@ function daysUntil(dateStr: string): number {
   return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-function ExpiryCountdown({ date, label }: { date: string; label: string }) {
+function ExpiryCountdown({ date, label: _label }: { date: string; label: string }) {
   const days = daysUntil(date)
   const isExpired = days < 0
   const isWarning = days >= 0 && days <= 90
@@ -129,12 +129,12 @@ function CardSkeleton() {
   )
 }
 
-const cardVariants = {
+const cardVariants: import('framer-motion').Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.06, type: 'spring', stiffness: 300, damping: 25 },
+    transition: { delay: i * 0.06, type: 'spring' as const, stiffness: 300, damping: 25 },
   }),
 }
 

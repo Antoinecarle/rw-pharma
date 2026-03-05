@@ -38,13 +38,13 @@ interface EditState {
   value: string
 }
 
-const cardVariants = {
+const cardVariants: import('framer-motion').Variants = {
   hidden: { opacity: 0, y: 15, scale: 0.97 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { delay: i * 0.08, type: 'spring', stiffness: 300, damping: 25 },
+    transition: { delay: i * 0.08, type: 'spring' as const, stiffness: 300, damping: 25 },
   }),
 }
 
