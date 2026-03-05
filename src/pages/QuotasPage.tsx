@@ -41,9 +41,9 @@ function TableSkeleton() {
   ))}</>)
 }
 
-const rowVariants = {
+const rowVariants: import('framer-motion').Variants = {
   hidden: { opacity: 0, x: -8 },
-  visible: (i: number) => ({ opacity: 1, x: 0, transition: { delay: i * 0.025, duration: 0.25, ease: [0.2, 0.9, 0.2, 1] } }),
+  visible: (i: number) => ({ opacity: 1, x: 0, transition: { delay: i * 0.025, duration: 0.25, ease: [0.2, 0.9, 0.2, 1] as [number, number, number, number] } }),
 }
 
 export default function QuotasPage() {
