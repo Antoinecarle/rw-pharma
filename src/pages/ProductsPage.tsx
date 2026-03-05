@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Product, ProductInsert } from '@/types/database'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import TagInput from '@/components/ui/tag-input'
-import { Plus, Search, Pencil, Trash2, ShieldAlert, FileSpreadsheet, Pill, Package, X } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, ShieldAlert, FileSpreadsheet, Pill, Package, X, TrendingUp, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import ExcelImport from '@/components/ExcelImport'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -42,18 +42,27 @@ function TableSkeleton() {
   return (
     <>
       {Array.from({ length: 8 }).map((_, i) => (
-        <TableRow key={i}>
-          <TableCell><Skeleton className="h-3.5 w-24" /></TableCell>
-          <TableCell><Skeleton className="h-3.5 w-36" /></TableCell>
-          <TableCell className="hidden md:table-cell"><Skeleton className="h-3.5 w-20" /></TableCell>
-          <TableCell><Skeleton className="h-3.5 w-14" /></TableCell>
-          <TableCell className="hidden lg:table-cell"><Skeleton className="h-3.5 w-16" /></TableCell>
-          <TableCell><Skeleton className="h-3.5 w-12" /></TableCell>
-          <TableCell><Skeleton className="h-3.5 w-14" /></TableCell>
+        <TableRow key={i} className="border-b border-dashed" style={{ borderColor: 'rgba(0,0,0,0.04)' }}>
+          <TableCell><Skeleton className="h-4 w-28 rounded-md" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-40 rounded-md" /></TableCell>
+          <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-24 rounded-md" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-16 rounded-md" /></TableCell>
+          <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-20 rounded-md" /></TableCell>
+          <TableCell><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-14 rounded-md" /></TableCell>
         </TableRow>
       ))}
     </>
   )
+}
+
+const rowVariants = {
+  hidden: { opacity: 0, x: -8 },
+  visible: (i: number) => ({
+    opacity: 1,
+    x: 0,
+    transition: { delay: i * 0.025, duration: 0.3, ease: [0.2, 0.9, 0.2, 1] as [number, number, number, number] },
+  }),
 }
 
 export default function ProductsPage() {
@@ -171,78 +180,147 @@ export default function ProductsPage() {
 
   const topLabs = (laboratories ?? []).slice(0, 8)
   const totalPages = Math.ceil((products?.count ?? 0) / PAGE_SIZE)
+  const catalogProgress = products?.count ? Math.min((products.count / 1760) * 100, 100) : 0
 
   return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-6xl mx-auto animate-fade-in">
+    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1200px] mx-auto ivory-page-glow">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center">
-            <Pill className="h-4 w-4 text-emerald-600" />
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="relative z-10"
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm"
+              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(13,148,136,0.08))' }}>
+              <Pill className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
+            </div>
+            <div>
+              <h2 className="ivory-heading text-xl md:text-2xl">Catalogue produits</h2>
+              <div className="flex items-center gap-3 mt-0.5">
+                <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
+                  {products?.count ?? 0} references pharmaceutiques
+                </p>
+                {products?.count != null && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.04)' }}>
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ background: 'linear-gradient(90deg, var(--ivory-accent), var(--ivory-teal))' }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${catalogProgress}%` }}
+                        transition={{ duration: 1.2, ease: 'easeOut', delay: 0.3 }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-medium tabular-nums" style={{ color: 'var(--ivory-accent)' }}>
+                      {catalogProgress.toFixed(0)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg md:text-xl font-semibold tracking-tight">Produits</h2>
-            <p className="text-[12px] text-muted-foreground">{products?.count ?? 0} produits au catalogue</p>
+          <div className="flex gap-2.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setImportOpen(true)}
+              className="gap-1.5 text-[13px] h-9 rounded-xl border-dashed hover:border-solid transition-all"
+              style={{ borderColor: 'rgba(0,0,0,0.10)' }}
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Import Excel</span>
+            </Button>
+            <Button
+              size="sm"
+              onClick={openCreate}
+              className="gap-1.5 text-[13px] h-9 rounded-xl shadow-sm"
+              style={{ background: 'linear-gradient(180deg, var(--ivory-accent), var(--ivory-accent-hover))', color: 'white' }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Ajouter
+            </Button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="gap-1.5 text-[13px] h-8">
-            <FileSpreadsheet className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Import Excel</span>
-          </Button>
-          <Button size="sm" onClick={openCreate} className="gap-1.5 text-[13px] h-8">
-            <Plus className="h-3.5 w-3.5" />
-            Ajouter
-          </Button>
+      </motion.div>
+
+      {/* Stats bar */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+        className="flex gap-3 flex-wrap relative z-10"
+      >
+        <div className="ivory-stat-pill">
+          <TrendingUp className="h-3.5 w-3.5" style={{ color: 'var(--ivory-teal)' }} />
+          <span className="text-[12px] font-medium" style={{ color: 'var(--ivory-text-body)' }}>
+            <span className="font-bold tabular-nums">{products?.count ?? 0}</span> / 1 760
+          </span>
         </div>
-      </div>
+        {(products?.count ?? 0) > 0 && (
+          <div className="ivory-stat-pill">
+            <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+            <span className="text-[12px] font-medium" style={{ color: 'var(--ivory-text-body)' }}>
+              ANSM bloques
+            </span>
+          </div>
+        )}
+      </motion.div>
 
       {/* Filters */}
-      <div className="space-y-2.5">
-        <div className="flex gap-2.5 items-center flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.15 }}
+        className="space-y-3 relative z-10"
+      >
+        <div className="flex gap-3 items-center flex-wrap">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: 'var(--ivory-text-muted)' }} />
             <Input
               placeholder="Rechercher par CIP13, nom, labo..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0) }}
-              className="pl-9 h-9 text-[13px]"
+              className="pl-10 h-10 text-[13px] rounded-xl bg-white"
+              style={{ border: '1px solid rgba(0,0,0,0.08)', boxShadow: 'var(--ivory-shadow-sm)' }}
             />
           </div>
-          <div className="flex rounded-lg border border-border/80 overflow-hidden">
+          <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.08)', boxShadow: 'var(--ivory-shadow-sm)' }}>
             <button
               type="button"
               onClick={() => { setAnsm(false); setPage(0) }}
-              className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-                !ansm ? 'bg-foreground text-background' : 'hover:bg-muted text-muted-foreground'
-              }`}
+              className="px-3.5 py-2 text-[12px] font-medium transition-all"
+              style={{
+                background: !ansm ? 'var(--ivory-accent)' : 'white',
+                color: !ansm ? 'white' : 'var(--ivory-text-muted)',
+              }}
             >
               Tous
             </button>
             <button
               type="button"
               onClick={() => { setAnsm(true); setPage(0) }}
-              className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors flex items-center gap-1 ${
-                ansm ? 'bg-destructive text-destructive-foreground' : 'hover:bg-muted text-muted-foreground'
-              }`}
+              className="px-3.5 py-2 text-[12px] font-medium transition-all flex items-center gap-1.5"
+              style={{
+                background: ansm ? '#DC4A4A' : 'white',
+                color: ansm ? 'white' : 'var(--ivory-text-muted)',
+              }}
             >
-              <ShieldAlert className="h-3 w-3" />
+              <ShieldAlert className="h-3.5 w-3.5" />
               ANSM
             </button>
           </div>
         </div>
 
         {topLabs.length > 0 && (
-          <div className="flex gap-1 items-center flex-wrap">
-            <span className="text-[11px] text-muted-foreground/70 mr-0.5">Labos :</span>
+          <div className="flex gap-1.5 items-center flex-wrap">
+            <span className="text-[11px] font-medium mr-1" style={{ color: 'var(--ivory-text-muted)' }}>Labos</span>
             <button
               type="button"
               onClick={() => { setLabFilter('all'); setPage(0) }}
-              className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all ${
-                labFilter === 'all'
-                  ? 'bg-foreground text-background'
-                  : 'hover:bg-muted text-muted-foreground'
-              }`}
+              className={`ivory-chip ${labFilter === 'all' ? 'active' : ''}`}
             >
               Tous
             </button>
@@ -251,19 +329,15 @@ export default function ProductsPage() {
                 key={lab}
                 type="button"
                 onClick={() => { setLabFilter(labFilter === lab ? 'all' : lab); setPage(0) }}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all ${
-                  labFilter === lab
-                    ? 'bg-foreground text-background'
-                    : 'hover:bg-muted text-muted-foreground'
-                }`}
+                className={`ivory-chip ${labFilter === lab ? 'active' : ''}`}
               >
                 {lab}
-                {labFilter === lab && <X className="h-2.5 w-2.5 ml-0.5 inline" />}
+                {labFilter === lab && <X className="h-2.5 w-2.5" />}
               </button>
             ))}
             {(laboratories?.length ?? 0) > 8 && (
               <Select value={labFilter} onValueChange={(v) => { setLabFilter(v); setPage(0) }}>
-                <SelectTrigger className="h-6 w-auto border-dashed text-[11px] gap-1 px-2">
+                <SelectTrigger className="h-7 w-auto border-dashed text-[11px] gap-1 px-2.5 rounded-full">
                   <SelectValue placeholder={`+${(laboratories?.length ?? 0) - 8}`} />
                 </SelectTrigger>
                 <SelectContent>
@@ -276,20 +350,26 @@ export default function ProductsPage() {
             )}
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* Table */}
-      <div className="border border-border/60 rounded-lg overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="ivory-glass overflow-hidden relative z-10"
+        style={{ padding: 0 }}
+      >
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/30 hover:bg-muted/30">
-              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">CIP13</TableHead>
-              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Nom</TableHead>
-              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground hidden md:table-cell">Laboratoire</TableHead>
-              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">PFHT</TableHead>
-              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground hidden lg:table-cell">EUNB</TableHead>
-              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Statut</TableHead>
-              <TableHead className="w-16"></TableHead>
+            <TableRow className="hover:bg-transparent" style={{ background: 'rgba(248,247,244,0.8)' }}>
+              <TableHead className="ivory-table-head py-3.5 px-4">CIP13</TableHead>
+              <TableHead className="ivory-table-head py-3.5">Nom</TableHead>
+              <TableHead className="ivory-table-head py-3.5 hidden md:table-cell">Laboratoire</TableHead>
+              <TableHead className="ivory-table-head py-3.5">PFHT</TableHead>
+              <TableHead className="ivory-table-head py-3.5 hidden lg:table-cell">EUNB</TableHead>
+              <TableHead className="ivory-table-head py-3.5">Statut</TableHead>
+              <TableHead className="w-20"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -297,92 +377,151 @@ export default function ProductsPage() {
               <TableSkeleton />
             ) : !products?.data.length ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-14">
-                  <div className="flex flex-col items-center gap-2.5">
-                    <div className="h-12 w-12 rounded-xl bg-muted/50 flex items-center justify-center">
-                      <Package className="h-6 w-6 text-muted-foreground/50" />
+                <TableCell colSpan={7} className="text-center py-20">
+                  <motion.div
+                    className="flex flex-col items-center gap-3"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <div className="h-16 w-16 rounded-2xl flex items-center justify-center"
+                      style={{ background: 'rgba(124,92,191,0.06)' }}>
+                      <Package className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} />
                     </div>
                     <div>
-                      <p className="font-medium text-[13px] text-foreground">Aucun produit trouve</p>
-                      <p className="text-[12px] text-muted-foreground mt-0.5">
+                      <p className="ivory-heading text-[14px]">Aucun produit trouve</p>
+                      <p className="text-[12px] mt-1" style={{ color: 'var(--ivory-text-muted)' }}>
                         Ajoutez des produits ou importez un fichier Excel
                       </p>
                     </div>
-                    <div className="flex gap-2 mt-1">
-                      <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="text-[12px] h-7">
-                        <FileSpreadsheet className="h-3 w-3 mr-1" />
+                    <div className="flex gap-2.5 mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setImportOpen(true)}
+                        className="text-[12px] h-8 rounded-xl"
+                      >
+                        <FileSpreadsheet className="h-3 w-3 mr-1.5" />
                         Import Excel
                       </Button>
-                      <Button size="sm" onClick={openCreate} className="text-[12px] h-7">
-                        <Plus className="h-3 w-3 mr-1" />
+                      <Button
+                        size="sm"
+                        onClick={openCreate}
+                        className="text-[12px] h-8 rounded-xl"
+                        style={{ background: 'var(--ivory-accent)', color: 'white' }}
+                      >
+                        <Plus className="h-3 w-3 mr-1.5" />
                         Ajouter
                       </Button>
                     </div>
-                  </div>
+                  </motion.div>
                 </TableCell>
               </TableRow>
             ) : (
-              products.data.map((p) => (
-                <TableRow key={p.id} className="group">
-                  <TableCell className="font-mono text-[12px] text-primary font-medium">{p.cip13}</TableCell>
-                  <TableCell className="text-[13px] font-medium max-w-[200px] truncate">{p.name}</TableCell>
-                  <TableCell className="text-[12px] text-muted-foreground hidden md:table-cell">{p.laboratory ?? '-'}</TableCell>
-                  <TableCell className="tabular-nums text-[12px]">
-                    {p.pfht != null ? (
-                      <span className="font-medium">{p.pfht.toFixed(2)} <span className="text-muted-foreground/60">EUR</span></span>
-                    ) : (
-                      <span className="text-muted-foreground/40">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[12px] text-muted-foreground hidden lg:table-cell font-mono">{p.eunb ?? '-'}</TableCell>
-                  <TableCell>
-                    {p.is_ansm_blocked ? (
-                      <Badge variant="destructive" className="gap-1 text-[10px] h-5 px-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-red-300 animate-subtle-pulse" />
-                        Bloque
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-emerald-700 bg-emerald-50 border-emerald-100 gap-1 text-[10px] h-5 px-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        Actif
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(p)}>
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Modifier</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteId(p.id)}>
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Supprimer</TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+              <AnimatePresence mode="popLayout">
+                {products.data.map((p, i) => (
+                  <motion.tr
+                    key={p.id}
+                    custom={i}
+                    variants={rowVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="group ivory-table-row"
+                  >
+                    <TableCell className="px-4">
+                      <span className="ivory-mono text-[12px] font-medium px-2 py-0.5 rounded-md"
+                        style={{ color: 'var(--ivory-accent)', background: 'rgba(124,92,191,0.06)' }}>
+                        {p.cip13}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-[13px] font-medium max-w-[220px] truncate block"
+                        style={{ color: 'var(--ivory-text-heading)' }}>
+                        {p.name}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <span className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>{p.laboratory ?? '-'}</span>
+                    </TableCell>
+                    <TableCell>
+                      {p.pfht != null ? (
+                        <span className="text-[12px] font-semibold tabular-nums" style={{ color: 'var(--ivory-text-heading)' }}>
+                          {p.pfht.toFixed(2)}
+                          <span className="ml-0.5 font-normal" style={{ color: 'var(--ivory-text-muted)' }}>EUR</span>
+                        </span>
+                      ) : (
+                        <span style={{ color: 'rgba(0,0,0,0.15)' }}>-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <span className="ivory-mono text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>{p.eunb ?? '-'}</span>
+                    </TableCell>
+                    <TableCell>
+                      {p.is_ansm_blocked ? (
+                        <span className="ivory-badge"
+                          style={{ background: 'rgba(220,74,74,0.08)', color: '#DC4A4A', border: '1px solid rgba(220,74,74,0.15)' }}>
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-subtle-pulse inline-block" />
+                          Bloque
+                        </span>
+                      ) : (
+                        <span className="ivory-badge"
+                          style={{ background: 'rgba(13,148,136,0.08)', color: 'var(--ivory-teal)', border: '1px solid rgba(13,148,136,0.12)' }}>
+                          <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ background: 'var(--ivory-teal)' }} />
+                          Actif
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(124,92,191,0.06)]" onClick={() => openEdit(p)}>
+                              <Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Modifier</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50" onClick={() => setDeleteId(p.id)}>
+                              <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Supprimer</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TableCell>
+                  </motion.tr>
+                ))}
+              </AnimatePresence>
             )}
           </TableBody>
         </Table>
-      </div>
+      </motion.div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-[12px] text-muted-foreground">
-            <span className="font-medium text-foreground">{page * PAGE_SIZE + 1}</span>-<span className="font-medium text-foreground">{Math.min((page + 1) * PAGE_SIZE, products?.count ?? 0)}</span> sur <span className="font-medium text-foreground">{products?.count ?? 0}</span>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="flex items-center justify-between relative z-10"
+        >
+          <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
+            <span className="font-semibold" style={{ color: 'var(--ivory-text-heading)' }}>{page * PAGE_SIZE + 1}</span>
+            {' - '}
+            <span className="font-semibold" style={{ color: 'var(--ivory-text-heading)' }}>{Math.min((page + 1) * PAGE_SIZE, products?.count ?? 0)}</span>
+            {' sur '}
+            <span className="font-semibold" style={{ color: 'var(--ivory-text-heading)' }}>{products?.count ?? 0}</span>
           </p>
-          <div className="flex items-center gap-0.5">
-            <Button variant="outline" size="sm" className="h-7 text-[12px]" disabled={page === 0} onClick={() => setPage(page - 1)}>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-[12px] rounded-lg"
+              disabled={page === 0}
+              onClick={() => setPage(page - 1)}
+            >
               Precedent
             </Button>
             {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
@@ -401,27 +540,35 @@ export default function ProductsPage() {
                   key={pageNum}
                   variant={pageNum === page ? 'default' : 'ghost'}
                   size="sm"
-                  className="w-7 h-7 p-0 text-[11px]"
+                  className="w-8 h-8 p-0 text-[12px] rounded-lg"
+                  style={pageNum === page ? { background: 'var(--ivory-accent)', color: 'white' } : {}}
                   onClick={() => setPage(pageNum)}
                 >
                   {pageNum + 1}
                 </Button>
               )
             })}
-            <Button variant="outline" size="sm" className="h-7 text-[12px]" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-[12px] rounded-lg"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage(page + 1)}
+            >
               Suivant
             </Button>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <div className="h-7 w-7 rounded-md bg-primary/8 flex items-center justify-center">
-                <Pill className="h-3.5 w-3.5 text-primary" />
+            <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base">
+              <div className="h-8 w-8 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(124,92,191,0.08)' }}>
+                <Pill className="h-4 w-4" style={{ color: 'var(--ivory-accent)' }} />
               </div>
               {editing ? 'Modifier le produit' : 'Nouveau produit'}
             </DialogTitle>
@@ -429,79 +576,80 @@ export default function ProductsPage() {
               {editing ? 'Modifiez les informations du produit' : 'Remplissez les informations du nouveau produit'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-3.5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-[13px]">CIP13 *</Label>
+                <Label className="text-[13px] font-medium">CIP13 *</Label>
                 <Input
                   value={form.cip13}
                   onChange={(e) => setForm({ ...form, cip13: e.target.value })}
                   placeholder="3400930000000"
                   required
-                  className="font-mono text-[13px] h-9"
+                  className="ivory-mono text-[13px] h-10 rounded-xl"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[13px]">CIP7</Label>
+                <Label className="text-[13px] font-medium">CIP7</Label>
                 <Input
                   value={form.cip7 ?? ''}
                   onChange={(e) => setForm({ ...form, cip7: e.target.value || null })}
                   placeholder="3000000"
-                  className="font-mono text-[13px] h-9"
+                  className="ivory-mono text-[13px] h-10 rounded-xl"
                 />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[13px]">Nom *</Label>
+              <Label className="text-[13px] font-medium">Nom *</Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="Nom du produit"
                 required
-                className="text-[13px] h-9"
+                className="text-[13px] h-10 rounded-xl"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-[13px]">Laboratoire</Label>
+                <Label className="text-[13px] font-medium">Laboratoire</Label>
                 <Input
                   value={form.laboratory ?? ''}
                   onChange={(e) => setForm({ ...form, laboratory: e.target.value || null })}
-                  className="text-[13px] h-9"
+                  className="text-[13px] h-10 rounded-xl"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[13px]">PFHT (EUR)</Label>
+                <Label className="text-[13px] font-medium">PFHT (EUR)</Label>
                 <Input
                   type="number"
                   step="0.01"
                   value={form.pfht ?? ''}
                   onChange={(e) => setForm({ ...form, pfht: e.target.value ? parseFloat(e.target.value) : null })}
-                  className="text-[13px] h-9"
+                  className="text-[13px] h-10 rounded-xl"
                 />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[13px]">EUNB</Label>
+              <Label className="text-[13px] font-medium">EUNB</Label>
               <Input
                 value={form.eunb ?? ''}
                 onChange={(e) => setForm({ ...form, eunb: e.target.value || null })}
-                className="font-mono text-[13px] h-9"
+                className="ivory-mono text-[13px] h-10 rounded-xl"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[13px]">Dates d'expiration</Label>
+              <Label className="text-[13px] font-medium">Dates d'expiration</Label>
               <TagInput
                 value={expiryTags}
                 onChange={setExpiryTags}
                 placeholder="Saisir MM/YYYY puis Entree..."
               />
-              <p className="text-[11px] text-muted-foreground/70">Format : MM/YYYY ou YYYY-MM</p>
+              <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>Format : MM/YYYY ou YYYY-MM</p>
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-border/60 p-3">
+            <div className="flex items-center justify-between rounded-xl p-3.5"
+              style={{ border: '1px solid rgba(0,0,0,0.06)', background: 'rgba(248,247,244,0.5)' }}>
               <div className="space-y-0.5">
-                <Label htmlFor="ansm-switch" className="cursor-pointer text-[13px]">Bloque ANSM</Label>
-                <p className="text-[11px] text-muted-foreground">Interdit a l'export</p>
+                <Label htmlFor="ansm-switch" className="cursor-pointer text-[13px] font-medium">Bloque ANSM</Label>
+                <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>Interdit a l'export</p>
               </div>
               <Switch
                 id="ansm-switch"
@@ -510,10 +658,16 @@ export default function ProductsPage() {
               />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px]">
+              <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">
                 Annuler
               </Button>
-              <Button type="submit" size="sm" disabled={upsert.isPending} className="text-[13px]">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={upsert.isPending}
+                className="text-[13px] rounded-xl"
+                style={{ background: 'var(--ivory-accent)', color: 'white' }}
+              >
                 {upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Creer'}
               </Button>
             </DialogFooter>

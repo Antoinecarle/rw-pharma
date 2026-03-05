@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -56,8 +55,8 @@ function ExpiryCountdown({ date }: { date: string; label: string }) {
   const Icon = days < 0 || (days >= 0 && days <= 90) ? AlertTriangle : CheckCircle2
   return (
     <div className="flex items-center gap-2">
-      <Input type="date" value={date} readOnly className="flex-1 text-[13px] h-9" />
-      <Badge variant="outline" className={`shrink-0 text-[10px] h-5 px-1.5 font-medium ${cls}`}>
+      <Input type="date" value={date} readOnly className="flex-1 text-[13px] h-10 rounded-xl" />
+      <Badge variant="outline" className={`shrink-0 text-[10px] h-5 px-1.5 font-medium rounded-full ${cls}`}>
         <Icon className="h-2.5 w-2.5 mr-0.5" />{days < 0 ? 'Expire' : `${days}j`}
       </Badge>
     </div>
@@ -66,20 +65,17 @@ function ExpiryCountdown({ date }: { date: string; label: string }) {
 
 function CardSkeleton() {
   return (
-    <Card className="border-border/60">
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
-          <div className="flex-1 space-y-2"><Skeleton className="h-4 w-28" /><Skeleton className="h-3.5 w-20" /><Skeleton className="h-3.5 w-32" /></div>
+    <div className="ivory-glass p-5">
+      <div className="flex items-start gap-3.5">
+        <Skeleton className="h-12 w-12 rounded-2xl shrink-0" />
+        <div className="flex-1 space-y-2.5">
+          <Skeleton className="h-4 w-28 rounded-md" />
+          <Skeleton className="h-3.5 w-20 rounded-md" />
+          <Skeleton className="h-3.5 w-36 rounded-md" />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
-}
-
-const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.04, duration: 0.25 } }),
 }
 
 export default function CustomersPage() {
@@ -128,135 +124,255 @@ export default function CustomersPage() {
 
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); upsert.mutate(editing ? { ...form, id: editing.id } : form) }
   const countryName = (code: string | null) => COUNTRIES.find(c => c.code === code)?.name ?? code ?? '-'
-  const hasDocuments = (c: Customer) => { const d = (c.documents as CustomerDocuments | null) ?? (c.metadata as Record<string, unknown>)?.documents as CustomerDocuments | undefined; return d && (d.wda_number || d.gdp_number) }
+  const hasDocuments = (c: Customer) => { const d = (c.documents as CustomerDocuments | null) ?? (c.metadata as Record<string, unknown>)?.documents as CustomerDocuments | undefined; return !!(d && (d.wda_number || d.gdp_number)) }
   const getPrefs = (c: Customer): AllocationPrefs => (c.allocation_preferences as AllocationPrefs) ?? {}
 
-  return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-6xl mx-auto animate-fade-in">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-violet-50 flex items-center justify-center"><Users className="h-4 w-4 text-violet-600" /></div>
-          <div>
-            <h2 className="text-lg md:text-xl font-semibold tracking-tight">Clients importateurs</h2>
-            <p className="text-[12px] text-muted-foreground">{customers?.length ?? 0} clients europeens</p>
-          </div>
-        </div>
-        <Button size="sm" onClick={openCreate} className="gap-1.5 text-[13px] h-8"><Plus className="h-3.5 w-3.5" />Ajouter</Button>
-      </div>
+  // Group by country
+  const topClients = customers?.filter(c => c.is_top_client) ?? []
+  const regularClients = customers?.filter(c => !c.is_top_client) ?? []
 
+  return (
+    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1200px] mx-auto ivory-page-glow">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="relative z-10"
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm"
+              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(124,92,191,0.04))' }}>
+              <Users className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
+            </div>
+            <div>
+              <h2 className="ivory-heading text-xl md:text-2xl">Clients importateurs</h2>
+              <p className="text-[12px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>
+                {customers?.length ?? 0} clients europeens
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={openCreate}
+            className="gap-1.5 text-[13px] h-9 rounded-xl shadow-sm"
+            style={{ background: 'linear-gradient(180deg, var(--ivory-accent), var(--ivory-accent-hover))', color: 'white' }}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Ajouter
+          </Button>
+        </div>
+      </motion.div>
+
+      {/* Summary stats */}
+      {customers && customers.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="flex gap-3 flex-wrap relative z-10"
+        >
+          <div className="ivory-stat-pill">
+            <Users className="h-3.5 w-3.5" style={{ color: 'var(--ivory-accent)' }} />
+            <span className="text-[12px]" style={{ color: 'var(--ivory-text-body)' }}>
+              <span className="font-bold tabular-nums">{customers.length}</span> clients
+            </span>
+          </div>
+          {topClients.length > 0 && (
+            <div className="ivory-stat-pill">
+              <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+              <span className="text-[12px]" style={{ color: 'var(--ivory-text-body)' }}>
+                <span className="font-bold tabular-nums">{topClients.length}</span> prioritaires
+              </span>
+            </div>
+          )}
+          {(() => {
+            const countries = new Set(customers.map(c => c.country).filter(Boolean))
+            return (
+              <div className="ivory-stat-pill">
+                <Globe className="h-3.5 w-3.5" style={{ color: 'var(--ivory-teal)' }} />
+                <span className="text-[12px]" style={{ color: 'var(--ivory-text-body)' }}>
+                  <span className="font-bold tabular-nums">{countries.size}</span> pays
+                </span>
+              </div>
+            )
+          })()}
+        </motion.div>
+      )}
+
+      {/* Cards */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
+        </div>
       ) : !customers?.length ? (
-        <Card className="border-border/60"><CardContent className="flex flex-col items-center py-14 gap-2.5">
-          <div className="h-12 w-12 rounded-xl bg-muted/50 flex items-center justify-center"><UserPlus className="h-6 w-6 text-muted-foreground/50" /></div>
-          <p className="font-medium text-[13px]">Aucun client</p>
-          <p className="text-[12px] text-muted-foreground">Ajoutez vos clients importateurs</p>
-          <Button size="sm" onClick={openCreate} className="mt-1 gap-1.5 text-[12px] h-7"><Plus className="h-3 w-3" />Ajouter</Button>
-        </CardContent></Card>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="ivory-glass p-0 overflow-hidden"
+        >
+          <div className="flex flex-col items-center py-20 gap-3">
+            <div className="h-16 w-16 rounded-2xl flex items-center justify-center"
+              style={{ background: 'rgba(124,92,191,0.06)' }}>
+              <UserPlus className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} />
+            </div>
+            <p className="ivory-heading text-[14px]">Aucun client</p>
+            <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Ajoutez vos clients importateurs europeens</p>
+            <Button
+              size="sm"
+              onClick={openCreate}
+              className="mt-2 gap-1.5 text-[12px] h-8 rounded-xl"
+              style={{ background: 'var(--ivory-accent)', color: 'white' }}
+            >
+              <Plus className="h-3 w-3" />
+              Ajouter
+            </Button>
+          </div>
+        </motion.div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <AnimatePresence mode="popLayout">
-            {customers.map((c, i) => (
-              <motion.div key={c.id} custom={i} variants={cardVariants} initial="hidden" animate="visible" exit={{ opacity: 0, scale: 0.97 }} layout>
-                <Card className={`group hover:shadow-md hover:shadow-black/[0.03] transition-all duration-200 border-border/60 hover:border-border ${c.is_top_client ? 'ring-1 ring-amber-200/60' : ''}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="h-9 w-9 rounded-lg bg-violet-50 flex items-center justify-center shrink-0 text-base">
-                        {c.country && FLAG_EMOJI[c.country] ? <span>{FLAG_EMOJI[c.country]}</span> : <Globe className="h-4 w-4 text-violet-600" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <h3 className="font-medium text-[13px] truncate">{c.name}</h3>
-                          {c.is_top_client && <Tooltip><TooltipTrigger><Star className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" /></TooltipTrigger><TooltipContent>Prioritaire</TooltipContent></Tooltip>}
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          {c.code && <Badge variant="secondary" className="font-mono text-[10px] h-5 px-1.5">{c.code}</Badge>}
-                          {c.country && <Badge variant="outline" className="text-[10px] h-5 px-1.5">{countryName(c.country)}</Badge>}
-                          {getPrefs(c).priority_level && <div className="flex items-center gap-px">{Array.from({ length: getPrefs(c).priority_level! }, (_, j) => <Star key={j} className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />)}</div>}
-                        </div>
-                        <div className="mt-2 space-y-1">
-                          {c.contact_email && <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground"><Mail className="h-3 w-3 shrink-0" /><span className="truncate">{c.contact_email}</span></div>}
-                          {hasDocuments(c) && <div className="flex items-center gap-1.5 text-[12px] text-emerald-600"><FileText className="h-3 w-3 shrink-0" /><span>Documents conformite</span></div>}
-                          {getPrefs(c).max_allocation_pct && <div className="text-[11px] text-muted-foreground">Max: <span className="font-medium">{getPrefs(c).max_allocation_pct}%</span></div>}
-                        </div>
-                      </div>
-                      <div className="flex gap-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(c)}><Pencil className="h-3 w-3" /></Button></TooltipTrigger><TooltipContent>Modifier</TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button></TooltipTrigger><TooltipContent>Supprimer</TooltipContent></Tooltip>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+        <div className="space-y-5 relative z-10">
+          {/* Priority clients section */}
+          {topClients.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
+                  Clients prioritaires
+                </span>
+                <div className="flex-1 h-px" style={{ background: 'rgba(0,0,0,0.04)' }} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <AnimatePresence mode="popLayout">
+                  {topClients.map((c, i) => (
+                    <CustomerCard key={c.id} customer={c} index={i} onEdit={openEdit} onDelete={setDeleteId}
+                      countryName={countryName} hasDocuments={hasDocuments} getPrefs={getPrefs} isPriority />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+
+          {/* Regular clients */}
+          {regularClients.length > 0 && (
+            <div>
+              {topClients.length > 0 && (
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} />
+                  <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
+                    Autres clients
+                  </span>
+                  <div className="flex-1 h-px" style={{ background: 'rgba(0,0,0,0.04)' }} />
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <AnimatePresence mode="popLayout">
+                  {regularClients.map((c, i) => (
+                    <CustomerCard key={c.id} customer={c} index={i + topClients.length} onEdit={openEdit} onDelete={setDeleteId}
+                      countryName={countryName} hasDocuments={hasDocuments} getPrefs={getPrefs} />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
+      {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base"><div className="h-7 w-7 rounded-md bg-violet-50 flex items-center justify-center"><Users className="h-3.5 w-3.5 text-violet-600" /></div>{editing ? 'Modifier le client' : 'Nouveau client'}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base">
+              <div className="h-8 w-8 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(124,92,191,0.08)' }}>
+                <Users className="h-4 w-4" style={{ color: 'var(--ivory-accent)' }} />
+              </div>
+              {editing ? 'Modifier le client' : 'Nouveau client'}
+            </DialogTitle>
             <DialogDescription className="text-[13px]">{editing ? 'Modifiez les informations' : 'Ajoutez un nouveau client'}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
-            <Tabs defaultValue="general" className="space-y-3.5">
-              <TabsList className="w-full grid grid-cols-3 h-8">
-                <TabsTrigger value="general" className="text-[12px]">General</TabsTrigger>
-                <TabsTrigger value="documents" className="text-[12px]">Documents</TabsTrigger>
-                <TabsTrigger value="preferences" className="text-[12px]">Preferences</TabsTrigger>
+            <Tabs defaultValue="general" className="space-y-4">
+              <TabsList className="w-full grid grid-cols-3 h-9 rounded-xl">
+                <TabsTrigger value="general" className="text-[12px] rounded-lg">General</TabsTrigger>
+                <TabsTrigger value="documents" className="text-[12px] rounded-lg">Documents</TabsTrigger>
+                <TabsTrigger value="preferences" className="text-[12px] rounded-lg">Preferences</TabsTrigger>
               </TabsList>
-              <TabsContent value="general" className="space-y-3.5">
+              <TabsContent value="general" className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label className="text-[13px]">Nom *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Orifarm" required className="text-[13px] h-9" /></div>
-                  <div className="space-y-1.5"><Label className="text-[13px]">Code</Label><Input value={form.code ?? ''} onChange={(e) => setForm({ ...form, code: e.target.value || null })} placeholder="ORI" className="font-mono uppercase text-[13px] h-9" /></div>
+                  <div className="space-y-1.5"><Label className="text-[13px] font-medium">Nom *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Orifarm" required className="text-[13px] h-10 rounded-xl" /></div>
+                  <div className="space-y-1.5"><Label className="text-[13px] font-medium">Code</Label><Input value={form.code ?? ''} onChange={(e) => setForm({ ...form, code: e.target.value || null })} placeholder="ORI" className="ivory-mono uppercase text-[13px] h-10 rounded-xl" /></div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[13px]">Pays</Label>
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <Label className="text-[13px] font-medium">Pays</Label>
+                  <div className="grid grid-cols-3 gap-2">
                     {COUNTRIES.map((country) => (
                       <button key={country.code} type="button" onClick={() => setForm({ ...form, country: form.country === country.code ? null : country.code })}
-                        className={`relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-[12px] transition-colors ${form.country === country.code ? 'border-violet-300 bg-violet-50 text-violet-900' : 'border-border/60 hover:bg-muted/30'}`}>
-                        <span className="text-sm">{FLAG_EMOJI[country.code]}</span>
-                        <div className="text-left"><div className="font-medium text-[11px]">{country.name}</div><div className="text-[9px] text-muted-foreground">{country.code}</div></div>
-                        {form.country === country.code && <CheckCircle2 className="absolute top-1 right-1 h-3 w-3 text-violet-500" />}
+                        className="relative flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] transition-all"
+                        style={{
+                          border: form.country === country.code ? '1.5px solid var(--ivory-accent)' : '1px solid rgba(0,0,0,0.06)',
+                          background: form.country === country.code ? 'rgba(124,92,191,0.06)' : 'white',
+                          boxShadow: form.country === country.code ? '0 0 0 4px rgba(124,92,191,0.06)' : 'none',
+                        }}>
+                        <span className="text-base">{FLAG_EMOJI[country.code]}</span>
+                        <div className="text-left">
+                          <div className="font-medium text-[11px]" style={{ color: 'var(--ivory-text-heading)' }}>{country.name}</div>
+                          <div className="text-[9px]" style={{ color: 'var(--ivory-text-muted)' }}>{country.code}</div>
+                        </div>
+                        {form.country === country.code && <CheckCircle2 className="absolute top-1 right-1 h-3.5 w-3.5" style={{ color: 'var(--ivory-accent)' }} />}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="space-y-1.5"><Label className="text-[13px]">Email</Label><Input type="email" value={form.contact_email ?? ''} onChange={(e) => setForm({ ...form, contact_email: e.target.value || null })} className="text-[13px] h-9" /></div>
-                <div className="flex items-center justify-between rounded-lg border border-border/60 p-3">
-                  <div className="space-y-0.5"><Label htmlFor="top-client-switch" className="cursor-pointer flex items-center gap-1.5 text-[13px]"><Star className="h-3.5 w-3.5 text-amber-500" />Client prioritaire</Label><p className="text-[11px] text-muted-foreground">Favorise lors des allocations</p></div>
+                <div className="space-y-1.5"><Label className="text-[13px] font-medium">Email</Label><Input type="email" value={form.contact_email ?? ''} onChange={(e) => setForm({ ...form, contact_email: e.target.value || null })} className="text-[13px] h-10 rounded-xl" /></div>
+                <div className="flex items-center justify-between rounded-xl p-3.5"
+                  style={{ border: '1px solid rgba(0,0,0,0.06)', background: 'rgba(248,247,244,0.5)' }}>
+                  <div className="space-y-0.5">
+                    <Label htmlFor="top-client-switch" className="cursor-pointer flex items-center gap-1.5 text-[13px] font-medium">
+                      <Star className="h-3.5 w-3.5 text-amber-500" />Client prioritaire
+                    </Label>
+                    <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>Favorise lors des allocations</p>
+                  </div>
                   <Switch id="top-client-switch" checked={form.is_top_client} onCheckedChange={(checked) => setForm({ ...form, is_top_client: checked })} />
                 </div>
               </TabsContent>
-              <TabsContent value="documents" className="space-y-3.5">
-                <div className="rounded-lg border border-dashed border-border/60 p-3 bg-muted/20"><p className="text-[12px] text-muted-foreground flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" />Documents reglementaires</p></div>
+              <TabsContent value="documents" className="space-y-4">
+                <div className="rounded-xl p-3.5" style={{ border: '1px dashed rgba(0,0,0,0.08)', background: 'rgba(248,247,244,0.5)' }}>
+                  <p className="text-[12px] flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
+                    <FileText className="h-3.5 w-3.5" />Documents reglementaires
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label className="text-[13px]">Numero WDA</Label><Input value={docs.wda_number ?? ''} onChange={(e) => setDocs({ ...docs, wda_number: e.target.value || undefined })} placeholder="WDA-XXXX" className="font-mono text-[13px] h-9" /></div>
-                  <div className="space-y-1.5"><Label className="text-[13px]">Expiration WDA</Label>
-                    {docs.wda_expiry ? <div className="space-y-1"><ExpiryCountdown date={docs.wda_expiry} label="WDA" /><button type="button" onClick={() => setDocs({ ...docs, wda_expiry: undefined })} className="text-[10px] text-muted-foreground hover:text-destructive">Effacer</button></div> : <Input type="date" value="" onChange={(e) => setDocs({ ...docs, wda_expiry: e.target.value || undefined })} className="text-[13px] h-9" />}
+                  <div className="space-y-1.5"><Label className="text-[13px] font-medium">Numero WDA</Label><Input value={docs.wda_number ?? ''} onChange={(e) => setDocs({ ...docs, wda_number: e.target.value || undefined })} placeholder="WDA-XXXX" className="ivory-mono text-[13px] h-10 rounded-xl" /></div>
+                  <div className="space-y-1.5"><Label className="text-[13px] font-medium">Expiration WDA</Label>
+                    {docs.wda_expiry ? <div className="space-y-1"><ExpiryCountdown date={docs.wda_expiry} label="WDA" /><button type="button" onClick={() => setDocs({ ...docs, wda_expiry: undefined })} className="text-[10px] hover:text-red-500 transition-colors" style={{ color: 'var(--ivory-text-muted)' }}>Effacer</button></div> : <Input type="date" value="" onChange={(e) => setDocs({ ...docs, wda_expiry: e.target.value || undefined })} className="text-[13px] h-10 rounded-xl" />}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label className="text-[13px]">Numero GDP</Label><Input value={docs.gdp_number ?? ''} onChange={(e) => setDocs({ ...docs, gdp_number: e.target.value || undefined })} placeholder="GDP-XXXX" className="font-mono text-[13px] h-9" /></div>
-                  <div className="space-y-1.5"><Label className="text-[13px]">Expiration GDP</Label>
-                    {docs.gdp_expiry ? <div className="space-y-1"><ExpiryCountdown date={docs.gdp_expiry} label="GDP" /><button type="button" onClick={() => setDocs({ ...docs, gdp_expiry: undefined })} className="text-[10px] text-muted-foreground hover:text-destructive">Effacer</button></div> : <Input type="date" value="" onChange={(e) => setDocs({ ...docs, gdp_expiry: e.target.value || undefined })} className="text-[13px] h-9" />}
+                  <div className="space-y-1.5"><Label className="text-[13px] font-medium">Numero GDP</Label><Input value={docs.gdp_number ?? ''} onChange={(e) => setDocs({ ...docs, gdp_number: e.target.value || undefined })} placeholder="GDP-XXXX" className="ivory-mono text-[13px] h-10 rounded-xl" /></div>
+                  <div className="space-y-1.5"><Label className="text-[13px] font-medium">Expiration GDP</Label>
+                    {docs.gdp_expiry ? <div className="space-y-1"><ExpiryCountdown date={docs.gdp_expiry} label="GDP" /><button type="button" onClick={() => setDocs({ ...docs, gdp_expiry: undefined })} className="text-[10px] hover:text-red-500 transition-colors" style={{ color: 'var(--ivory-text-muted)' }}>Effacer</button></div> : <Input type="date" value="" onChange={(e) => setDocs({ ...docs, gdp_expiry: e.target.value || undefined })} className="text-[13px] h-10 rounded-xl" />}
                   </div>
                 </div>
-                <div className="space-y-1.5"><Label className="text-[13px]">Notes</Label><Textarea value={docs.notes ?? ''} onChange={(e) => setDocs({ ...docs, notes: e.target.value || undefined })} placeholder="Notes..." rows={2} className="text-[13px]" /></div>
+                <div className="space-y-1.5"><Label className="text-[13px] font-medium">Notes</Label><Textarea value={docs.notes ?? ''} onChange={(e) => setDocs({ ...docs, notes: e.target.value || undefined })} placeholder="Notes..." rows={2} className="text-[13px] rounded-xl" /></div>
               </TabsContent>
               <TabsContent value="preferences" className="space-y-4">
-                <div className="rounded-lg border border-dashed border-border/60 p-3 bg-muted/20"><p className="text-[12px] text-muted-foreground flex items-center gap-1.5"><Star className="h-3.5 w-3.5" />Preferences d'allocation</p></div>
-                <div className="space-y-1.5"><Label className="text-[13px]">Priorite</Label><StarRating value={prefs.priority_level ?? 3} onChange={(v) => setPrefs({ ...prefs, priority_level: v })} labels={['Haute', 'Elevee', 'Normal', 'Basse', 'Tres basse']} /></div>
-                <div className="space-y-1.5"><Label className="text-[13px]">% max stock</Label><GradientSlider value={prefs.max_allocation_pct ?? 30} onChange={(v) => setPrefs({ ...prefs, max_allocation_pct: v })} min={0} max={100} step={5} suffix="%" zones={[{ label: 'Conservateur', max: 20 }, { label: 'Modere', max: 50 }, { label: 'Agressif', max: 100 }]} /></div>
-                <div className="space-y-1.5"><Label className="text-[13px]">Expiry min</Label><StepperInput value={prefs.preferred_expiry_months} onChange={(v) => setPrefs({ ...prefs, preferred_expiry_months: v })} min={0} max={36} suffix=" mois" placeholder="Non defini" presets={[{ label: '3', value: 3 }, { label: '6', value: 6 }, { label: '9', value: 9 }, { label: '12', value: 12 }]} /></div>
-                <div className="space-y-1.5"><Label className="text-[13px]">Notes</Label><Textarea value={prefs.notes ?? ''} onChange={(e) => setPrefs({ ...prefs, notes: e.target.value || undefined })} placeholder="Notes..." rows={2} className="text-[13px]" /></div>
+                <div className="rounded-xl p-3.5" style={{ border: '1px dashed rgba(0,0,0,0.08)', background: 'rgba(248,247,244,0.5)' }}>
+                  <p className="text-[12px] flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
+                    <Star className="h-3.5 w-3.5" />Preferences d'allocation
+                  </p>
+                </div>
+                <div className="space-y-1.5"><Label className="text-[13px] font-medium">Priorite</Label><StarRating value={prefs.priority_level ?? 3} onChange={(v) => setPrefs({ ...prefs, priority_level: v })} labels={['Haute', 'Elevee', 'Normal', 'Basse', 'Tres basse']} /></div>
+                <div className="space-y-1.5"><Label className="text-[13px] font-medium">% max stock</Label><GradientSlider value={prefs.max_allocation_pct ?? 30} onChange={(v) => setPrefs({ ...prefs, max_allocation_pct: v })} min={0} max={100} step={5} suffix="%" zones={[{ label: 'Conservateur', max: 20 }, { label: 'Modere', max: 50 }, { label: 'Agressif', max: 100 }]} /></div>
+                <div className="space-y-1.5"><Label className="text-[13px] font-medium">Expiry min</Label><StepperInput value={prefs.preferred_expiry_months} onChange={(v) => setPrefs({ ...prefs, preferred_expiry_months: v })} min={0} max={36} suffix=" mois" placeholder="Non defini" presets={[{ label: '3', value: 3 }, { label: '6', value: 6 }, { label: '9', value: 9 }, { label: '12', value: 12 }]} /></div>
+                <div className="space-y-1.5"><Label className="text-[13px] font-medium">Notes</Label><Textarea value={prefs.notes ?? ''} onChange={(e) => setPrefs({ ...prefs, notes: e.target.value || undefined })} placeholder="Notes..." rows={2} className="text-[13px] rounded-xl" /></div>
               </TabsContent>
             </Tabs>
-            <DialogFooter className="mt-4">
-              <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px]">Annuler</Button>
-              <Button type="submit" size="sm" disabled={upsert.isPending} className="text-[13px]">{upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Creer'}</Button>
+            <DialogFooter className="mt-5">
+              <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">Annuler</Button>
+              <Button type="submit" size="sm" disabled={upsert.isPending} className="text-[13px] rounded-xl" style={{ background: 'var(--ivory-accent)', color: 'white' }}>
+                {upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Creer'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -264,5 +380,140 @@ export default function CustomersPage() {
 
       <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Supprimer le client" description="Action irreversible." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
     </div>
+  )
+}
+
+const cardVariants: Variants = {
+  hidden: { opacity: 0, y: 16, scale: 0.98 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { delay: i * 0.06, duration: 0.4, ease: [0.2, 0.9, 0.2, 1] },
+  }),
+}
+
+/* Customer Card Component */
+function CustomerCard({
+  customer: c, index: i, onEdit, onDelete, countryName, hasDocuments, getPrefs, isPriority
+}: {
+  customer: Customer; index: number;
+  onEdit: (c: Customer) => void; onDelete: (id: string) => void;
+  countryName: (code: string | null) => string;
+  hasDocuments: (c: Customer) => boolean | undefined;
+  getPrefs: (c: Customer) => AllocationPrefs;
+  isPriority?: boolean;
+}) {
+  return (
+    <motion.div
+      custom={i}
+      variants={cardVariants}
+      initial="hidden"
+      animate="visible"
+      exit={{ opacity: 0, scale: 0.97 }}
+      layout
+    >
+      <div className="ivory-glass group cursor-default overflow-hidden"
+        style={isPriority ? { boxShadow: 'var(--ivory-shadow-md), 0 0 0 1px rgba(245,158,11,0.12)' } : {}}>
+        <div className="p-5">
+          <div className="flex items-start gap-3.5">
+            {/* Avatar */}
+            <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 text-lg shadow-sm"
+              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.08), rgba(124,92,191,0.04))' }}>
+              {c.country && FLAG_EMOJI[c.country]
+                ? <span className="text-xl">{FLAG_EMOJI[c.country]}</span>
+                : <Globe className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-[14px] truncate" style={{ color: 'var(--ivory-text-heading)' }}>{c.name}</h3>
+                {c.is_top_client && (
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent>Prioritaire</TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                {c.code && (
+                  <span className="ivory-mono text-[10px] font-semibold px-2 py-0.5 rounded-md"
+                    style={{ background: 'rgba(124,92,191,0.06)', color: 'var(--ivory-accent)' }}>
+                    {c.code}
+                  </span>
+                )}
+                {c.country && (
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-md"
+                    style={{ background: 'rgba(0,0,0,0.03)', color: 'var(--ivory-text-muted)' }}>
+                    {countryName(c.country)}
+                  </span>
+                )}
+                {getPrefs(c).priority_level && (
+                  <div className="flex items-center gap-px">
+                    {Array.from({ length: getPrefs(c).priority_level! }, (_, j) => (
+                      <Star key={j} className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 space-y-1.5">
+                {c.contact_email && (
+                  <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
+                    <Mail className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{c.contact_email}</span>
+                  </div>
+                )}
+                {hasDocuments(c) && (
+                  <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--ivory-teal)' }}>
+                    <FileText className="h-3 w-3 shrink-0" />
+                    <span>Documents conformite</span>
+                  </div>
+                )}
+                {getPrefs(c).max_allocation_pct && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.04)' }}>
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${getPrefs(c).max_allocation_pct}%`,
+                          background: 'linear-gradient(90deg, var(--ivory-accent), var(--ivory-teal))',
+                        }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-semibold tabular-nums" style={{ color: 'var(--ivory-text-muted)' }}>
+                      {getPrefs(c).max_allocation_pct}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(124,92,191,0.06)]" onClick={() => onEdit(c)}>
+                    <Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Modifier</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50" onClick={() => onDelete(c.id)}>
+                    <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Supprimer</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   )
 }

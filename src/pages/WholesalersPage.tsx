@@ -3,11 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Wholesaler, WholesalerInsert } from '@/types/database'
 import { motion, AnimatePresence } from 'framer-motion'
+import type { Variants } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -17,48 +16,35 @@ import { Plus, Pencil, Trash2, ExternalLink, Truck, Mail, Building2, FolderOpen,
 import { toast } from 'sonner'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
-const emptyWholesaler: WholesalerInsert = {
-  name: '',
-  code: null,
-  contact_email: null,
-  drive_folder_url: null,
-  metadata: {},
+const emptyWholesaler: WholesalerInsert = { name: '', code: null, contact_email: null, drive_folder_url: null, metadata: {} }
+
+const cardVariants: Variants = {
+  hidden: { opacity: 0, y: 16, scale: 0.98 },
+  visible: (i: number) => ({ opacity: 1, y: 0, scale: 1, transition: { delay: i * 0.06, duration: 0.4, ease: [0.2, 0.9, 0.2, 1] } }),
 }
 
 function CardSkeleton() {
   return (
-    <Card className="border-border/60">
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-3.5 w-20" />
-            <Skeleton className="h-3.5 w-36" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="ivory-glass p-5">
+      <div className="flex items-start gap-3.5">
+        <Skeleton className="h-12 w-12 rounded-2xl shrink-0" />
+        <div className="flex-1 space-y-2.5"><Skeleton className="h-4 w-28 rounded-md" /><Skeleton className="h-3.5 w-20 rounded-md" /><Skeleton className="h-3.5 w-40 rounded-md" /></div>
+      </div>
+    </div>
   )
 }
 
-const cardVariants: import('framer-motion').Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.04, duration: 0.25 },
-  }),
-}
+function isValidUrl(str: string): boolean { try { new URL(str); return true } catch { return false } }
 
-function isValidUrl(str: string): boolean {
-  try {
-    new URL(str)
-    return true
-  } catch {
-    return false
-  }
-}
+const GRADIENTS = [
+  'linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.04))',
+  'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.04))',
+  'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(124,92,191,0.04))',
+  'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04))',
+  'linear-gradient(135deg, rgba(236,72,153,0.12), rgba(236,72,153,0.04))',
+  'linear-gradient(135deg, rgba(6,182,212,0.12), rgba(6,182,212,0.04))',
+]
+const ICON_COLORS = ['#3B82F6', '#0D9488', '#7C5CBF', '#F59E0B', '#EC4899', '#06B6D4']
 
 export default function WholesalersPage() {
   const queryClient = useQueryClient()
@@ -69,294 +55,141 @@ export default function WholesalersPage() {
 
   const { data: wholesalers, isLoading } = useQuery({
     queryKey: ['wholesalers'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('wholesalers').select('*').order('name')
-      if (error) throw error
-      return data as Wholesaler[]
-    },
+    queryFn: async () => { const { data, error } = await supabase.from('wholesalers').select('*').order('name'); if (error) throw error; return data as Wholesaler[] },
   })
 
   const upsert = useMutation({
     mutationFn: async (w: WholesalerInsert & { id?: string }) => {
-      if (w.id) {
-        const { id, ...rest } = w
-        const { error } = await supabase.from('wholesalers').update(rest).eq('id', id)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('wholesalers').insert(w)
-        if (error) throw error
-      }
+      if (w.id) { const { id, ...rest } = w; const { error } = await supabase.from('wholesalers').update(rest).eq('id', id); if (error) throw error }
+      else { const { error } = await supabase.from('wholesalers').insert(w); if (error) throw error }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wholesalers'] })
-      setDialogOpen(false)
-      toast.success(editing ? 'Grossiste modifie' : 'Grossiste cree')
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['wholesalers'] }); setDialogOpen(false); toast.success(editing ? 'Grossiste modifie' : 'Grossiste cree') },
     onError: (err: Error) => toast.error(err.message),
   })
 
   const deleteMut = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('wholesalers').delete().eq('id', id)
-      if (error) throw error
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wholesalers'] })
-      toast.success('Grossiste supprime')
-    },
+    mutationFn: async (id: string) => { const { error } = await supabase.from('wholesalers').delete().eq('id', id); if (error) throw error },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['wholesalers'] }); toast.success('Grossiste supprime') },
     onError: (err: Error) => toast.error(err.message),
   })
 
-  const openCreate = () => {
-    setEditing(null)
-    setForm(emptyWholesaler)
-    setDialogOpen(true)
-  }
-
-  const openEdit = (w: Wholesaler) => {
-    setEditing(w)
-    setForm({
-      name: w.name,
-      code: w.code,
-      contact_email: w.contact_email,
-      drive_folder_url: w.drive_folder_url,
-      metadata: w.metadata,
-    })
-    setDialogOpen(true)
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    upsert.mutate(editing ? { ...form, id: editing.id } : form)
-  }
-
+  const openCreate = () => { setEditing(null); setForm(emptyWholesaler); setDialogOpen(true) }
+  const openEdit = (w: Wholesaler) => { setEditing(w); setForm({ name: w.name, code: w.code, contact_email: w.contact_email, drive_folder_url: w.drive_folder_url, metadata: w.metadata }); setDialogOpen(true) }
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); upsert.mutate(editing ? { ...form, id: editing.id } : form) }
   const driveUrlValid = !form.drive_folder_url || isValidUrl(form.drive_folder_url)
 
   return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-6xl mx-auto animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
-            <Truck className="h-4 w-4 text-blue-600" />
+    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1200px] mx-auto ivory-page-glow">
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="relative z-10">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: GRADIENTS[0] }}>
+              <Truck className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <h2 className="ivory-heading text-xl md:text-2xl">Grossistes</h2>
+              <p className="text-[12px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>{wholesalers?.length ?? 0} partenaires francais</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg md:text-xl font-semibold tracking-tight">Grossistes</h2>
-            <p className="text-[12px] text-muted-foreground">{wholesalers?.length ?? 0} partenaires francais</p>
-          </div>
+          <Button size="sm" onClick={openCreate} className="gap-1.5 text-[13px] h-9 rounded-xl shadow-sm" style={{ background: 'linear-gradient(180deg, var(--ivory-accent), var(--ivory-accent-hover))', color: 'white' }}>
+            <Plus className="h-3.5 w-3.5" /> Ajouter
+          </Button>
         </div>
-        <Button size="sm" onClick={openCreate} className="gap-1.5 text-[13px] h-8">
-          <Plus className="h-3.5 w-3.5" />
-          Ajouter
-        </Button>
-      </div>
+      </motion.div>
 
-      {/* Cards */}
+      {wholesalers && wholesalers.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }} className="flex gap-3 flex-wrap relative z-10">
+          <div className="ivory-stat-pill"><Truck className="h-3.5 w-3.5 text-blue-500" /><span className="text-[12px]" style={{ color: 'var(--ivory-text-body)' }}><span className="font-bold tabular-nums">{wholesalers.length}</span> grossistes</span></div>
+          <div className="ivory-stat-pill"><Mail className="h-3.5 w-3.5" style={{ color: 'var(--ivory-teal)' }} /><span className="text-[12px]" style={{ color: 'var(--ivory-text-body)' }}><span className="font-bold tabular-nums">{wholesalers.filter(w => w.contact_email).length}</span> avec email</span></div>
+          <div className="ivory-stat-pill"><FolderOpen className="h-3.5 w-3.5" style={{ color: 'var(--ivory-accent)' }} /><span className="text-[12px]" style={{ color: 'var(--ivory-text-body)' }}><span className="font-bold tabular-nums">{wholesalers.filter(w => w.drive_folder_url).length}</span> Drive</span></div>
+        </motion.div>
+      )}
+
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
-        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}</div>
       ) : !wholesalers?.length ? (
-        <Card className="border-border/60">
-          <CardContent className="flex flex-col items-center py-14 gap-2.5">
-            <div className="h-12 w-12 rounded-xl bg-muted/50 flex items-center justify-center">
-              <Building2 className="h-6 w-6 text-muted-foreground/50" />
-            </div>
-            <div className="text-center">
-              <p className="font-medium text-[13px]">Aucun grossiste</p>
-              <p className="text-[12px] text-muted-foreground mt-0.5">
-                Ajoutez vos grossistes francais (Alliance, CERP, OCP...)
-              </p>
-            </div>
-            <Button size="sm" onClick={openCreate} className="mt-1 gap-1.5 text-[12px] h-7">
-              <Plus className="h-3 w-3" />
-              Ajouter un grossiste
-            </Button>
-          </CardContent>
-        </Card>
+        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="ivory-glass p-0 overflow-hidden">
+          <div className="flex flex-col items-center py-20 gap-3">
+            <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(59,130,246,0.06)' }}><Building2 className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} /></div>
+            <p className="ivory-heading text-[14px]">Aucun grossiste</p>
+            <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Ajoutez vos grossistes francais</p>
+            <Button size="sm" onClick={openCreate} className="mt-2 gap-1.5 text-[12px] h-8 rounded-xl" style={{ background: 'var(--ivory-accent)', color: 'white' }}><Plus className="h-3 w-3" /> Ajouter</Button>
+          </div>
+        </motion.div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
           <AnimatePresence mode="popLayout">
             {wholesalers.map((w, i) => (
-              <motion.div
-                key={w.id}
-                custom={i}
-                variants={cardVariants}
-                initial="hidden"
-                animate="visible"
-                exit={{ opacity: 0, scale: 0.97 }}
-                layout
-              >
-                <Card className="group hover:shadow-md hover:shadow-black/[0.03] transition-all duration-200 border-border/60 hover:border-border">
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                        <Truck className="h-4 w-4 text-blue-600" />
+              <motion.div key={w.id} custom={i} variants={cardVariants} initial="hidden" animate="visible" exit={{ opacity: 0, scale: 0.97 }} layout>
+                <div className="ivory-glass group cursor-default overflow-hidden">
+                  <div className="p-5">
+                    <div className="flex items-start gap-3.5">
+                      <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm" style={{ background: GRADIENTS[i % GRADIENTS.length] }}>
+                        <Truck className="h-5 w-5" style={{ color: ICON_COLORS[i % ICON_COLORS.length] }} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-[13px] truncate">{w.name}</h3>
-                          {w.code && (
-                            <Badge variant="secondary" className="font-mono text-[10px] h-5 px-1.5 shrink-0">{w.code}</Badge>
-                          )}
+                          <h3 className="font-semibold text-[14px] truncate" style={{ color: 'var(--ivory-text-heading)' }}>{w.name}</h3>
+                          {w.code && <span className="ivory-mono text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0" style={{ background: 'rgba(124,92,191,0.06)', color: 'var(--ivory-accent)' }}>{w.code}</span>}
                         </div>
-
-                        <div className="mt-2 space-y-1">
-                          {w.contact_email && (
-                            <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                              <Mail className="h-3 w-3 shrink-0" />
-                              <span className="truncate">{w.contact_email}</span>
-                            </div>
-                          )}
+                        <div className="mt-3 space-y-2">
+                          {w.contact_email && <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{w.contact_email}</span></div>}
                           {w.drive_folder_url && (
-                            <a
-                              href={w.drive_folder_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 text-[12px] text-primary hover:underline group/link"
-                            >
-                              <FolderOpen className="h-3 w-3 shrink-0" />
-                              Google Drive
-                              <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                            <a href={w.drive_folder_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[12px] group/link" style={{ color: 'var(--ivory-accent)' }}>
+                              <FolderOpen className="h-3.5 w-3.5 shrink-0" /><span>Google Drive</span><ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover/link:opacity-100 transition-opacity" />
                             </a>
                           )}
-                          {!w.contact_email && !w.drive_folder_url && (
-                            <p className="text-[12px] text-muted-foreground/50 italic">Aucun contact</p>
-                          )}
+                          {!w.contact_email && !w.drive_folder_url && <p className="text-[12px] italic" style={{ color: 'rgba(0,0,0,0.2)' }}>Aucun contact</p>}
                         </div>
                       </div>
-
-                      <div className="flex gap-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(w)}>
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Modifier</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteId(w.id)}>
-                              <Trash2 className="h-3 w-3 text-destructive" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Supprimer</TooltipContent>
-                        </Tooltip>
+                      <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+                        <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(124,92,191,0.06)]" onClick={() => openEdit(w)}><Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} /></Button></TooltipTrigger><TooltipContent>Modifier</TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50" onClick={() => setDeleteId(w.id)}><Trash2 className="h-3.5 w-3.5 text-red-400" /></Button></TooltipTrigger><TooltipContent>Supprimer</TooltipContent></Tooltip>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </motion.div>
             ))}
           </AnimatePresence>
         </div>
       )}
 
-      {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <div className="h-7 w-7 rounded-md bg-blue-50 flex items-center justify-center">
-                <Truck className="h-3.5 w-3.5 text-blue-600" />
-              </div>
+            <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base">
+              <div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(59,130,246,0.08)' }}><Truck className="h-4 w-4 text-blue-500" /></div>
               {editing ? 'Modifier le grossiste' : 'Nouveau grossiste'}
             </DialogTitle>
-            <DialogDescription className="text-[13px]">
-              {editing ? 'Modifiez les informations du grossiste' : 'Ajoutez un nouveau grossiste francais'}
-            </DialogDescription>
+            <DialogDescription className="text-[13px]">{editing ? 'Modifiez les informations' : 'Ajoutez un nouveau grossiste'}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-3.5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-[13px]">Nom *</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Alliance Healthcare"
-                  required
-                  className="text-[13px] h-9"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[13px]">Code</Label>
-                <Input
-                  value={form.code ?? ''}
-                  onChange={(e) => setForm({ ...form, code: e.target.value || null })}
-                  placeholder="AHC"
-                  className="font-mono uppercase text-[13px] h-9"
-                />
-              </div>
+              <div className="space-y-1.5"><Label className="text-[13px] font-medium">Nom *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Alliance Healthcare" required className="text-[13px] h-10 rounded-xl" /></div>
+              <div className="space-y-1.5"><Label className="text-[13px] font-medium">Code</Label><Input value={form.code ?? ''} onChange={(e) => setForm({ ...form, code: e.target.value || null })} placeholder="AHC" className="ivory-mono uppercase text-[13px] h-10 rounded-xl" /></div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[13px]">Email de contact</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
-                <Input
-                  type="email"
-                  value={form.contact_email ?? ''}
-                  onChange={(e) => setForm({ ...form, contact_email: e.target.value || null })}
-                  placeholder="contact@grossiste.fr"
-                  className="pl-9 text-[13px] h-9"
-                />
-              </div>
+              <Label className="text-[13px] font-medium">Email</Label>
+              <div className="relative"><Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} /><Input type="email" value={form.contact_email ?? ''} onChange={(e) => setForm({ ...form, contact_email: e.target.value || null })} placeholder="contact@grossiste.fr" className="pl-10 text-[13px] h-10 rounded-xl" /></div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[13px]">URL Google Drive</Label>
+              <Label className="text-[13px] font-medium">URL Google Drive</Label>
               <div className="relative">
-                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
-                <Input
-                  value={form.drive_folder_url ?? ''}
-                  onChange={(e) => setForm({ ...form, drive_folder_url: e.target.value || null })}
-                  placeholder="https://drive.google.com/..."
-                  className={`pl-9 pr-10 text-[13px] h-9 ${form.drive_folder_url && !driveUrlValid ? 'border-red-300 focus-visible:ring-red-400' : ''}`}
-                />
-                {form.drive_folder_url && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {driveUrlValid ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                    ) : (
-                      <span className="text-[10px] text-red-500 font-medium">Invalide</span>
-                    )}
-                  </div>
-                )}
+                <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} />
+                <Input value={form.drive_folder_url ?? ''} onChange={(e) => setForm({ ...form, drive_folder_url: e.target.value || null })} placeholder="https://drive.google.com/..." className="pl-10 pr-10 text-[13px] h-10 rounded-xl" style={form.drive_folder_url && !driveUrlValid ? { borderColor: '#DC4A4A' } : {}} />
+                {form.drive_folder_url && <div className="absolute right-3.5 top-1/2 -translate-y-1/2">{driveUrlValid ? <CheckCircle2 className="h-4 w-4" style={{ color: 'var(--ivory-teal)' }} /> : <span className="text-[10px] font-semibold text-red-500">Invalide</span>}</div>}
               </div>
-              {form.drive_folder_url && driveUrlValid && (
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/30 rounded-md px-2.5 py-1.5">
-                  <FolderOpen className="h-3 w-3 text-primary shrink-0" />
-                  <span className="truncate">{form.drive_folder_url}</span>
-                  <a
-                    href={form.drive_folder_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline shrink-0 ml-auto"
-                  >
-                    Ouvrir
-                  </a>
-                </div>
-              )}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px]">
-                Annuler
-              </Button>
-              <Button type="submit" size="sm" disabled={upsert.isPending} className="text-[13px]">
-                {upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Creer'}
-              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">Annuler</Button>
+              <Button type="submit" size="sm" disabled={upsert.isPending} className="text-[13px] rounded-xl" style={{ background: 'var(--ivory-accent)', color: 'white' }}>{upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Creer'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog
-        open={!!deleteId}
-        onOpenChange={() => setDeleteId(null)}
-        title="Supprimer le grossiste"
-        description="Cette action est irreversible. Le grossiste et ses quotas seront supprimes."
-        onConfirm={() => deleteId && deleteMut.mutate(deleteId)}
-        loading={deleteMut.isPending}
-      />
+      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Supprimer le grossiste" description="Cette action est irreversible." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
     </div>
   )
 }

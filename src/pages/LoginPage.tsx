@@ -89,7 +89,7 @@ export default function LoginPage() {
             <span className="text-xl font-semibold text-foreground tracking-tight">RW Pharma</span>
           </div>
 
-          <Card className="border-0 shadow-lg shadow-black/[0.03] lg:border lg:shadow-xl lg:shadow-black/[0.04]">
+          <Card className="ivory-card-elevated border-0 lg:border">
             <CardHeader className="space-y-1 pb-2">
               <CardTitle className="text-xl font-semibold tracking-tight">Connexion</CardTitle>
               <CardDescription className="text-[13px]">

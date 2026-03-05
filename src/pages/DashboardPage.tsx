@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { motion } from 'framer-motion'
@@ -15,69 +13,50 @@ import {
 
 function StatSkeleton() {
   return (
-    <Card className="border-border/60">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <Skeleton className="h-3.5 w-16" />
-        <Skeleton className="h-7 w-7 rounded-lg" />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-7 w-14 mt-1" />
-      </CardContent>
-    </Card>
+    <div className="ivory-glass p-5">
+      <div className="flex items-center justify-between mb-3">
+        <Skeleton className="h-3.5 w-16 rounded-md" />
+        <Skeleton className="h-9 w-9 rounded-xl" />
+      </div>
+      <Skeleton className="h-8 w-16 rounded-md" />
+    </div>
   )
 }
 
 export default function DashboardPage() {
   const { data: productCount, isLoading: loadingProducts } = useQuery({
     queryKey: ['products', 'count'],
-    queryFn: async () => {
-      const { count } = await supabase.from('products').select('*', { count: 'exact', head: true })
-      return count ?? 0
-    },
+    queryFn: async () => { const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }); return count ?? 0 },
   })
 
   const { data: wholesalerCount, isLoading: loadingWholesalers } = useQuery({
     queryKey: ['wholesalers', 'count'],
-    queryFn: async () => {
-      const { count } = await supabase.from('wholesalers').select('*', { count: 'exact', head: true })
-      return count ?? 0
-    },
+    queryFn: async () => { const { count } = await supabase.from('wholesalers').select('*', { count: 'exact', head: true }); return count ?? 0 },
   })
 
   const { data: customerCount, isLoading: loadingCustomers } = useQuery({
     queryKey: ['customers', 'count'],
-    queryFn: async () => {
-      const { count } = await supabase.from('customers').select('*', { count: 'exact', head: true })
-      return count ?? 0
-    },
+    queryFn: async () => { const { count } = await supabase.from('customers').select('*', { count: 'exact', head: true }); return count ?? 0 },
   })
 
   const { data: blockedCount, isLoading: loadingBlocked } = useQuery({
     queryKey: ['products', 'blocked', 'count'],
-    queryFn: async () => {
-      const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_ansm_blocked', true)
-      return count ?? 0
-    },
+    queryFn: async () => { const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_ansm_blocked', true); return count ?? 0 },
   })
 
   const { data: quotaCount, isLoading: loadingQuotas } = useQuery({
     queryKey: ['quotas', 'count'],
-    queryFn: async () => {
-      const { count } = await supabase.from('wholesaler_quotas').select('*', { count: 'exact', head: true })
-      return count ?? 0
-    },
+    queryFn: async () => { const { count } = await supabase.from('wholesaler_quotas').select('*', { count: 'exact', head: true }); return count ?? 0 },
   })
 
   const { data: activeProcess } = useQuery({
     queryKey: ['monthly-processes', 'active'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('monthly_processes')
-        .select('*')
+        .from('monthly_processes').select('*')
         .neq('status', 'completed')
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        .limit(1).maybeSingle()
       if (error) throw error
       return data as { id: string; month: number; year: number; current_step: number; status: string; orders_count: number; allocations_count: number } | null
     },
@@ -87,33 +66,34 @@ export default function DashboardPage() {
   const STEP_LABELS = ['Import commandes', 'Revue commandes', 'Allocation', 'Revue allocations', 'Finalisation']
 
   const stats = [
-    { name: 'Produits', value: productCount, loading: loadingProducts, icon: Pill, color: 'text-emerald-600', bg: 'bg-emerald-50', href: '/products', target: 1760 },
-    { name: 'Grossistes', value: wholesalerCount, loading: loadingWholesalers, icon: Truck, color: 'text-blue-600', bg: 'bg-blue-50', href: '/wholesalers' },
-    { name: 'Clients', value: customerCount, loading: loadingCustomers, icon: Users, color: 'text-violet-600', bg: 'bg-violet-50', href: '/customers' },
-    { name: 'Quotas actifs', value: quotaCount, loading: loadingQuotas, icon: ClipboardList, color: 'text-amber-600', bg: 'bg-amber-50', href: '/quotas' },
-    { name: 'Bloques ANSM', value: blockedCount, loading: loadingBlocked, icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50', href: '/products', danger: true },
+    { name: 'Produits', value: productCount, loading: loadingProducts, icon: Pill, gradient: 'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.04))', iconColor: '#0D9488', href: '/products', target: 1760 },
+    { name: 'Grossistes', value: wholesalerCount, loading: loadingWholesalers, icon: Truck, gradient: 'linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.04))', iconColor: '#3B82F6', href: '/wholesalers' },
+    { name: 'Clients', value: customerCount, loading: loadingCustomers, icon: Users, gradient: 'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(124,92,191,0.04))', iconColor: '#7C5CBF', href: '/customers' },
+    { name: 'Quotas', value: quotaCount, loading: loadingQuotas, icon: ClipboardList, gradient: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04))', iconColor: '#F59E0B', href: '/quotas' },
+    { name: 'ANSM', value: blockedCount, loading: loadingBlocked, icon: AlertTriangle, gradient: 'linear-gradient(135deg, rgba(220,74,74,0.10), rgba(220,74,74,0.03))', iconColor: '#DC4A4A', href: '/products', danger: true },
   ]
 
   const quickActions = [
-    { name: 'Allocations mensuelles', description: 'Lancer ou continuer un processus d\'allocation', href: '/monthly-processes', icon: CalendarRange, color: 'text-primary', bg: 'bg-primary/8' },
-    { name: 'Gerer les produits', description: 'Catalogue de 1 760 references, import Excel, filtres avances', href: '/products', icon: Pill, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { name: 'Gerer les grossistes', description: 'Alliance, CERP, OCP et autres partenaires francais', href: '/wholesalers', icon: Truck, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { name: 'Gerer les clients', description: 'Orifarm, MPA, Axicorp et importateurs europeens', href: '/customers', icon: Users, color: 'text-violet-600', bg: 'bg-violet-50' },
+    { name: 'Allocations mensuelles', description: 'Lancer ou continuer un processus d\'allocation', href: '/monthly-processes', icon: CalendarRange, gradient: 'linear-gradient(135deg, rgba(124,92,191,0.10), rgba(124,92,191,0.03))', iconColor: 'var(--ivory-accent)' },
+    { name: 'Gerer les produits', description: 'Catalogue de 1 760 references, import Excel', href: '/products', icon: Pill, gradient: 'linear-gradient(135deg, rgba(13,148,136,0.10), rgba(13,148,136,0.03))', iconColor: '#0D9488' },
+    { name: 'Gerer les grossistes', description: 'Alliance, CERP, OCP et partenaires', href: '/wholesalers', icon: Truck, gradient: 'linear-gradient(135deg, rgba(59,130,246,0.10), rgba(59,130,246,0.03))', iconColor: '#3B82F6' },
+    { name: 'Gerer les clients', description: 'Orifarm, MPA, Axicorp et importateurs', href: '/customers', icon: Users, gradient: 'linear-gradient(135deg, rgba(124,92,191,0.10), rgba(124,92,191,0.03))', iconColor: '#7C5CBF' },
   ]
 
   const catalogProgress = productCount != null ? Math.min((productCount / 1760) * 100, 100) : 0
 
   return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-7 max-w-6xl mx-auto">
+    <div className="p-5 md:p-7 lg:p-8 space-y-7 max-w-[1200px] mx-auto ivory-page-glow">
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="relative z-10">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl md:text-2xl font-semibold tracking-tight">Tableau de bord</h2>
-            <p className="text-[13px] text-muted-foreground mt-0.5">Vue d'ensemble des donnees de reference</p>
+            <h2 className="ivory-display text-2xl md:text-3xl">Tableau de bord</h2>
+            <p className="text-[13px] mt-1" style={{ color: 'var(--ivory-text-muted)' }}>Vue d'ensemble des donnees de reference</p>
           </div>
           <Link to="/products">
-            <Button variant="outline" size="sm" className="hidden sm:flex gap-1.5 text-[13px] h-8">
+            <Button variant="outline" size="sm" className="hidden sm:flex gap-1.5 text-[13px] h-9 rounded-xl"
+              style={{ borderColor: 'rgba(0,0,0,0.08)', boxShadow: 'var(--ivory-shadow-sm)' }}>
               <FileSpreadsheet className="h-3.5 w-3.5" />
               Import Excel
             </Button>
@@ -124,81 +104,86 @@ export default function DashboardPage() {
       {/* Active process banner */}
       {activeProcess && (
         <Link to={`/monthly-processes/${activeProcess.id}`}>
-          <motion.div initial={{ opacity: 0, scale: 0.99 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3, delay: 0.05 }}>
-            <Card className="border-primary/20 bg-primary/[0.03] hover:bg-primary/[0.05] transition-colors cursor-pointer group">
-              <CardContent className="p-4 md:p-5">
-                <div className="flex items-center gap-3.5">
-                  <div className="h-10 w-10 rounded-xl bg-primary/8 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
-                    <Play className="h-5 w-5 text-primary" />
+          <motion.div initial={{ opacity: 0, scale: 0.99 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.05 }} className="relative z-10">
+            <div className="ivory-glass group cursor-pointer overflow-hidden"
+              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.04), rgba(13,148,136,0.02))', borderColor: 'rgba(124,92,191,0.15)' }}>
+              <div className="p-5">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-105"
+                    style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.15), rgba(124,92,191,0.05))' }}>
+                    <Play className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="font-semibold text-[13px]">Processus en cours</h3>
-                      <Badge variant="secondary" className="text-[10px] h-5">Etape {activeProcess.current_step}/5</Badge>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="ivory-heading text-[14px]">Processus en cours</h3>
+                      <span className="ivory-badge" style={{ background: 'rgba(124,92,191,0.08)', color: 'var(--ivory-accent)' }}>
+                        Etape {activeProcess.current_step}/5
+                      </span>
                     </div>
-                    <p className="text-[12px] text-muted-foreground">
+                    <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
                       {MONTH_NAMES[activeProcess.month - 1]} {activeProcess.year} — {STEP_LABELS[activeProcess.current_step - 1]}
                     </p>
-                    {/* Step dots */}
-                    <div className="flex items-center gap-1 mt-2">
-                      {STEP_LABELS.map((label, i) => {
-                        const stepNum = i + 1
+                    <div className="flex items-center gap-1.5 mt-2.5">
+                      {STEP_LABELS.map((label, idx) => {
+                        const stepNum = idx + 1
                         const isCompleted = stepNum < activeProcess.current_step
                         const isCurrent = stepNum === activeProcess.current_step
                         return (
-                          <div key={i} className="flex items-center gap-1">
+                          <div key={idx} className="flex items-center gap-1.5">
                             <div
-                              className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                                isCompleted ? 'bg-primary' : isCurrent ? 'bg-primary animate-subtle-pulse' : 'bg-border'
-                              }`}
+                              className={`h-2 w-2 rounded-full transition-colors ${isCurrent ? 'animate-subtle-pulse' : ''}`}
+                              style={{
+                                background: isCompleted || isCurrent ? 'var(--ivory-accent)' : 'rgba(0,0,0,0.08)',
+                              }}
                               title={label}
                             />
-                            {i < STEP_LABELS.length - 1 && (
-                              <div className={`w-3 h-px ${stepNum < activeProcess.current_step ? 'bg-primary/40' : 'bg-border'}`} />
+                            {idx < STEP_LABELS.length - 1 && (
+                              <div className="w-4 h-0.5 rounded-full" style={{ background: isCompleted ? 'rgba(124,92,191,0.3)' : 'rgba(0,0,0,0.04)' }} />
                             )}
                           </div>
                         )
                       })}
                     </div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 shrink-0" />
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1 shrink-0" style={{ color: 'var(--ivory-text-muted)' }} />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </motion.div>
         </Link>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      {/* Stats Bento Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 relative z-10">
         {stats.map((stat, i) => (
           stat.loading ? <StatSkeleton key={stat.name} /> : (
             <Link key={stat.name} to={stat.href}>
               <motion.div
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: i * 0.04 }}
+                transition={{ duration: 0.4, delay: i * 0.06 }}
               >
-                <Card className="group hover:shadow-md hover:shadow-black/[0.03] transition-all duration-200 cursor-pointer h-full border-border/60 hover:border-border">
-                  <CardHeader className="flex flex-row items-center justify-between pb-1.5 space-y-0">
-                    <CardTitle className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{stat.name}</CardTitle>
-                    <div className={`p-1.5 rounded-md ${stat.bg}`}>
-                      <stat.icon className={`h-3.5 w-3.5 ${stat.color}`} />
+                <div className="ivory-glass group cursor-pointer overflow-hidden p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
+                      {stat.name}
+                    </span>
+                    <div className="h-9 w-9 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
+                      style={{ background: stat.gradient }}>
+                      <stat.icon className="h-4 w-4" style={{ color: stat.iconColor }} />
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <AnimatedCounter
-                      value={stat.value ?? 0}
-                      valueClassName={`text-2xl font-semibold tabular-nums ${stat.danger && stat.value ? 'text-destructive' : ''}`}
-                    />
-                    {stat.target && (
-                      <div className="mt-2 flex items-center gap-1.5">
-                        <ProgressRing value={stat.value ? (stat.value / stat.target) * 100 : 0} size={22} strokeWidth={2.5} showValue={false} />
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">/ {stat.target}</span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                  </div>
+                  <AnimatedCounter
+                    value={stat.value ?? 0}
+                    valueClassName={`text-2xl ivory-heading tabular-nums ${stat.danger && stat.value ? 'text-red-500' : ''}`}
+                  />
+                  {stat.target && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <ProgressRing value={stat.value ? (stat.value / stat.target) * 100 : 0} size={24} strokeWidth={2.5} showValue={false} />
+                      <span className="text-[10px] font-medium tabular-nums" style={{ color: 'var(--ivory-text-muted)' }}>/ {stat.target}</span>
+                    </div>
+                  )}
+                </div>
               </motion.div>
             </Link>
           )
@@ -206,51 +191,66 @@ export default function DashboardPage() {
       </div>
 
       {/* Catalog progress */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}>
-        <Card className="border-border/60">
-          <CardContent className="p-4 md:p-5">
-            <div className="flex items-center gap-4">
-              <ProgressRing value={catalogProgress} size={56} strokeWidth={5} color="hsl(var(--primary))" />
-              <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-[13px]">Progression du catalogue</h3>
-                <p className="text-[12px] text-muted-foreground mt-0.5">{productCount ?? 0} produits importes sur 1 760 attendus</p>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.4 }} className="relative z-10">
+        <div className="ivory-glass p-5 overflow-hidden">
+          <div className="flex items-center gap-5">
+            <ProgressRing value={catalogProgress} size={64} strokeWidth={5} color="var(--ivory-accent)" />
+            <div className="flex-1 min-w-0">
+              <h3 className="ivory-heading text-[14px]">Progression du catalogue</h3>
+              <p className="text-[12px] mt-1" style={{ color: 'var(--ivory-text-muted)' }}>
+                {productCount ?? 0} produits importes sur 1 760 attendus
+              </p>
+              <div className="mt-2.5 w-full h-2 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.04)' }}>
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ background: 'linear-gradient(90deg, var(--ivory-accent), var(--ivory-teal))' }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${catalogProgress}%` }}
+                  transition={{ duration: 1.5, ease: 'easeOut', delay: 0.4 }}
+                />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Quick actions */}
-      <div>
-        <h3 className="text-[13px] font-medium text-muted-foreground mb-3">Acces rapide</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      <div className="relative z-10">
+        <div className="flex items-center gap-2 mb-3.5">
+          <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
+            Acces rapide
+          </span>
+          <div className="flex-1 h-px" style={{ background: 'rgba(0,0,0,0.04)' }} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {quickActions.map((action, i) => (
             <Link key={action.href} to={action.href}>
               <motion.div
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: 0.3 + i * 0.04 }}
+                transition={{ duration: 0.35, delay: 0.35 + i * 0.06 }}
               >
-                <Card className="group hover:shadow-md hover:shadow-black/[0.03] transition-all duration-200 cursor-pointer overflow-hidden h-full border-border/60 hover:border-border">
-                  <CardContent className="flex items-center gap-3 p-3.5">
-                    <div className={`h-9 w-9 rounded-lg ${action.bg} flex items-center justify-center shrink-0`}>
-                      <action.icon className={`h-4 w-4 ${action.color}`} />
+                <div className="ivory-glass group cursor-pointer overflow-hidden p-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
+                      style={{ background: action.gradient }}>
+                      <action.icon className="h-4.5 w-4.5" style={{ color: action.iconColor }} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-[13px]">{action.name}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{action.description}</p>
+                      <p className="font-semibold text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>{action.name}</p>
+                      <p className="text-[11px] mt-0.5 line-clamp-1" style={{ color: 'var(--ivory-text-muted)' }}>{action.description}</p>
                     </div>
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
-                  </CardContent>
-                </Card>
+                    <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" style={{ color: 'rgba(0,0,0,0.15)' }} />
+                  </div>
+                </div>
               </motion.div>
             </Link>
           ))}
         </div>
       </div>
 
-      <div className="text-center pt-2 pb-4">
-        <p className="text-[11px] text-muted-foreground/50">
+      <div className="text-center pt-3 pb-5 relative z-10">
+        <p className="text-[11px]" style={{ color: 'rgba(0,0,0,0.15)' }}>
           RW Pharma &middot; Phase 1 : Setup & Donnees de reference
         </p>
       </div>

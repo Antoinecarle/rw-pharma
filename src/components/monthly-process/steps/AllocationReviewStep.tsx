@@ -247,7 +247,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
       {/* KPI cards with gauge */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <motion.div custom={0} variants={cardVariants} initial="hidden" animate="visible">
-          <Card className="hover:shadow-md transition-shadow">
+          <Card>
             <CardContent className="p-4 text-center">
               <BarChart3 className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
               <AnimatedCounter
@@ -260,7 +260,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
           </Card>
         </motion.div>
         <motion.div custom={1} variants={cardVariants} initial="hidden" animate="visible">
-          <Card className="hover:shadow-md transition-shadow">
+          <Card>
             <CardContent className="p-4 text-center">
               <AnimatedCounter
                 value={totalRequested}
@@ -272,7 +272,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
           </Card>
         </motion.div>
         <motion.div custom={2} variants={cardVariants} initial="hidden" animate="visible">
-          <Card className="hover:shadow-md transition-shadow">
+          <Card>
             <CardContent className="p-4 text-center">
               <AnimatedCounter
                 value={totalAllocated}
@@ -284,7 +284,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
           </Card>
         </motion.div>
         <motion.div custom={3} variants={cardVariants} initial="hidden" animate="visible">
-          <Card className="hover:shadow-md transition-shadow">
+          <Card>
             <CardContent className="p-3 flex flex-col items-center">
               <GaugeChart
                 value={fulfillmentRate}
@@ -300,7 +300,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
       {/* Under-allocated products alert */}
       {underAllocated.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+          <Card className="border-amber-200/60 bg-amber-50/30">
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -505,7 +505,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
           </Table>
         </div>
       ) : (
-        <Card className="border-dashed">
+        <Card className="ivory-card-empty">
           <CardContent className="p-8 text-center">
             <AlertTriangle className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
             <p className="font-medium">Aucune allocation</p>

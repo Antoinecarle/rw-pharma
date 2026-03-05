@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Label } from '@/components/ui/label'
 import {
@@ -11,16 +10,13 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { motion } from 'framer-motion'
 import { Plus, Calendar, CalendarRange } from 'lucide-react'
 import { toast } from 'sonner'
 import MonthlyProcessCard from '@/components/monthly-process/MonthlyProcessCard'
 import type { MonthlyProcess } from '@/types/database'
 
-const MONTH_NAMES = [
-  'Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre',
-]
-
+const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
 const currentYear = new Date().getFullYear()
 const YEARS = [currentYear - 1, currentYear, currentYear + 1]
 
@@ -33,11 +29,7 @@ export default function MonthlyProcessesPage() {
   const { data: processes, isLoading } = useQuery({
     queryKey: ['monthly-processes'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('monthly_processes')
-        .select('*')
-        .order('year', { ascending: false })
-        .order('month', { ascending: false })
+      const { data, error } = await supabase.from('monthly_processes').select('*').order('year', { ascending: false }).order('month', { ascending: false })
       if (error) throw error
       return data as MonthlyProcess[]
     },
@@ -45,122 +37,100 @@ export default function MonthlyProcessesPage() {
 
   const createMut = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase
-        .from('monthly_processes')
-        .insert({
-          month: parseInt(newMonth, 10),
-          year: parseInt(newYear, 10),
-          status: 'draft',
-          current_step: 1,
-          metadata: {},
-        })
-        .select()
-        .single()
+      const { data, error } = await supabase.from('monthly_processes').insert({ month: parseInt(newMonth, 10), year: parseInt(newYear, 10), status: 'draft', current_step: 1, metadata: {} }).select().single()
       if (error) throw error
       return data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      setDialogOpen(false)
-      toast.success('Processus mensuel cree')
-    },
-    onError: (err: Error) => {
-      if (err.message.includes('unique') || err.message.includes('duplicate')) {
-        toast.error('Un processus existe deja pour ce mois')
-      } else {
-        toast.error(err.message)
-      }
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['monthly-processes'] }); setDialogOpen(false); toast.success('Processus mensuel cree') },
+    onError: (err: Error) => { if (err.message.includes('unique') || err.message.includes('duplicate')) toast.error('Un processus existe deja pour ce mois'); else toast.error(err.message) },
   })
 
   return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-6xl mx-auto">
+    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1200px] mx-auto ivory-page-glow">
       {/* Header */}
-      <div className="animate-fade-in flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl md:text-2xl font-semibold tracking-tight">Processus Mensuels</h2>
-          <p className="text-[13px] text-muted-foreground mt-0.5">
-            Gestion des allocations mensuelles
-          </p>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="relative z-10">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm"
+              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(13,148,136,0.06))' }}>
+              <CalendarRange className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
+            </div>
+            <div>
+              <h2 className="ivory-heading text-xl md:text-2xl">Processus Mensuels</h2>
+              <p className="text-[12px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>Gestion des allocations mensuelles</p>
+            </div>
+          </div>
+          <Button size="sm" onClick={() => setDialogOpen(true)} className="gap-1.5 text-[13px] h-9 rounded-xl shadow-sm"
+            style={{ background: 'linear-gradient(180deg, var(--ivory-accent), var(--ivory-accent-hover))', color: 'white' }}>
+            <Plus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Nouveau</span>
+          </Button>
         </div>
-        <Button size="sm" onClick={() => setDialogOpen(true)} className="gap-1.5 text-[13px] h-8">
-          <Plus className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Nouveau</span>
-        </Button>
-      </div>
+      </motion.div>
 
       {/* Process list */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i}><CardContent className="p-5"><Skeleton className="h-24 w-full" /></CardContent></Card>
+            <div key={i} className="ivory-glass p-5"><Skeleton className="h-28 w-full rounded-xl" /></div>
           ))}
         </div>
       ) : processes && processes.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
-          {processes.map((p) => (
-            <MonthlyProcessCard key={p.id} process={p} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
+          {processes.map((p, i) => (
+            <MonthlyProcessCard key={p.id} process={p} index={i} />
           ))}
         </div>
       ) : (
-        <Card className="border-dashed animate-fade-in">
-          <CardContent className="p-10 text-center">
-            <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-              <CalendarRange className="h-7 w-7 text-muted-foreground" />
+        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="relative z-10">
+          <div className="ivory-glass p-0 overflow-hidden" style={{ borderStyle: 'dashed' }}>
+            <div className="flex flex-col items-center py-20 gap-3">
+              <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(124,92,191,0.06)' }}>
+                <CalendarRange className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} />
+              </div>
+              <p className="ivory-heading text-[16px]">Aucun processus</p>
+              <p className="text-[13px]" style={{ color: 'var(--ivory-text-muted)' }}>Creez votre premier processus d'allocation mensuelle</p>
+              <Button onClick={() => setDialogOpen(true)} className="mt-2 gap-2 text-[13px] h-9 rounded-xl"
+                style={{ background: 'var(--ivory-accent)', color: 'white' }}>
+                <Plus className="h-4 w-4" /> Creer un processus
+              </Button>
             </div>
-            <h3 className="text-lg font-semibold">Aucun processus</h3>
-            <p className="text-sm text-muted-foreground mt-1 mb-4">
-              Creez votre premier processus d'allocation mensuelle
-            </p>
-            <Button onClick={() => setDialogOpen(true)} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Creer un processus
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
       )}
 
       {/* Create dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Nouveau processus mensuel
+            <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base">
+              <div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(124,92,191,0.08)' }}>
+                <Calendar className="h-4 w-4" style={{ color: 'var(--ivory-accent)' }} />
+              </div>
+              Nouveau processus
             </DialogTitle>
-            <DialogDescription>
-              Selectionnez le mois et l'annee pour ce cycle d'allocation.
-            </DialogDescription>
+            <DialogDescription className="text-[13px]">Selectionnez le mois et l'annee.</DialogDescription>
           </DialogHeader>
-
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Mois</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[13px] font-medium">Mois</Label>
               <Select value={newMonth} onValueChange={setNewMonth}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MONTH_NAMES.map((name, i) => (
-                    <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>{MONTH_NAMES.map((name, i) => <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Annee</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[13px] font-medium">Annee</Label>
               <Select value={newYear} onValueChange={setNewYear}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {YEARS.map((y) => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>{YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
-            <Button onClick={() => createMut.mutate()} disabled={createMut.isPending}>
+            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">Annuler</Button>
+            <Button size="sm" onClick={() => createMut.mutate()} disabled={createMut.isPending} className="text-[13px] rounded-xl"
+              style={{ background: 'var(--ivory-accent)', color: 'white' }}>
               {createMut.isPending ? 'Creation...' : 'Creer'}
             </Button>
           </DialogFooter>

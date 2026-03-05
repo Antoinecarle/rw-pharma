@@ -326,7 +326,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       </div>
 
       {existingAllocations != null && existingAllocations > 0 && (
-        <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+        <Card className="border-amber-200/60 bg-amber-50/30">
           <CardContent className="p-4 flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
             <p className="text-sm">
@@ -439,7 +439,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
 
           {/* Dry run results */}
           {dryRunResult && (
-            <Card className="border-primary/20 bg-primary/5">
+            <Card className="ivory-card-highlight">
               <CardContent className="p-5 space-y-4">
                 <div className="flex items-center gap-2">
                   <Eye className="h-4 w-4 text-primary" />
@@ -506,7 +506,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
           )}
 
           {/* Launch button */}
-          <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+          <Card className="ivory-card-highlight">
             <CardContent className="p-6 text-center space-y-4">
               <Cpu className="h-12 w-12 mx-auto text-primary" />
               <div>

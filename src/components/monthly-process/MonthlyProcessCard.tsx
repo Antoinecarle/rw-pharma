@@ -1,7 +1,5 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Calendar, ArrowRight, Package, BarChart3, Check } from 'lucide-react'
 import type { MonthlyProcess } from '@/types/database'
 
@@ -10,14 +8,14 @@ const MONTH_NAMES = [
   'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre',
 ]
 
-const STATUS_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  draft: { label: 'Brouillon', variant: 'secondary' },
-  importing: { label: 'Importation', variant: 'outline' },
-  reviewing_orders: { label: 'Revue commandes', variant: 'outline' },
-  allocating: { label: 'Allocation en cours', variant: 'default' },
-  reviewing_allocations: { label: 'Revue allocations', variant: 'outline' },
-  finalizing: { label: 'Finalisation', variant: 'outline' },
-  completed: { label: 'Termine', variant: 'default' },
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  draft: { label: 'Brouillon', color: 'var(--ivory-text-muted)', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.06)' },
+  importing: { label: 'Importation', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
+  reviewing_orders: { label: 'Revue commandes', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
+  allocating: { label: 'Allocation', color: 'var(--ivory-accent)', bg: 'rgba(124,92,191,0.08)', border: 'rgba(124,92,191,0.15)' },
+  reviewing_allocations: { label: 'Revue allocations', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
+  finalizing: { label: 'Finalisation', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
+  completed: { label: 'Termine', color: 'var(--ivory-teal)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
 }
 
 const STEP_LABELS = ['', 'Importation', 'Revue commandes', 'Allocation', 'Revue allocations', 'Finalisation']
@@ -31,6 +29,7 @@ export default function MonthlyProcessCard({ process, index = 0 }: MonthlyProces
   const statusCfg = STATUS_CONFIG[process.status] ?? STATUS_CONFIG.draft
   const monthName = MONTH_NAMES[process.month - 1] ?? ''
   const isCompleted = process.status === 'completed'
+  const progress = (process.current_step / 5) * 100
 
   return (
     <Link to={`/monthly-processes/${process.id}`}>
@@ -38,50 +37,57 @@ export default function MonthlyProcessCard({ process, index = 0 }: MonthlyProces
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.06, type: 'spring', stiffness: 300, damping: 25 }}
-        whileHover={{ y: -4 }}
+        whileHover={{ y: -3 }}
+        className="h-full"
       >
-        <Card className={`group hover:shadow-lg hover:shadow-black/5 transition-shadow duration-300 cursor-pointer overflow-hidden ${isCompleted ? 'border-primary/30' : ''}`}>
-          <CardContent className="p-5">
+        <div className="ivory-glass group cursor-pointer overflow-hidden h-full transition-all duration-300"
+          style={{ borderColor: isCompleted ? 'rgba(13,148,136,0.15)' : undefined }}>
+          <div className="p-5">
+            {/* Header */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <motion.div
-                  className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${isCompleted ? 'bg-gradient-to-br from-primary to-emerald-600' : 'bg-gradient-to-br from-orange-500 to-amber-600'}`}
-                  whileHover={{ rotate: 10 }}
+                  className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-105"
+                  style={{
+                    background: isCompleted
+                      ? 'linear-gradient(135deg, rgba(13,148,136,0.15), rgba(13,148,136,0.05))'
+                      : 'linear-gradient(135deg, rgba(124,92,191,0.15), rgba(124,92,191,0.05))',
+                  }}
                 >
-                  <Calendar className="h-5 w-5 text-white" />
+                  <Calendar className="h-5 w-5" style={{ color: isCompleted ? 'var(--ivory-teal)' : 'var(--ivory-accent)' }} />
                 </motion.div>
                 <div>
-                  <h3 className="font-semibold text-sm">{monthName} {process.year}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Etape {process.current_step}/5 : {STEP_LABELS[process.current_step]}
+                  <h3 className="ivory-heading text-[14px]">{monthName} {process.year}</h3>
+                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>
+                    Etape {process.current_step}/5 — {STEP_LABELS[process.current_step]}
                   </p>
                 </div>
               </div>
-              <Badge variant={statusCfg.variant} className="shrink-0">
+              <span className="ivory-badge shrink-0" style={{ background: statusCfg.bg, color: statusCfg.color, border: `1px solid ${statusCfg.border}` }}>
+                {isCompleted && <Check className="h-3 w-3" />}
                 {statusCfg.label}
-              </Badge>
+              </span>
             </div>
 
-            <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <Package className="h-3.5 w-3.5" />
-                <span>{process.orders_count} commandes</span>
+            {/* Stats */}
+            <div className="mt-4 flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <Package className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} />
+                <span className="text-[12px] font-medium" style={{ color: 'var(--ivory-text-body)' }}>
+                  <span className="font-bold tabular-nums">{process.orders_count}</span> commandes
+                </span>
               </div>
-              <div className="flex items-center gap-1">
-                <BarChart3 className="h-3.5 w-3.5" />
-                <span>{process.allocations_count} allocations</span>
+              <div className="flex items-center gap-1.5">
+                <BarChart3 className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} />
+                <span className="text-[12px] font-medium" style={{ color: 'var(--ivory-text-body)' }}>
+                  <span className="font-bold tabular-nums">{process.allocations_count}</span> allocations
+                </span>
               </div>
-              <motion.div
-                className="ml-auto"
-                animate={{ x: [0, 3, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <ArrowRight className="h-3.5 w-3.5" />
-              </motion.div>
+              <ArrowRight className="h-3.5 w-3.5 ml-auto transition-transform group-hover:translate-x-1" style={{ color: 'rgba(0,0,0,0.15)' }} />
             </div>
 
-            {/* Stepper dots replacing progress bar */}
-            <div className="mt-3 flex items-center gap-1">
+            {/* Step progress */}
+            <div className="mt-3.5 flex items-center gap-1.5">
               {[1, 2, 3, 4, 5].map(step => {
                 const isDone = step < process.current_step
                 const isActive = step === process.current_step
@@ -89,31 +95,49 @@ export default function MonthlyProcessCard({ process, index = 0 }: MonthlyProces
                   <div key={step} className="flex items-center flex-1 last:flex-none">
                     <div className="relative">
                       <div
-                        className={`h-2.5 w-2.5 rounded-full transition-all ${
-                          isDone
-                            ? 'bg-primary'
-                            : isActive
-                              ? 'bg-primary'
-                              : 'bg-muted'
-                        }`}
+                        className={`h-2.5 w-2.5 rounded-full transition-all ${isActive ? 'animate-subtle-pulse' : ''}`}
+                        style={{
+                          background: isDone || isActive
+                            ? (isCompleted ? 'var(--ivory-teal)' : 'var(--ivory-accent)')
+                            : 'rgba(0,0,0,0.06)',
+                        }}
                       >
                         {isDone && (
-                          <Check className="h-2 w-2 text-primary-foreground absolute inset-0 m-auto" />
+                          <Check className="h-2 w-2 text-white absolute inset-0 m-auto" />
                         )}
                       </div>
-                      {isActive && (
-                        <span className="absolute inset-0 rounded-full bg-primary/30 animate-ping" />
-                      )}
                     </div>
                     {step < 5 && (
-                      <div className={`flex-1 h-0.5 mx-0.5 rounded-full ${isDone ? 'bg-primary' : 'bg-muted'}`} />
+                      <div
+                        className="flex-1 h-0.5 mx-0.5 rounded-full"
+                        style={{
+                          background: isDone
+                            ? (isCompleted ? 'rgba(13,148,136,0.3)' : 'rgba(124,92,191,0.3)')
+                            : 'rgba(0,0,0,0.04)',
+                        }}
+                      />
                     )}
                   </div>
                 )
               })}
             </div>
-          </CardContent>
-        </Card>
+
+            {/* Progress bar */}
+            <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.04)' }}>
+              <motion.div
+                className="h-full rounded-full"
+                style={{
+                  background: isCompleted
+                    ? 'linear-gradient(90deg, var(--ivory-teal), #10B981)'
+                    : 'linear-gradient(90deg, var(--ivory-accent), var(--ivory-teal))',
+                }}
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 1, ease: 'easeOut', delay: index * 0.06 + 0.3 }}
+              />
+            </div>
+          </div>
+        </div>
       </motion.div>
     </Link>
   )

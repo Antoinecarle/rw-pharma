@@ -284,7 +284,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
 
       {/* Anomaly breakdown */}
       {totalAnomalies > 0 && (
-        <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+        <Card className="border-amber-200/60 bg-amber-50/30">
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -460,7 +460,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
           </Table>
         </div>
       ) : (
-        <Card className="border-dashed">
+        <Card className="ivory-card-empty">
           <CardContent className="p-8 text-center">
             <AlertTriangle className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
             <p className="font-medium">

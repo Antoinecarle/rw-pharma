@@ -2,11 +2,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, Trash2 } from 'lucide-react'
+import { ArrowLeft, Trash2, CalendarRange } from 'lucide-react'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 import confetti from 'canvas-confetti'
@@ -116,19 +114,19 @@ export default function MonthlyProcessDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-5xl mx-auto">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-64 w-full" />
+      <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-[1200px] mx-auto ivory-page-glow">
+        <Skeleton className="h-8 w-48 rounded-xl" />
+        <Skeleton className="h-16 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
       </div>
     )
   }
 
   if (!process) {
     return (
-      <div className="p-4 md:p-6 lg:p-8 text-center">
-        <p className="text-muted-foreground">Processus introuvable</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/monthly-processes')}>
+      <div className="p-5 md:p-7 lg:p-8 text-center max-w-[1200px] mx-auto ivory-page-glow">
+        <p style={{ color: 'var(--ivory-text-muted)' }}>Processus introuvable</p>
+        <Button variant="outline" className="mt-4 rounded-xl" onClick={() => navigate('/monthly-processes')}>
           Retour
         </Button>
       </div>
@@ -138,14 +136,15 @@ export default function MonthlyProcessDetailPage() {
   const monthName = MONTH_NAMES[process.month - 1] ?? ''
 
   return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-5xl mx-auto">
+    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1200px] mx-auto ivory-page-glow">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
+        className="relative z-10"
       >
-        <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground mb-3">
+        <div className="flex items-center gap-1.5 text-[12px] mb-4" style={{ color: 'var(--ivory-text-muted)' }}>
           <Link to="/monthly-processes" className="hover:text-foreground transition-colors flex items-center gap-1">
             <ArrowLeft className="h-3.5 w-3.5" />
             Processus Mensuels
@@ -155,26 +154,31 @@ export default function MonthlyProcessDetailPage() {
         </div>
 
         <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <h2 className="text-xl md:text-2xl font-semibold tracking-tight">
-              Allocation - {monthName} {process.year}
-            </h2>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant={process.status === 'completed' ? 'default' : 'secondary'} className="text-[10px] h-5">
-                {STATUS_LABELS[process.status] ?? process.status}
-              </Badge>
-              <span className="text-[12px] text-muted-foreground">
-                {process.orders_count} commandes / {process.allocations_count} allocations
-              </span>
+          <div className="flex items-center gap-3.5 flex-1">
+            <div className="h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm shrink-0"
+              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(13,148,136,0.08))' }}>
+              <CalendarRange className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
+            </div>
+            <div>
+              <h2 className="ivory-heading text-xl md:text-2xl">
+                Allocation - {monthName} {process.year}
+              </h2>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant={process.status === 'completed' ? 'default' : 'secondary'} className="text-[10px] h-5">
+                  {STATUS_LABELS[process.status] ?? process.status}
+                </Badge>
+                <span className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
+                  {process.orders_count} commandes / {process.allocations_count} allocations
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Quality Score */}
             <StepQualityScore process={process} step={currentStep} />
 
             {process.status !== 'completed' && (
-              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive rounded-xl" onClick={() => setDeleteOpen(true)}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
@@ -188,8 +192,7 @@ export default function MonthlyProcessDetailPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.1 }}
       >
-        <Card>
-          <CardContent className="p-4 md:p-5">
+        <div className="ivory-glass p-4 md:p-5">
             <ProcessStepper
               currentStep={currentStep}
               onStepClick={(step) => {
@@ -205,11 +208,10 @@ export default function MonthlyProcessDetailPage() {
                 return stats
               })()}
             />
-          </CardContent>
-        </Card>
+        </div>
       </motion.div>
 
-      <Separator />
+      <div className="h-px" style={{ background: 'rgba(0,0,0,0.06)' }} />
 
       {/* Step content with animated transitions */}
       <AnimatePresence mode="wait">

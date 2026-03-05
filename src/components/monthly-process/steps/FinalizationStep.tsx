@@ -334,7 +334,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
           { icon: Truck, color: 'text-amber-600', value: stats?.uniqueWholesalers ?? 0, label: 'Grossistes' },
         ].map((stat, i) => (
           <motion.div key={stat.label} custom={i} variants={cardVariants} initial="hidden" animate="visible">
-            <Card className="hover:shadow-md transition-shadow">
+            <Card>
               <CardContent className="p-4 flex items-center gap-3">
                 <stat.icon className={`h-5 w-5 ${stat.color} shrink-0`} />
                 <div>
@@ -386,7 +386,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
 
       {/* Export section */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-        <Card className="border-primary/20">
+        <Card className="ivory-card-highlight">
           <CardContent className="p-5 space-y-4">
             <div className="flex items-center gap-2">
               <Download className="h-4 w-4 text-primary" />

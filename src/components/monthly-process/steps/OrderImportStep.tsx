@@ -456,7 +456,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       </div>
 
       {existingOrders != null && existingOrders > 0 && (
-        <Card className="border-primary/20 bg-primary/5">
+        <Card className="ivory-card-highlight">
           <CardContent className="p-4 flex items-center gap-3">
             <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
             <p className="text-sm">
