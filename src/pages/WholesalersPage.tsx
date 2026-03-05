@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Wholesaler, WholesalerInsert } from '@/types/database'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog'
-import { Plus, Pencil, Trash2, ExternalLink, Truck, Mail, Building2, FolderOpen } from 'lucide-react'
+import { Plus, Pencil, Trash2, ExternalLink, Truck, Mail, Building2, FolderOpen, CheckCircle2, LinkIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
@@ -39,6 +40,24 @@ function CardSkeleton() {
       </CardContent>
     </Card>
   )
+}
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.06, type: 'spring', stiffness: 300, damping: 25 },
+  }),
+}
+
+function isValidUrl(str: string): boolean {
+  try {
+    new URL(str)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export default function WholesalersPage() {
@@ -111,23 +130,31 @@ export default function WholesalersPage() {
     upsert.mutate(editing ? { ...form, id: editing.id } : form)
   }
 
+  const driveUrlValid = !form.drive_folder_url || isValidUrl(form.drive_folder_url)
+
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-5 max-w-7xl mx-auto animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center">
+          <motion.div
+            className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center"
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            transition={{ type: 'spring', stiffness: 400 }}
+          >
             <Truck className="h-5 w-5 text-blue-600" />
-          </div>
+          </motion.div>
           <div>
             <h2 className="text-xl md:text-2xl font-bold">Grossistes</h2>
             <p className="text-sm text-muted-foreground">{wholesalers?.length ?? 0} grossistes francais partenaires</p>
           </div>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Ajouter
-        </Button>
+        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <Button onClick={openCreate} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Ajouter
+          </Button>
+        </motion.div>
       </div>
 
       {/* Cards grid */}
@@ -138,9 +165,14 @@ export default function WholesalersPage() {
       ) : !wholesalers?.length ? (
         <Card>
           <CardContent className="flex flex-col items-center py-16 gap-3">
-            <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center">
+            <motion.div
+              className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
+            >
               <Building2 className="h-8 w-8 text-muted-foreground" />
-            </div>
+            </motion.div>
             <div className="text-center">
               <p className="font-semibold">Aucun grossiste</p>
               <p className="text-sm text-muted-foreground mt-1">
@@ -155,68 +187,86 @@ export default function WholesalersPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {wholesalers.map((w, i) => (
-            <Card key={w.id} className={`group hover:shadow-lg hover:shadow-black/5 transition-all duration-300 hover:-translate-y-0.5 animate-fade-in stagger-${Math.min(i + 1, 5)}`}>
-              <CardContent className="p-5">
-                <div className="flex items-start gap-4">
-                  <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
-                    <Truck className="h-5 w-5 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold truncate">{w.name}</h3>
-                      {w.code && (
-                        <Badge variant="secondary" className="font-mono text-xs shrink-0">{w.code}</Badge>
-                      )}
-                    </div>
-
-                    <div className="mt-2 space-y-1.5">
-                      {w.contact_email && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Mail className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{w.contact_email}</span>
+          <AnimatePresence mode="popLayout">
+            {wholesalers.map((w, i) => (
+              <motion.div
+                key={w.id}
+                custom={i}
+                variants={cardVariants}
+                initial="hidden"
+                animate="visible"
+                exit={{ opacity: 0, scale: 0.95 }}
+                layout
+                whileHover={{ y: -4 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              >
+                <Card className="group hover:shadow-lg hover:shadow-black/5 transition-shadow duration-300">
+                  <CardContent className="p-5">
+                    <div className="flex items-start gap-4">
+                      <motion.div
+                        className="h-11 w-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm"
+                        whileHover={{ rotate: 10 }}
+                      >
+                        <Truck className="h-5 w-5 text-white" />
+                      </motion.div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold truncate">{w.name}</h3>
+                          {w.code && (
+                            <Badge variant="secondary" className="font-mono text-xs shrink-0">{w.code}</Badge>
+                          )}
                         </div>
-                      )}
-                      {w.drive_folder_url && (
-                        <a
-                          href={w.drive_folder_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-sm text-primary hover:underline"
-                        >
-                          <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-                          Google Drive
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
-                      {!w.contact_email && !w.drive_folder_url && (
-                        <p className="text-sm text-muted-foreground italic">Aucun contact configure</p>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(w)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Modifier</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(w.id)}>
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Supprimer</TooltipContent>
-                    </Tooltip>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                        <div className="mt-2 space-y-1.5">
+                          {w.contact_email && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Mail className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">{w.contact_email}</span>
+                            </div>
+                          )}
+                          {w.drive_folder_url && (
+                            <motion.a
+                              href={w.drive_folder_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-sm text-primary hover:underline group/link"
+                              whileHover={{ x: 2 }}
+                            >
+                              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                              Google Drive
+                              <ExternalLink className="h-3 w-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                            </motion.a>
+                          )}
+                          {!w.contact_email && !w.drive_folder_url && (
+                            <p className="text-sm text-muted-foreground italic">Aucun contact configure</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(w)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Modifier</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(w.id)}>
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Supprimer</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
 
@@ -268,18 +318,48 @@ export default function WholesalersPage() {
                 />
               </div>
             </div>
+
+            {/* URL input with validation preview */}
             <div className="space-y-2">
               <Label>URL Google Drive</Label>
               <div className="relative">
-                <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   value={form.drive_folder_url ?? ''}
                   onChange={(e) => setForm({ ...form, drive_folder_url: e.target.value || null })}
                   placeholder="https://drive.google.com/..."
-                  className="pl-9"
+                  className={`pl-9 pr-10 ${form.drive_folder_url && !driveUrlValid ? 'border-red-300 focus-visible:ring-red-400' : ''}`}
                 />
+                {form.drive_folder_url && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {driveUrlValid ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    ) : (
+                      <span className="text-xs text-red-500 font-medium">URL invalide</span>
+                    )}
+                  </div>
+                )}
               </div>
+              {form.drive_folder_url && driveUrlValid && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2"
+                >
+                  <FolderOpen className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="truncate">{form.drive_folder_url}</span>
+                  <a
+                    href={form.drive_folder_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline shrink-0 ml-auto"
+                  >
+                    Ouvrir
+                  </a>
+                </motion.div>
+              )}
             </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Annuler

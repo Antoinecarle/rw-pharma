@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Wholesaler, Product, WholesalerQuota, WholesalerQuotaInsert } from '@/types/database'
+import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,12 +18,19 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import MonthStrip from '@/components/ui/month-strip'
+import StepperInput from '@/components/ui/stepper-input'
 import { Plus, Pencil, Trash2, Search, ClipboardList, Calendar, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ProductCombobox from '@/components/quotas/ProductCombobox'
 
 const PAGE_SIZE = 50
+
+const WHOLESALER_COLORS = [
+  'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500',
+  'bg-rose-500', 'bg-cyan-500', 'bg-orange-500', 'bg-indigo-500',
+]
 
 function TableSkeleton() {
   return (
@@ -40,6 +48,15 @@ function TableSkeleton() {
       ))}
     </>
   )
+}
+
+const rowVariants = {
+  hidden: { opacity: 0, x: -10 },
+  visible: (i: number) => ({
+    opacity: 1,
+    x: 0,
+    transition: { delay: i * 0.03, duration: 0.2 },
+  }),
 }
 
 export default function QuotasPage() {
@@ -196,14 +213,31 @@ export default function QuotasPage() {
 
   const currentMonthLabel = new Date(monthFilter).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 
+  // Build wholesaler color map for colored dots
+  const wholesalerColorMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    wholesalers?.forEach((w, i) => {
+      map[w.id] = WHOLESALER_COLORS[i % WHOLESALER_COLORS.length]
+    })
+    return map
+  }, [wholesalers])
+
+  // Summary stats
+  const totalQuota = quotas?.data.reduce((s, q) => s + q.quota_quantity, 0) ?? 0
+  const totalExtra = quotas?.data.reduce((s, q) => s + q.extra_available, 0) ?? 0
+
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-5 max-w-7xl mx-auto animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center">
+          <motion.div
+            className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center"
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            transition={{ type: 'spring', stiffness: 400 }}
+          >
             <ClipboardList className="h-5 w-5 text-amber-600" />
-          </div>
+          </motion.div>
           <div>
             <h2 className="text-xl md:text-2xl font-bold">Quotas grossistes</h2>
             <p className="text-sm text-muted-foreground flex items-center gap-1.5">
@@ -212,13 +246,24 @@ export default function QuotasPage() {
             </p>
           </div>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Ajouter
-        </Button>
+        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <Button onClick={openCreate} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Ajouter
+          </Button>
+        </motion.div>
       </div>
 
-      {/* Filters */}
+      {/* Month strip */}
+      <div className="rounded-xl border bg-card p-2">
+        <MonthStrip
+          value={monthFilter}
+          onChange={(v) => { setMonthFilter(v); setPage(0) }}
+          months={monthOptions}
+        />
+      </div>
+
+      {/* Filters + summary */}
       <div className="flex gap-3 items-center flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -229,30 +274,61 @@ export default function QuotasPage() {
             className="pl-9"
           />
         </div>
-        <Select value={wholesalerFilter} onValueChange={(v) => { setWholesalerFilter(v); setPage(0) }}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Grossiste" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les grossistes</SelectItem>
-            {wholesalers?.map((w) => (
-              <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={monthFilter} onValueChange={(v) => { setMonthFilter(v); setPage(0) }}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Mois" />
-          </SelectTrigger>
-          <SelectContent>
-            {monthOptions.map((m) => (
-              <SelectItem key={m} value={m}>
-                {new Date(m).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+
+        {/* Wholesaler chip filter */}
+        <div className="flex gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => { setWholesalerFilter('all'); setPage(0) }}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+              wholesalerFilter === 'all'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border hover:bg-muted text-muted-foreground'
+            }`}
+          >
+            Tous
+          </button>
+          {wholesalers?.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              onClick={() => { setWholesalerFilter(w.id); setPage(0) }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                wholesalerFilter === w.id
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border hover:bg-muted text-muted-foreground'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${wholesalerColorMap[w.id]}`} />
+              {w.code ?? w.name}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Summary stats bar */}
+      {quotas && quotas.data.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex gap-4 items-center text-sm"
+        >
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50">
+            <span className="text-muted-foreground">Quota total:</span>
+            <span className="font-bold tabular-nums">{totalQuota.toLocaleString('fr-FR')}</span>
+          </div>
+          {totalExtra > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50">
+              <span className="text-muted-foreground">Extra:</span>
+              <span className="font-bold tabular-nums text-emerald-600">+{totalExtra.toLocaleString('fr-FR')}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/5">
+            <span className="text-muted-foreground">Total:</span>
+            <span className="font-bold tabular-nums text-primary">{(totalQuota + totalExtra).toLocaleString('fr-FR')}</span>
+          </div>
+        </motion.div>
+      )}
 
       {/* Table */}
       <div className="border rounded-xl overflow-hidden shadow-sm">
@@ -275,9 +351,14 @@ export default function QuotasPage() {
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-16">
                   <div className="flex flex-col items-center gap-3">
-                    <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center">
+                    <motion.div
+                      className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
+                    >
                       <Package className="h-8 w-8 text-muted-foreground" />
-                    </div>
+                    </motion.div>
                     <div>
                       <p className="font-semibold">Aucun quota pour {currentMonthLabel}</p>
                       <p className="text-sm text-muted-foreground mt-1">
@@ -292,14 +373,25 @@ export default function QuotasPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              quotas.data.map((q) => {
+              quotas.data.map((q, i) => {
                 const total = q.quota_quantity + q.extra_available
+                const colorClass = wholesalerColorMap[q.wholesaler_id] ?? 'bg-gray-400'
                 return (
-                  <TableRow key={q.id} className="group">
+                  <motion.tr
+                    key={q.id}
+                    custom={i}
+                    variants={rowVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="group border-b transition-colors hover:bg-muted/50"
+                  >
                     <TableCell>
-                      <Badge variant="secondary" className="font-medium">
-                        {q.wholesaler?.code ?? q.wholesaler?.name ?? '-'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${colorClass}`} />
+                        <Badge variant="secondary" className="font-medium">
+                          {q.wholesaler?.code ?? q.wholesaler?.name ?? '-'}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell className="font-mono text-sm text-primary">{q.product?.cip13 ?? '-'}</TableCell>
                     <TableCell className="font-medium max-w-[200px] truncate">{q.product?.name ?? '-'}</TableCell>
@@ -336,7 +428,7 @@ export default function QuotasPage() {
                         </Tooltip>
                       </div>
                     </TableCell>
-                  </TableRow>
+                  </motion.tr>
                 )
               })
             )}
@@ -350,10 +442,24 @@ export default function QuotasPage() {
           <p className="text-sm text-muted-foreground">
             Page <span className="font-medium text-foreground">{page + 1}</span> sur <span className="font-medium text-foreground">{totalPages}</span>
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
               Precedent
             </Button>
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              const p = totalPages <= 7 ? i : page <= 3 ? i : page >= totalPages - 4 ? totalPages - 7 + i : page - 3 + i
+              return (
+                <Button
+                  key={p}
+                  variant={p === page ? 'default' : 'outline'}
+                  size="sm"
+                  className="w-8 px-0"
+                  onClick={() => setPage(p)}
+                >
+                  {p + 1}
+                </Button>
+              )
+            })}
             <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
               Suivant
             </Button>
@@ -387,7 +493,12 @@ export default function QuotasPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {wholesalers?.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                    <SelectItem key={w.id} value={w.id}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${wholesalerColorMap[w.id]}`} />
+                        {w.name}
+                      </div>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -418,34 +529,57 @@ export default function QuotasPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Stepper inputs for quota and extra */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Quantite quota *</Label>
-                <Input
-                  type="number"
-                  min={0}
+                <StepperInput
                   value={form.quota_quantity}
-                  onChange={(e) => setForm({ ...form, quota_quantity: parseInt(e.target.value) || 0 })}
-                  required
-                  className="tabular-nums"
+                  onChange={(v) => setForm({ ...form, quota_quantity: v ?? 0 })}
+                  min={0}
+                  max={9999}
+                  step={10}
+                  presets={[
+                    { label: '50', value: 50 },
+                    { label: '100', value: 100 },
+                    { label: '500', value: 500 },
+                  ]}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Extra disponible</Label>
-                <Input
-                  type="number"
-                  min={0}
+                <StepperInput
                   value={form.extra_available}
-                  onChange={(e) => setForm({ ...form, extra_available: parseInt(e.target.value) || 0 })}
-                  className="tabular-nums"
+                  onChange={(v) => setForm({ ...form, extra_available: v ?? 0 })}
+                  min={0}
+                  max={9999}
+                  step={5}
+                  presets={[
+                    { label: '10', value: 10 },
+                    { label: '25', value: 25 },
+                    { label: '50', value: 50 },
+                  ]}
                 />
               </div>
             </div>
+
             {(form.quota_quantity > 0 || form.extra_available > 0) && (
-              <div className="rounded-lg bg-muted/50 p-3 flex items-center justify-between">
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="rounded-lg bg-muted/50 p-3 flex items-center justify-between"
+              >
                 <span className="text-sm text-muted-foreground">Total disponible</span>
-                <span className="font-bold text-lg tabular-nums">{form.quota_quantity + form.extra_available}</span>
-              </div>
+                <motion.span
+                  key={form.quota_quantity + form.extra_available}
+                  initial={{ scale: 1.2 }}
+                  animate={{ scale: 1 }}
+                  className="font-bold text-lg tabular-nums"
+                >
+                  {form.quota_quantity + form.extra_available}
+                </motion.span>
+              </motion.div>
             )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>

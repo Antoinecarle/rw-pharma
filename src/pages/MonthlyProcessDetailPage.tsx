@@ -151,6 +151,12 @@ export default function MonthlyProcessDetailPage() {
           <ProcessStepper
             currentStep={currentStep}
             onStepClick={(step) => setActiveStep(step)}
+            stepStats={{
+              ...(process.orders_count > 0 ? { 1: { value: process.orders_count, label: 'commandes' } } : {}),
+              ...(process.orders_count > 0 && currentStep > 2 ? { 2: { value: 'validees', label: '' } } : {}),
+              ...(process.allocations_count > 0 ? { 3: { value: process.allocations_count, label: 'allocations' } } : {}),
+              ...(process.allocations_count > 0 && currentStep > 4 ? { 4: { value: 'confirmees', label: '' } } : {}),
+            }}
           />
         </CardContent>
       </Card>

@@ -18,8 +18,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { Plus, Search, Pencil, Trash2, ShieldAlert, FileSpreadsheet, Pill, Package } from 'lucide-react'
+import TagInput from '@/components/ui/tag-input'
+import { motion } from 'framer-motion'
+import { Plus, Search, Pencil, Trash2, ShieldAlert, FileSpreadsheet, Pill, Package, X } from 'lucide-react'
 import { toast } from 'sonner'
 import ExcelImport from '@/components/ExcelImport'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -67,7 +68,8 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductInsert>(emptyProduct)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [expiryText, setExpiryText] = useState('')
+  const [expiryTags, setExpiryTags] = useState<string[]>([])
+  const [labChips, setLabChips] = useState<string[]>([])
 
   const { data: products, isLoading } = useQuery({
     queryKey: ['products', search, labFilter, ansm, page],
@@ -142,7 +144,7 @@ export default function ProductsPage() {
   const openCreate = () => {
     setEditing(null)
     setForm(emptyProduct)
-    setExpiryText('')
+    setExpiryTags([])
     setDialogOpen(true)
   }
 
@@ -159,21 +161,18 @@ export default function ProductsPage() {
       expiry_dates: p.expiry_dates,
       metadata: p.metadata,
     })
-    setExpiryText(Array.isArray(p.expiry_dates) ? p.expiry_dates.join(', ') : '')
+    setExpiryTags(Array.isArray(p.expiry_dates) ? p.expiry_dates : [])
     setDialogOpen(true)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const parsedExpiry = expiryText.trim()
-      ? expiryText.split(/[,\n]+/).map(d => d.trim()).filter(Boolean).map(d => {
-          const mmYyyy = d.match(/^(\d{2})\/(\d{4})$/)
-          return mmYyyy ? `${mmYyyy[2]}-${mmYyyy[1]}` : d
-        })
-      : null
-    const payload = { ...form, expiry_dates: parsedExpiry }
+    const payload = { ...form, expiry_dates: expiryTags.length > 0 ? expiryTags : null }
     upsert.mutate(editing ? { ...payload, id: editing.id } : payload)
   }
+
+  // Top laboratories for chip filter
+  const topLabs = (laboratories ?? []).slice(0, 8)
 
   const totalPages = Math.ceil((products?.count ?? 0) / PAGE_SIZE)
 
@@ -203,37 +202,87 @@ export default function ProductsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 items-center flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Rechercher par CIP13, nom, labo..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0) }}
-            className="pl-9"
-          />
+      <div className="space-y-3">
+        <div className="flex gap-3 items-center flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher par CIP13, nom, labo..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(0) }}
+              className="pl-9"
+            />
+          </div>
+          {/* ANSM segmented toggle */}
+          <div className="flex rounded-lg border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => { setAnsm(false); setPage(0) }}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                !ansm ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'
+              }`}
+            >
+              Tous
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAnsm(true); setPage(0) }}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 ${
+                ansm ? 'bg-destructive text-destructive-foreground' : 'hover:bg-muted text-muted-foreground'
+              }`}
+            >
+              <ShieldAlert className="h-3 w-3" />
+              Bloques ANSM
+            </button>
+          </div>
         </div>
-        <Select value={labFilter} onValueChange={(v) => { setLabFilter(v); setPage(0) }}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Laboratoire" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les labos</SelectItem>
-            {laboratories?.map((lab) => (
-              <SelectItem key={lab} value={lab}>{lab}</SelectItem>
+
+        {/* Lab chip filters */}
+        {topLabs.length > 0 && (
+          <div className="flex gap-1.5 items-center flex-wrap">
+            <span className="text-xs text-muted-foreground mr-1">Labos :</span>
+            <button
+              type="button"
+              onClick={() => { setLabFilter('all'); setPage(0) }}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                labFilter === 'all'
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border hover:bg-muted text-muted-foreground'
+              }`}
+            >
+              Tous
+            </button>
+            {topLabs.map((lab) => (
+              <motion.button
+                key={lab}
+                type="button"
+                onClick={() => { setLabFilter(labFilter === lab ? 'all' : lab); setPage(0) }}
+                whileTap={{ scale: 0.92 }}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                  labFilter === lab
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border hover:bg-muted text-muted-foreground'
+                }`}
+              >
+                {lab}
+                {labFilter === lab && <X className="h-3 w-3 ml-1 inline" />}
+              </motion.button>
             ))}
-          </SelectContent>
-        </Select>
-        <Button
-          variant={ansm ? 'destructive' : 'outline'}
-          size="sm"
-          onClick={() => { setAnsm(!ansm); setPage(0) }}
-          className="gap-1.5"
-        >
-          <ShieldAlert className="h-4 w-4" />
-          ANSM
-          {ansm && <span className="ml-1 text-xs opacity-80">(actif)</span>}
-        </Button>
+            {(laboratories?.length ?? 0) > 8 && (
+              <Select value={labFilter} onValueChange={(v) => { setLabFilter(v); setPage(0) }}>
+                <SelectTrigger className="h-7 w-auto border-dashed text-xs gap-1 px-2">
+                  <SelectValue placeholder={`+${(laboratories?.length ?? 0) - 8} autres`} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les labos</SelectItem>
+                  {laboratories?.map((lab) => (
+                    <SelectItem key={lab} value={lab}>{lab}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -295,12 +344,18 @@ export default function ProductsPage() {
                   <TableCell className="text-sm text-muted-foreground hidden lg:table-cell font-mono">{p.eunb ?? '-'}</TableCell>
                   <TableCell>
                     {p.is_ansm_blocked ? (
-                      <Badge variant="destructive" className="gap-1">
-                        <ShieldAlert className="h-3 w-3" />
+                      <Badge variant="destructive" className="gap-1.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                        </span>
                         Bloque
                       </Badge>
                     ) : (
-                      <Badge variant="secondary" className="text-emerald-700 bg-emerald-50 border-emerald-200">
+                      <Badge variant="secondary" className="text-emerald-700 bg-emerald-50 border-emerald-200 gap-1.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                        </span>
                         Actif
                       </Badge>
                     )}
@@ -336,12 +391,36 @@ export default function ProductsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Page <span className="font-medium text-foreground">{page + 1}</span> sur <span className="font-medium text-foreground">{totalPages}</span>
+            Affichage <span className="font-medium text-foreground">{page * PAGE_SIZE + 1}</span>-<span className="font-medium text-foreground">{Math.min((page + 1) * PAGE_SIZE, products?.count ?? 0)}</span> sur <span className="font-medium text-foreground">{products?.count ?? 0}</span>
           </p>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-1">
             <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
               Precedent
             </Button>
+            {/* Page dots */}
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              let pageNum: number
+              if (totalPages <= 7) {
+                pageNum = i
+              } else if (page < 3) {
+                pageNum = i
+              } else if (page > totalPages - 4) {
+                pageNum = totalPages - 7 + i
+              } else {
+                pageNum = page - 3 + i
+              }
+              return (
+                <Button
+                  key={pageNum}
+                  variant={pageNum === page ? 'default' : 'ghost'}
+                  size="sm"
+                  className="w-8 h-8 p-0 text-xs"
+                  onClick={() => setPage(pageNum)}
+                >
+                  {pageNum + 1}
+                </Button>
+              )
+            })}
             <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
               Suivant
             </Button>
@@ -422,13 +501,12 @@ export default function ProductsPage() {
             </div>
             <div className="space-y-2">
               <Label>Dates d'expiration</Label>
-              <Textarea
-                value={expiryText}
-                onChange={(e) => setExpiryText(e.target.value)}
-                placeholder="2025-06, 2025-09 ou 06/2025, 09/2025"
-                rows={2}
+              <TagInput
+                value={expiryTags}
+                onChange={setExpiryTags}
+                placeholder="Saisir MM/YYYY puis Entree..."
               />
-              <p className="text-xs text-muted-foreground">Format : YYYY-MM ou MM/YYYY, separes par virgules</p>
+              <p className="text-xs text-muted-foreground">Format : MM/YYYY ou YYYY-MM — couleur selon proximite</p>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">
