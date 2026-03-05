@@ -306,7 +306,7 @@ export default function ProductsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}>

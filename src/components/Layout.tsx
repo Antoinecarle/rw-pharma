@@ -10,7 +10,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -21,26 +20,31 @@ import {
   LayoutDashboard,
   Menu,
   ClipboardList,
+  CalendarRange,
   ChevronRight,
-  Settings,
-  User,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const navigation = [
+const mainNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, description: 'Vue d\'ensemble' },
+  { name: 'Allocations', href: '/monthly-processes', icon: CalendarRange, description: 'Processus mensuels' },
+]
+
+const referenceNavigation = [
   { name: 'Produits', href: '/products', icon: Pill, description: 'Catalogue pharmaceutique' },
   { name: 'Grossistes', href: '/wholesalers', icon: Truck, description: 'Partenaires francais' },
-  { name: 'Quotas', href: '/quotas', icon: ClipboardList, description: 'Quotas mensuels' },
   { name: 'Clients', href: '/customers', icon: Users, description: 'Importateurs europeens' },
+  { name: 'Quotas', href: '/quotas', icon: ClipboardList, description: 'Quotas mensuels' },
 ]
+
+const navigation = [...mainNavigation, ...referenceNavigation]
 
 function getInitials(email: string) {
   return email.split('@')[0].slice(0, 2).toUpperCase()
 }
 
 function getPageTitle(pathname: string) {
-  const nav = navigation.find((n) => n.href === pathname)
+  const nav = navigation.find((n) => n.href === pathname || (n.href !== '/' && pathname.startsWith(n.href)))
   return nav?.name ?? 'RW Pharma'
 }
 
@@ -67,12 +71,42 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <Separator className="bg-sidebar-border" />
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-0.5">
+      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2">
-          Navigation
+          Principal
         </p>
-        {navigation.map((item) => {
-          const isActive = location.pathname === item.href
+        {mainNavigation.map((item) => {
+          const isActive = item.href === '/' ? location.pathname === '/' : location.pathname.startsWith(item.href)
+          return (
+            <Tooltip key={item.href}>
+              <TooltipTrigger asChild>
+                <Link
+                  to={item.href}
+                  onClick={onNavigate}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
+                      : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                  )}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span className="flex-1">{item.name}</span>
+                  {isActive && <ChevronRight className="h-3.5 w-3.5 opacity-70" />}
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="font-normal">
+                {item.description}
+              </TooltipContent>
+            </Tooltip>
+          )
+        })}
+
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2 mt-4">
+          Donnees de reference
+        </p>
+        {referenceNavigation.map((item) => {
+          const isActive = location.pathname.startsWith(item.href)
           return (
             <Tooltip key={item.href}>
               <TooltipTrigger asChild>
@@ -122,15 +156,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuItem disabled>
-              <User className="h-4 w-4 mr-2" />
-              Mon profil
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled>
-              <Settings className="h-4 w-4 mr-2" />
-              Parametres
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4 mr-2" />
               Se deconnecter

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
@@ -10,6 +10,8 @@ import ProductsPage from '@/pages/ProductsPage'
 import WholesalersPage from '@/pages/WholesalersPage'
 import CustomersPage from '@/pages/CustomersPage'
 import QuotasPage from '@/pages/QuotasPage'
+import MonthlyProcessesPage from '@/pages/MonthlyProcessesPage'
+import MonthlyProcessDetailPage from '@/pages/MonthlyProcessDetailPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +46,21 @@ function LoadingScreen() {
   )
 }
 
+function NotFoundPage() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
+      <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+        <span className="text-2xl font-bold text-muted-foreground">404</span>
+      </div>
+      <h2 className="text-xl font-bold mb-2">Page introuvable</h2>
+      <p className="text-sm text-muted-foreground mb-6">Cette page n'existe pas ou a ete deplacee.</p>
+      <Link to="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+        Retour au Dashboard
+      </Link>
+    </div>
+  )
+}
+
 function AppRoutes() {
   const { user, loading } = useAuth()
 
@@ -65,6 +82,9 @@ function AppRoutes() {
         <Route path="wholesalers" element={<WholesalersPage />} />
         <Route path="quotas" element={<QuotasPage />} />
         <Route path="customers" element={<CustomersPage />} />
+        <Route path="monthly-processes" element={<MonthlyProcessesPage />} />
+        <Route path="monthly-processes/:id" element={<MonthlyProcessDetailPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
   )

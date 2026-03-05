@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -16,6 +17,8 @@ import {
   TrendingUp,
   Sparkles,
   FileSpreadsheet,
+  CalendarRange,
+  Play,
 } from 'lucide-react'
 
 function StatSkeleton() {
@@ -72,6 +75,24 @@ export default function DashboardPage() {
       return count ?? 0
     },
   })
+
+  const { data: activeProcess } = useQuery({
+    queryKey: ['monthly-processes', 'active'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('monthly_processes')
+        .select('*')
+        .neq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (error) throw error
+      return data as { id: string; month: number; year: number; current_step: number; status: string; orders_count: number; allocations_count: number } | null
+    },
+  })
+
+  const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
+  const STEP_LABELS = ['Import commandes', 'Revue commandes', 'Allocation', 'Revue allocations', 'Finalisation']
 
   const stats = [
     {
@@ -130,6 +151,13 @@ export default function DashboardPage() {
 
   const quickActions = [
     {
+      name: 'Allocations mensuelles',
+      description: 'Lancer ou continuer un processus d\'allocation',
+      href: '/monthly-processes',
+      icon: CalendarRange,
+      gradient: 'from-primary to-amber-600',
+    },
+    {
       name: 'Gerer les produits',
       description: 'Catalogue de 1 760 references, import Excel, filtres avances',
       href: '/products',
@@ -142,13 +170,6 @@ export default function DashboardPage() {
       href: '/wholesalers',
       icon: Truck,
       gradient: 'from-blue-500 to-indigo-600',
-    },
-    {
-      name: 'Gerer les quotas',
-      description: 'Quotas mensuels par grossiste et par produit',
-      href: '/quotas',
-      icon: ClipboardList,
-      gradient: 'from-amber-500 to-orange-600',
     },
     {
       name: 'Gerer les clients',
@@ -180,6 +201,34 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Active process hero card */}
+      {activeProcess && (
+        <Link to={`/monthly-processes/${activeProcess.id}`}>
+          <Card className="animate-fade-in border-primary/30 bg-gradient-to-r from-primary/5 via-primary/10 to-transparent hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 cursor-pointer group">
+            <CardContent className="p-5 md:p-6">
+              <div className="flex items-center gap-4">
+                <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0 transition-transform group-hover:scale-110">
+                  <Play className="h-7 w-7 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-bold text-base">Processus en cours</h3>
+                    <Badge variant="secondary" className="text-xs">
+                      Etape {activeProcess.current_step}/5
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    {MONTH_NAMES[activeProcess.month - 1]} {activeProcess.year} — {STEP_LABELS[activeProcess.current_step - 1]}
+                  </p>
+                  <Progress value={(activeProcess.current_step / 5) * 100} className="h-2" />
+                </div>
+                <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1 shrink-0" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
