@@ -227,31 +227,25 @@ export default function QuotasPage() {
   const totalExtra = quotas?.data.reduce((s, q) => s + q.extra_available, 0) ?? 0
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-5 max-w-7xl mx-auto animate-fade-in">
+    <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-6xl mx-auto animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <motion.div
-            className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center"
-            whileHover={{ scale: 1.1, rotate: 5 }}
-            transition={{ type: 'spring', stiffness: 400 }}
-          >
-            <ClipboardList className="h-5 w-5 text-amber-600" />
-          </motion.div>
+          <div className="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center">
+            <ClipboardList className="h-4 w-4 text-amber-600" />
+          </div>
           <div>
-            <h2 className="text-xl md:text-2xl font-bold">Quotas grossistes</h2>
-            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5" />
+            <h2 className="text-lg md:text-xl font-semibold tracking-tight">Quotas grossistes</h2>
+            <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
+              <Calendar className="h-3 w-3" />
               {currentMonthLabel} &middot; {quotas?.count ?? 0} quotas
             </p>
           </div>
         </div>
-        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-          <Button onClick={openCreate} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Ajouter
-          </Button>
-        </motion.div>
+        <Button size="sm" onClick={openCreate} className="gap-1.5 text-[13px] h-8">
+          <Plus className="h-3.5 w-3.5" />
+          Ajouter
+        </Button>
       </div>
 
       {/* Month strip */}
@@ -331,17 +325,17 @@ export default function QuotasPage() {
       )}
 
       {/* Table */}
-      <div className="border rounded-xl overflow-hidden shadow-sm">
+      <div className="border border-border/60 rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/40">
-              <TableHead className="font-semibold">Grossiste</TableHead>
-              <TableHead className="font-semibold">CIP13</TableHead>
-              <TableHead className="font-semibold">Produit</TableHead>
-              <TableHead className="font-semibold text-right">Quota</TableHead>
-              <TableHead className="font-semibold text-right">Extra</TableHead>
-              <TableHead className="font-semibold text-right">Total</TableHead>
-              <TableHead className="w-20"></TableHead>
+            <TableRow className="bg-muted/30 hover:bg-muted/30">
+              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Grossiste</TableHead>
+              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">CIP13</TableHead>
+              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Produit</TableHead>
+              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Quota</TableHead>
+              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Extra</TableHead>
+              <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Total</TableHead>
+              <TableHead className="w-16"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

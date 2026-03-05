@@ -74,18 +74,18 @@ export default function MonthlyProcessesPage() {
   })
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-6xl mx-auto">
       {/* Header */}
       <div className="animate-fade-in flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Processus Mensuels</h2>
-          <p className="text-muted-foreground mt-1">
-            Gestion des allocations mensuelles de stocks
+          <h2 className="text-xl md:text-2xl font-semibold tracking-tight">Processus Mensuels</h2>
+          <p className="text-[13px] text-muted-foreground mt-0.5">
+            Gestion des allocations mensuelles
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Nouveau processus</span>
+        <Button size="sm" onClick={() => setDialogOpen(true)} className="gap-1.5 text-[13px] h-8">
+          <Plus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Nouveau</span>
         </Button>
       </div>
 

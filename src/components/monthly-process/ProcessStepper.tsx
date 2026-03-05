@@ -49,7 +49,7 @@ export default function ProcessStepper({ currentStep, onStepClick, stepStats }: 
               >
                 <motion.div
                   className={cn(
-                    'h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold transition-colors relative',
+                    'h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-[11px] font-semibold transition-colors relative',
                     isCompleted && 'bg-primary text-primary-foreground',
                     isCurrent && 'bg-primary text-primary-foreground',
                     !isCompleted && !isCurrent && 'bg-muted text-muted-foreground'
@@ -79,7 +79,7 @@ export default function ProcessStepper({ currentStep, onStepClick, stepStats }: 
                 </motion.div>
                 <div className="text-left">
                   <p className={cn(
-                    'text-xs font-medium leading-tight',
+                    'text-[11px] font-medium leading-tight',
                     isCurrent ? 'text-foreground' : 'text-muted-foreground'
                   )}>
                     {step.label}
@@ -88,7 +88,7 @@ export default function ProcessStepper({ currentStep, onStepClick, stepStats }: 
                     <motion.p
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="text-[10px] text-primary font-medium leading-tight mt-0.5"
+                      className="text-[9px] text-primary font-medium leading-tight mt-0.5"
                     >
                       {stat.value} {stat.label}
                     </motion.p>

@@ -116,7 +116,7 @@ export default function MonthlyProcessDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
+      <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-5xl mx-auto">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-64 w-full" />
@@ -138,14 +138,14 @@ export default function MonthlyProcessDetailPage() {
   const monthName = MONTH_NAMES[process.month - 1] ?? ''
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
+    <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-5xl mx-auto">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+        <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground mb-3">
           <Link to="/monthly-processes" className="hover:text-foreground transition-colors flex items-center gap-1">
             <ArrowLeft className="h-3.5 w-3.5" />
             Processus Mensuels
@@ -156,14 +156,14 @@ export default function MonthlyProcessDetailPage() {
 
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
+            <h2 className="text-xl md:text-2xl font-semibold tracking-tight">
               Allocation - {monthName} {process.year}
             </h2>
-            <div className="flex items-center gap-2 mt-1.5">
-              <Badge variant={process.status === 'completed' ? 'default' : 'secondary'}>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant={process.status === 'completed' ? 'default' : 'secondary'} className="text-[10px] h-5">
                 {STATUS_LABELS[process.status] ?? process.status}
               </Badge>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-[12px] text-muted-foreground">
                 {process.orders_count} commandes / {process.allocations_count} allocations
               </span>
             </div>
