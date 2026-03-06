@@ -127,75 +127,61 @@ export default function ProcessStepper({ currentStep, onStepClick, stepStats }: 
         </div>
 
         {/* Medium desktop — 2 rows of 4 with icons + short labels */}
-        <div className="hidden md:grid xl:hidden grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-y-3 gap-x-0">
+        <div className="hidden md:flex xl:hidden flex-col gap-2">
           {[0, 4].map((rowStart) => (
-            STEPS.slice(rowStart, rowStart + 4).map((step, i) => {
-              const stepNum = rowStart + i + 1
-              const isCompleted = stepNum < currentStep
-              const isCurrent = stepNum === currentStep
-              const isClickable = onStepClick && stepNum <= currentStep
-              const stat = stepStats?.[stepNum]
-              const isLastInRow = i === 3
+            <div key={rowStart} className="flex items-center gap-0">
+              {STEPS.slice(rowStart, rowStart + 4).map((step, i) => {
+                const stepNum = rowStart + i + 1
+                const isCompleted = stepNum < currentStep
+                const isCurrent = stepNum === currentStep
+                const isClickable = onStepClick && stepNum <= currentStep
+                const stat = stepStats?.[stepNum]
 
-              return [
-                <motion.button
-                  key={`step-${stepNum}`}
-                  type="button"
-                  disabled={!isClickable}
-                  onClick={() => isClickable && onStepClick(stepNum)}
-                  whileHover={isClickable ? { scale: 1.03 } : undefined}
-                  whileTap={isClickable ? { scale: 0.97 } : undefined}
-                  className={cn(
-                    'flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all',
-                    isCurrent && 'bg-primary/8',
-                    isClickable && 'cursor-pointer hover:bg-muted',
-                    !isClickable && 'cursor-default'
-                  )}
-                >
-                  <StepCircle stepNum={stepNum} isCompleted={isCompleted} isCurrent={isCurrent} />
-                  <div className="text-left min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <step.icon className={cn('h-3.5 w-3.5 shrink-0', isCurrent ? 'text-primary' : 'text-muted-foreground')} />
-                      <p className={cn(
-                        'text-[11px] font-medium leading-tight truncate',
-                        isCurrent ? 'text-foreground' : 'text-muted-foreground'
-                      )}>
-                        {step.shortLabel}
-                      </p>
-                    </div>
-                    {isCompleted && stat && (
-                      <motion.p
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="text-[9px] text-primary font-medium leading-tight mt-0.5 ml-5"
-                      >
-                        {stat.value} {stat.label}
-                      </motion.p>
+                return (
+                  <div key={stepNum} className="flex items-center flex-1 last:flex-none">
+                    <motion.button
+                      type="button"
+                      disabled={!isClickable}
+                      onClick={() => isClickable && onStepClick(stepNum)}
+                      whileHover={isClickable ? { scale: 1.03 } : undefined}
+                      whileTap={isClickable ? { scale: 0.97 } : undefined}
+                      className={cn(
+                        'flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all',
+                        isCurrent && 'bg-primary/8',
+                        isClickable && 'cursor-pointer hover:bg-muted',
+                        !isClickable && 'cursor-default'
+                      )}
+                    >
+                      <StepCircle stepNum={stepNum} isCompleted={isCompleted} isCurrent={isCurrent} />
+                      <div className="text-left min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <step.icon className={cn('h-3.5 w-3.5 shrink-0', isCurrent ? 'text-primary' : 'text-muted-foreground')} />
+                          <p className={cn(
+                            'text-[11px] font-medium leading-tight truncate',
+                            isCurrent ? 'text-foreground' : 'text-muted-foreground'
+                          )}>
+                            {step.shortLabel}
+                          </p>
+                        </div>
+                        {isCompleted && stat && (
+                          <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="text-[9px] text-primary font-medium leading-tight mt-0.5 ml-5"
+                          >
+                            {stat.value} {stat.label}
+                          </motion.p>
+                        )}
+                      </div>
+                    </motion.button>
+                    {i < 3 && (
+                      <Connector filled={stepNum < currentStep} delay={i * 0.1} />
                     )}
                   </div>
-                </motion.button>,
-                !isLastInRow && (
-                  <div key={`conn-${stepNum}`} className="flex items-center px-0.5">
-                    <Connector filled={stepNum < currentStep} delay={i * 0.1} />
-                  </div>
-                ),
-              ]
-            })
-          ))}
-          {/* Row connector: arrow between row 1 and row 2 */}
-          <div className="col-span-full flex justify-center -my-1">
-            <div className="flex items-center gap-1 text-muted-foreground/50">
-              <div className="w-8 h-0.5 bg-muted rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-primary rounded-full"
-                  initial={{ width: '0%' }}
-                  animate={{ width: currentStep > 4 ? '100%' : '0%' }}
-                  transition={{ duration: 0.5 }}
-                />
-              </div>
-              <ChevronRight className="h-3 w-3" />
+                )
+              })}
             </div>
-          </div>
+          ))}
         </div>
 
         {/* Mobile — compact: current step prominent + mini progress dots */}
