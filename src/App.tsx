@@ -19,6 +19,7 @@ import PortalOrdersPage from '@/pages/portal/PortalOrdersPage'
 import PortalAllocationsPage from '@/pages/portal/PortalAllocationsPage'
 import PortalStockPage from '@/pages/portal/PortalStockPage'
 import PortalDocumentsPage from '@/pages/portal/PortalDocumentsPage'
+import AcceptInvitationPage from '@/pages/portal/AcceptInvitationPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -87,6 +88,9 @@ function AppRoutes() {
       <Route path="/login" element={
         user ? <Navigate to={role === 'customer' ? '/portal' : '/'} replace /> : <LoginPage />
       } />
+
+      {/* Invitation acceptance (public) */}
+      <Route path="/invite/:token" element={<AcceptInvitationPage />} />
 
       {/* Admin routes */}
       <Route

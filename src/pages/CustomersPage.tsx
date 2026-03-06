@@ -19,9 +19,10 @@ import {
 import StarRating from '@/components/ui/star-rating'
 import GradientSlider from '@/components/ui/gradient-slider'
 import StepperInput from '@/components/ui/stepper-input'
-import { Plus, Pencil, Trash2, Star, FileText, Users, Globe, Mail, UserPlus, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Star, FileText, Users, Globe, Mail, UserPlus, AlertTriangle, CheckCircle2, Send, Copy, Link2, Clock, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { useAuth } from '@/hooks/useAuth'
 
 const COUNTRIES = [
   { code: 'DE', name: 'Allemagne' },
@@ -86,6 +87,8 @@ export default function CustomersPage() {
   const [docs, setDocs] = useState<CustomerDocuments>({})
   const [prefs, setPrefs] = useState<AllocationPrefs>({})
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const { user } = useAuth()
 
   const { data: customers, isLoading } = useQuery({
     queryKey: ['customers'],
@@ -95,6 +98,77 @@ export default function CustomersPage() {
       return data as Customer[]
     },
   })
+
+  // Fetch portal users for all customers
+  const { data: portalUsers } = useQuery({
+    queryKey: ['customer-portal-users'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('customer_users')
+        .select('id, customer_id, role, created_at, auth_user_id')
+      if (error) throw error
+      // Fetch emails from auth user ids
+      const userIds = (data ?? []).map((u: any) => u.auth_user_id)
+      if (userIds.length === 0) return []
+      // We can't query auth.users directly, so we'll use the invitation email or show the ID
+      return data ?? []
+    },
+  })
+
+  // Fetch invitations
+  const { data: invitations, refetch: refetchInvitations } = useQuery({
+    queryKey: ['customer-invitations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('customer_invitations')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data ?? []
+    },
+  })
+
+  const getCustomerInvitations = (customerId: string) =>
+    (invitations ?? []).filter((i: any) => i.customer_id === customerId)
+
+  const getCustomerPortalUsers = (customerId: string) =>
+    (portalUsers ?? []).filter((u: any) => u.customer_id === customerId)
+
+  const getPortalAccessCount = (customerId: string) => {
+    const users = getCustomerPortalUsers(customerId).length
+    const pending = getCustomerInvitations(customerId).filter((i: any) => i.status === 'pending').length
+    return { users, pending }
+  }
+
+  const handleInvite = async (customerId: string) => {
+    if (!inviteEmail.trim()) return
+    setInviting(true)
+    try {
+      const token = crypto.randomUUID().replace(/-/g, '').slice(0, 32)
+      const { error } = await supabase.from('customer_invitations').insert({
+        customer_id: customerId,
+        email: inviteEmail.trim(),
+        token,
+        invited_by: user?.id,
+      })
+      if (error) throw error
+      const link = `${window.location.origin}/invite/${token}`
+      await navigator.clipboard.writeText(link)
+      toast.success('Invitation creee ! Lien copie dans le presse-papier.')
+      setInviteEmail('')
+      refetchInvitations()
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const copyInviteLink = (token: string) => {
+    const link = `${window.location.origin}/invite/${token}`
+    navigator.clipboard.writeText(link)
+    toast.success('Lien copie !')
+  }
 
   const upsert = useMutation({
     mutationFn: async (c: CustomerInsert & { id?: string }) => {
@@ -246,7 +320,7 @@ export default function CustomersPage() {
                 <AnimatePresence mode="popLayout">
                   {topClients.map((c, i) => (
                     <CustomerCard key={c.id} customer={c} index={i} onEdit={openEdit} onDelete={setDeleteId}
-                      countryName={countryName} hasDocuments={hasDocuments} getPrefs={getPrefs} isPriority />
+                      countryName={countryName} hasDocuments={hasDocuments} getPrefs={getPrefs} portalAccess={getPortalAccessCount(c.id)} isPriority />
                   ))}
                 </AnimatePresence>
               </div>
@@ -269,7 +343,7 @@ export default function CustomersPage() {
                 <AnimatePresence mode="popLayout">
                   {regularClients.map((c, i) => (
                     <CustomerCard key={c.id} customer={c} index={i + topClients.length} onEdit={openEdit} onDelete={setDeleteId}
-                      countryName={countryName} hasDocuments={hasDocuments} getPrefs={getPrefs} />
+                      countryName={countryName} hasDocuments={hasDocuments} getPrefs={getPrefs} portalAccess={getPortalAccessCount(c.id)} />
                   ))}
                 </AnimatePresence>
               </div>
@@ -293,10 +367,11 @@ export default function CustomersPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <Tabs defaultValue="general" className="space-y-4">
-              <TabsList className="w-full grid grid-cols-3 h-9 rounded-xl">
+              <TabsList className="w-full grid grid-cols-4 h-9 rounded-xl">
                 <TabsTrigger value="general" className="text-[12px] rounded-lg">General</TabsTrigger>
                 <TabsTrigger value="documents" className="text-[12px] rounded-lg">Documents</TabsTrigger>
                 <TabsTrigger value="preferences" className="text-[12px] rounded-lg">Preferences</TabsTrigger>
+                {editing && <TabsTrigger value="access" className="text-[12px] rounded-lg">Acces</TabsTrigger>}
               </TabsList>
               <TabsContent value="general" className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
@@ -367,6 +442,109 @@ export default function CustomersPage() {
                 <div className="space-y-1.5"><Label className="text-[13px] font-medium">Expiry min</Label><StepperInput value={prefs.preferred_expiry_months} onChange={(v) => setPrefs({ ...prefs, preferred_expiry_months: v })} min={0} max={36} suffix=" mois" placeholder="Non defini" presets={[{ label: '3', value: 3 }, { label: '6', value: 6 }, { label: '9', value: 9 }, { label: '12', value: 12 }]} /></div>
                 <div className="space-y-1.5"><Label className="text-[13px] font-medium">Notes</Label><Textarea value={prefs.notes ?? ''} onChange={(e) => setPrefs({ ...prefs, notes: e.target.value || undefined })} placeholder="Notes..." rows={2} className="text-[13px] rounded-xl" /></div>
               </TabsContent>
+
+              {/* Onglet Acces portail */}
+              {editing && (
+                <TabsContent value="access" className="space-y-4">
+                  <div className="rounded-xl p-3.5" style={{ border: '1px dashed rgba(0,0,0,0.08)', background: 'rgba(248,247,244,0.5)' }}>
+                    <p className="text-[12px] flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
+                      <UserPlus className="h-3.5 w-3.5" />
+                      Invitez des contacts pour acceder au portail client
+                    </p>
+                  </div>
+
+                  {/* Invite form */}
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 space-y-1.5">
+                      <Label className="text-[13px] font-medium">Email du contact</Label>
+                      <Input
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="contact@client.com"
+                        className="text-[13px] h-10 rounded-xl"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-10 gap-1.5 text-[12px] rounded-xl shrink-0"
+                      style={{ background: 'var(--ivory-accent)', color: 'white' }}
+                      disabled={!inviteEmail.trim() || inviting}
+                      onClick={() => handleInvite(editing.id)}
+                    >
+                      {inviting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                      Inviter
+                    </Button>
+                  </div>
+
+                  {/* Active portal users */}
+                  {getCustomerPortalUsers(editing.id).length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
+                        <CheckCircle2 className="h-3 w-3" style={{ color: 'var(--ivory-accent)' }} />
+                        Comptes actifs
+                      </p>
+                      {getCustomerPortalUsers(editing.id).map((u: any) => {
+                        const matchingInvite = (invitations ?? []).find((i: any) => i.customer_id === editing.id && i.status === 'accepted')
+                        return (
+                          <div key={u.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px]" style={{ background: 'rgba(34,197,94,0.04)', border: '1px solid rgba(34,197,94,0.1)' }}>
+                            <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                            <span className="flex-1 truncate" style={{ color: 'var(--ivory-text-heading)' }}>
+                              {matchingInvite?.email ?? `User ${u.auth_user_id.slice(0, 8)}...`}
+                            </span>
+                            <Badge variant="outline" className="text-[10px]">{u.role}</Badge>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Invitations */}
+                  {getCustomerInvitations(editing.id).length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
+                        <Clock className="h-3 w-3" />
+                        Invitations
+                      </p>
+                      {getCustomerInvitations(editing.id).map((inv: any) => (
+                        <div key={inv.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px]"
+                          style={{
+                            background: inv.status === 'accepted' ? 'rgba(34,197,94,0.04)' : 'rgba(234,179,8,0.04)',
+                            border: `1px solid ${inv.status === 'accepted' ? 'rgba(34,197,94,0.1)' : 'rgba(234,179,8,0.1)'}`,
+                          }}>
+                          {inv.status === 'accepted'
+                            ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                            : <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+                          <span className="flex-1 truncate" style={{ color: 'var(--ivory-text-heading)' }}>{inv.email}</span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {inv.status === 'pending' ? 'En attente' : inv.status === 'accepted' ? 'Acceptee' : 'Expiree'}
+                          </Badge>
+                          {inv.status === 'pending' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => copyInviteLink(inv.token)}>
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Copier le lien</TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {getCustomerPortalUsers(editing.id).length === 0 && getCustomerInvitations(editing.id).length === 0 && (
+                    <div className="flex flex-col items-center py-8 text-center">
+                      <Link2 className="h-8 w-8 mb-2" style={{ color: 'var(--ivory-text-muted)', opacity: 0.3 }} />
+                      <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
+                        Aucun acces portail configure pour ce client.
+                      </p>
+                    </div>
+                  )}
+                </TabsContent>
+              )}
             </Tabs>
             <DialogFooter className="mt-5">
               <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">Annuler</Button>
@@ -395,13 +573,14 @@ const cardVariants: Variants = {
 
 /* Customer Card Component */
 function CustomerCard({
-  customer: c, index: i, onEdit, onDelete, countryName, hasDocuments, getPrefs, isPriority
+  customer: c, index: i, onEdit, onDelete, countryName, hasDocuments, getPrefs, portalAccess, isPriority
 }: {
   customer: Customer; index: number;
   onEdit: (c: Customer) => void; onDelete: (id: string) => void;
   countryName: (code: string | null) => string;
   hasDocuments: (c: Customer) => boolean | undefined;
   getPrefs: (c: Customer) => AllocationPrefs;
+  portalAccess: { users: number; pending: number };
   isPriority?: boolean;
 }) {
   return (
@@ -471,6 +650,16 @@ function CustomerCard({
                   <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--ivory-teal)' }}>
                     <FileText className="h-3 w-3 shrink-0" />
                     <span>Documents conformite</span>
+                  </div>
+                )}
+                {(portalAccess.users > 0 || portalAccess.pending > 0) && (
+                  <div className="flex items-center gap-2 text-[12px]">
+                    <Link2 className="h-3 w-3 shrink-0" style={{ color: 'var(--ivory-accent)' }} />
+                    <span style={{ color: 'var(--ivory-text-muted)' }}>
+                      {portalAccess.users > 0 && <span className="font-medium" style={{ color: 'var(--ivory-accent)' }}>{portalAccess.users} acces</span>}
+                      {portalAccess.users > 0 && portalAccess.pending > 0 && ' + '}
+                      {portalAccess.pending > 0 && <span className="text-amber-500">{portalAccess.pending} en attente</span>}
+                    </span>
                   </div>
                 )}
                 {getPrefs(c).max_allocation_pct && (
