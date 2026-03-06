@@ -150,3 +150,28 @@ export interface Allocation {
 
 export type AllocationInsert = Omit<Allocation, 'id' | 'created_at' | 'customer' | 'product' | 'wholesaler'>
 export type AllocationUpdate = Partial<AllocationInsert>
+
+// ── ANSM ──────────────────────────────────────────────────────────
+
+export interface AnsmBlockedProduct {
+  id: string
+  cip13: string
+  product_name: string | null
+  blocked_date: string
+  source_url: string | null
+  created_at: string
+}
+
+export type AnsmSyncStatus = 'running' | 'success' | 'failed'
+
+export interface AnsmSyncLog {
+  id: string
+  started_at: string
+  finished_at: string | null
+  status: AnsmSyncStatus
+  message: string | null
+  products_blocked: number
+  products_unblocked: number
+  total_ansm_count: number
+  created_at: string
+}

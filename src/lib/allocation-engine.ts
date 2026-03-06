@@ -53,6 +53,7 @@ interface ProductRow {
   id: string
   name: string
   cip13: string
+  is_ansm_blocked: boolean
 }
 
 interface WholesalerRow {
@@ -87,6 +88,7 @@ export type AllocationReason =
   | 'fallback'        // No quota/stock — even distribution
   | 'fallback_single' // No quota/stock — single wholesaler
   | 'max_pct_cap'     // Quantity reduced by max_allocation_pct
+  | 'ansm_blocked'    // Product blocked by ANSM — export forbidden
 
 export interface AllocationLog {
   step: number
@@ -175,7 +177,7 @@ async function fetchProducts(): Promise<ProductRow[]> {
   while (true) {
     const { data, error } = await supabase
       .from('products')
-      .select('id, name, cip13')
+      .select('id, name, cip13, is_ansm_blocked')
       .range(from, from + pageSize - 1)
     if (error) throw error
     if (!data || data.length === 0) break
@@ -442,6 +444,14 @@ export async function runAllocation(
     const prefs = (order.customer?.allocation_preferences ?? {}) as AllocationPrefs
     const priorityScore = getCustomerPriority(order)
     let remainingToAllocate = order.quantity
+
+    // ANSM check: skip products blocked for export
+    const product = productMap.get(order.product_id)
+    if (product?.is_ansm_blocked) {
+      pushLog(order, null, 0, remainingToAllocate, 'ansm_blocked',
+        `Produit ${product.cip13} bloque ANSM — interdit a l'export`)
+      continue
+    }
 
     // Apply max allocation % limit
     const maxPct = prefs.max_allocation_pct

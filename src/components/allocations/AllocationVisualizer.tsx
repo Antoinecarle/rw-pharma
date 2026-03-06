@@ -22,6 +22,7 @@ const REASON_CONFIG: Record<AllocationReason, { label: string; color: string; ic
   fallback:        { label: 'Repartition',      color: 'text-amber-700',   icon: Truck,          bg: 'bg-amber-50 border-amber-200' },
   fallback_single: { label: 'Grossiste unique', color: 'text-orange-700',  icon: Truck,          bg: 'bg-orange-50 border-orange-200' },
   max_pct_cap:     { label: 'Limite % max',     color: 'text-red-700',     icon: AlertTriangle,  bg: 'bg-red-50 border-red-200' },
+  ansm_blocked:    { label: 'Bloque ANSM',     color: 'text-rose-700',    icon: AlertTriangle,  bg: 'bg-rose-50 border-rose-200' },
 }
 
 const SPEED_OPTIONS = [

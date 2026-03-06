@@ -133,6 +133,35 @@ CREATE TABLE IF NOT EXISTS allocations (
 CREATE INDEX IF NOT EXISTS idx_allocations_process ON allocations(monthly_process_id);
 
 -- =============================================
+-- Table: ansm_blocked_products (liste ANSM)
+-- =============================================
+CREATE TABLE IF NOT EXISTS ansm_blocked_products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  cip13 VARCHAR(13) UNIQUE NOT NULL,
+  product_name VARCHAR(500),
+  blocked_date TIMESTAMPTZ DEFAULT NOW(),
+  source_url VARCHAR(500),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ansm_blocked_cip13 ON ansm_blocked_products(cip13);
+
+-- =============================================
+-- Table: ansm_sync_logs (historique synchronisations)
+-- =============================================
+CREATE TABLE IF NOT EXISTS ansm_sync_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  finished_at TIMESTAMPTZ,
+  status VARCHAR(20) NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'success', 'failed')),
+  message TEXT,
+  products_blocked INTEGER DEFAULT 0,
+  products_unblocked INTEGER DEFAULT 0,
+  total_ansm_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- =============================================
 -- Trigger: updated_at automatique
 -- =============================================
 CREATE OR REPLACE FUNCTION update_updated_at()
@@ -233,4 +262,25 @@ CREATE POLICY "Authenticated users can insert allocations" ON allocations
 CREATE POLICY "Authenticated users can update allocations" ON allocations
   FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Authenticated users can delete allocations" ON allocations
+  FOR DELETE TO authenticated USING (true);
+
+ALTER TABLE ansm_blocked_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ansm_sync_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can read ansm_blocked_products" ON ansm_blocked_products
+  FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Authenticated users can insert ansm_blocked_products" ON ansm_blocked_products
+  FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Authenticated users can update ansm_blocked_products" ON ansm_blocked_products
+  FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Authenticated users can delete ansm_blocked_products" ON ansm_blocked_products
+  FOR DELETE TO authenticated USING (true);
+
+CREATE POLICY "Authenticated users can read ansm_sync_logs" ON ansm_sync_logs
+  FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Authenticated users can insert ansm_sync_logs" ON ansm_sync_logs
+  FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Authenticated users can update ansm_sync_logs" ON ansm_sync_logs
+  FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Authenticated users can delete ansm_sync_logs" ON ansm_sync_logs
   FOR DELETE TO authenticated USING (true);
