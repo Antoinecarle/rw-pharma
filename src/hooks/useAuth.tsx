@@ -2,10 +2,15 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
+export type UserRole = 'admin' | 'customer'
+
 interface AuthContext {
   user: User | null
   session: Session | null
   loading: boolean
+  role: UserRole
+  customerId: string | null
+  customerName: string | null
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
 }
@@ -16,17 +21,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [role, setRole] = useState<UserRole>('admin')
+  const [customerId, setCustomerId] = useState<string | null>(null)
+  const [customerName, setCustomerName] = useState<string | null>(null)
+
+  const resolveRole = async (userId: string) => {
+    const { data } = await supabase
+      .from('customer_users')
+      .select('customer_id, customers(name)')
+      .eq('auth_user_id', userId)
+      .maybeSingle()
+
+    if (data) {
+      setRole('customer')
+      setCustomerId(data.customer_id)
+      setCustomerName((data.customers as any)?.name ?? null)
+    } else {
+      setRole('admin')
+      setCustomerId(null)
+      setCustomerName(null)
+    }
+  }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
+      if (session?.user) await resolveRole(session.user.id)
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
+      if (session?.user) await resolveRole(session.user.id)
       setLoading(false)
     })
 
@@ -44,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, role, customerId, customerName, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )

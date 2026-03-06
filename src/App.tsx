@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { Toaster } from '@/components/ui/sonner'
 import Layout from '@/components/Layout'
+import PortalLayout from '@/components/portal/PortalLayout'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import ProductsPage from '@/pages/ProductsPage'
@@ -14,6 +15,10 @@ import MonthlyProcessesPage from '@/pages/MonthlyProcessesPage'
 import MonthlyProcessDetailPage from '@/pages/MonthlyProcessDetailPage'
 import AllocationDashboardPage from '@/pages/AllocationDashboardPage'
 import AnsmPage from '@/pages/AnsmPage'
+import PortalOrdersPage from '@/pages/portal/PortalOrdersPage'
+import PortalAllocationsPage from '@/pages/portal/PortalAllocationsPage'
+import PortalStockPage from '@/pages/portal/PortalStockPage'
+import PortalDocumentsPage from '@/pages/portal/PortalDocumentsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,9 +30,18 @@ const queryClient = new QueryClient({
 })
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, loading, role } = useAuth()
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace />
+  if (role === 'customer') return <Navigate to="/portal" replace />
+  return <>{children}</>
+}
+
+function CustomerRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading, role } = useAuth()
+  if (loading) return <LoadingScreen />
+  if (!user) return <Navigate to="/login" replace />
+  if (role !== 'customer') return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -64,13 +78,17 @@ function NotFoundPage() {
 }
 
 function AppRoutes() {
-  const { user, loading } = useAuth()
+  const { user, loading, role } = useAuth()
 
   if (loading) return <LoadingScreen />
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/login" element={
+        user ? <Navigate to={role === 'customer' ? '/portal' : '/'} replace /> : <LoginPage />
+      } />
+
+      {/* Admin routes */}
       <Route
         path="/"
         element={
@@ -89,6 +107,21 @@ function AppRoutes() {
         <Route path="allocation-dashboard" element={<AllocationDashboardPage />} />
         <Route path="ansm" element={<AnsmPage />} />
         <Route path="*" element={<NotFoundPage />} />
+      </Route>
+
+      {/* Customer portal routes */}
+      <Route
+        path="/portal"
+        element={
+          <CustomerRoute>
+            <PortalLayout />
+          </CustomerRoute>
+        }
+      >
+        <Route index element={<PortalOrdersPage />} />
+        <Route path="allocations" element={<PortalAllocationsPage />} />
+        <Route path="stock" element={<PortalStockPage />} />
+        <Route path="documents" element={<PortalDocumentsPage />} />
       </Route>
     </Routes>
   )
