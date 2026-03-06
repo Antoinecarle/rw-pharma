@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table'
 import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X } from 'lucide-react'
 import { toast } from 'sonner'
-import type { MonthlyProcess, Wholesaler, Product } from '@/types/database'
+import type { MonthlyProcess, Wholesaler } from '@/types/database'
 
 // --------------- Types ---------------
 
@@ -238,7 +238,6 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
   const allDone = queue.length > 0 && queue.every(f => f.status === 'done')
   const hasActiveImport = queue.some(f => f.status === 'importing')
   const totalInserted = queue.filter(f => f.status === 'done').reduce((s, f) => s + f.importResult.inserted, 0)
-  const totalUpdated = queue.filter(f => f.status === 'done').reduce((s, f) => s + f.importResult.updated, 0)
 
   const getWholesalerCode = (f: QueuedQuotaFile) => f.detectedWholesaler ?? f.manualWholesaler
 

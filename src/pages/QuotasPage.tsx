@@ -55,7 +55,7 @@ export default function QuotasPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<WholesalerQuota | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [form, setForm] = useState<WholesalerQuotaInsert>({ wholesaler_id: '', product_id: '', month: monthFilter, quota_quantity: 0, extra_available: 0, metadata: {} })
+  const [form, setForm] = useState<WholesalerQuotaInsert>({ wholesaler_id: '', product_id: '', month: monthFilter, quota_quantity: 0, extra_available: 0, monthly_process_id: null, import_file_name: null, metadata: {} })
 
   const { data: wholesalers } = useQuery({ queryKey: ['wholesalers'], queryFn: async () => { const { data, error } = await supabase.from('wholesalers').select('*').order('name'); if (error) throw error; return data as Wholesaler[] } })
   const { data: products } = useQuery({ queryKey: ['products', 'all-for-select'], queryFn: async () => { const { data, error } = await supabase.from('products').select('id, cip13, name').order('name').limit(2000); if (error) throw error; return data as Pick<Product, 'id' | 'cip13' | 'name'>[] } })
@@ -85,8 +85,8 @@ export default function QuotasPage() {
     onError: (err: Error) => toast.error(err.message),
   })
 
-  const openCreate = () => { setEditing(null); setForm({ wholesaler_id: wholesalerFilter !== 'all' ? wholesalerFilter : '', product_id: '', month: monthFilter, quota_quantity: 0, extra_available: 0, metadata: {} }); setDialogOpen(true) }
-  const openEdit = (q: WholesalerQuota) => { setEditing(q); setForm({ wholesaler_id: q.wholesaler_id, product_id: q.product_id, month: q.month, quota_quantity: q.quota_quantity, extra_available: q.extra_available, metadata: q.metadata }); setDialogOpen(true) }
+  const openCreate = () => { setEditing(null); setForm({ wholesaler_id: wholesalerFilter !== 'all' ? wholesalerFilter : '', product_id: '', month: monthFilter, quota_quantity: 0, extra_available: 0, monthly_process_id: null, import_file_name: null, metadata: {} }); setDialogOpen(true) }
+  const openEdit = (q: WholesalerQuota) => { setEditing(q); setForm({ wholesaler_id: q.wholesaler_id, product_id: q.product_id, month: q.month, quota_quantity: q.quota_quantity, extra_available: q.extra_available, monthly_process_id: q.monthly_process_id, import_file_name: q.import_file_name, metadata: q.metadata }); setDialogOpen(true) }
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); upsert.mutate(editing ? { ...form, id: editing.id } : form) }
 
   const totalPages = Math.ceil((quotas?.count ?? 0) / PAGE_SIZE)
