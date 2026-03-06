@@ -113,22 +113,21 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
   const { data: stats } = useQuery({
     queryKey: ['monthly-process', process.id, 'final-stats'],
     queryFn: async () => {
-      const [ordersRes, allocRes, customersRes, wholesalersRes] = await Promise.all([
-        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('monthly_process_id', process.id),
-        supabase.from('allocations').select('id, allocated_quantity, requested_quantity', { count: 'exact' }).eq('monthly_process_id', process.id),
+      const [ordersRes, allocRes] = await Promise.all([
         supabase.from('orders').select('customer_id').eq('monthly_process_id', process.id),
-        supabase.from('allocations').select('wholesaler_id').eq('monthly_process_id', process.id),
+        supabase.from('allocations').select('allocated_quantity, requested_quantity, customer_id, wholesaler_id').eq('monthly_process_id', process.id),
       ])
 
+      const ordersData = ordersRes.data ?? []
       const allocData = allocRes.data ?? []
       const totalRequested = allocData.reduce((s, a) => s + (a.requested_quantity ?? 0), 0)
       const totalAllocated = allocData.reduce((s, a) => s + (a.allocated_quantity ?? 0), 0)
-      const uniqueCustomers = new Set((customersRes.data ?? []).map((o) => o.customer_id)).size
-      const uniqueWholesalers = new Set((wholesalersRes.data ?? []).map((a) => a.wholesaler_id)).size
+      const uniqueCustomers = new Set(ordersData.map((o) => o.customer_id)).size
+      const uniqueWholesalers = new Set(allocData.map((a) => a.wholesaler_id)).size
 
       return {
-        orders: ordersRes.count ?? 0,
-        allocations: allocRes.count ?? 0,
+        orders: ordersData.length,
+        allocations: allocData.length,
         totalRequested,
         totalAllocated,
         fulfillmentRate: totalRequested > 0 ? ((totalAllocated / totalRequested) * 100) : 0,
