@@ -138,42 +138,42 @@ export default function ProcessStepper({ currentStep, onStepClick, stepStats }: 
                 const stat = stepStats?.[stepNum]
 
                 return (
-                  <div key={stepNum} className="flex items-center flex-1 last:flex-none">
-                    <motion.button
-                      type="button"
-                      disabled={!isClickable}
-                      onClick={() => isClickable && onStepClick(stepNum)}
-                      whileHover={isClickable ? { scale: 1.03 } : undefined}
-                      whileTap={isClickable ? { scale: 0.97 } : undefined}
-                      className={cn(
-                        'flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all',
-                        isCurrent && 'bg-primary/8',
-                        isClickable && 'cursor-pointer hover:bg-muted',
-                        !isClickable && 'cursor-default'
-                      )}
-                    >
-                      <StepCircle stepNum={stepNum} isCompleted={isCompleted} isCurrent={isCurrent} />
-                      <div className="text-left min-w-0">
-                        <div className="flex items-center gap-1.5">
+                  <div key={stepNum} className="flex items-center flex-1 min-w-0">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <motion.button
+                          type="button"
+                          disabled={!isClickable}
+                          onClick={() => isClickable && onStepClick(stepNum)}
+                          whileHover={isClickable ? { scale: 1.03 } : undefined}
+                          whileTap={isClickable ? { scale: 0.97 } : undefined}
+                          className={cn(
+                            'flex items-center gap-1.5 px-1.5 py-1.5 rounded-lg transition-all min-w-0',
+                            isCurrent && 'bg-primary/8',
+                            isClickable && 'cursor-pointer hover:bg-muted',
+                            !isClickable && 'cursor-default'
+                          )}
+                        >
+                          <StepCircle stepNum={stepNum} isCompleted={isCompleted} isCurrent={isCurrent} />
                           <step.icon className={cn('h-3.5 w-3.5 shrink-0', isCurrent ? 'text-primary' : 'text-muted-foreground')} />
                           <p className={cn(
-                            'text-[11px] font-medium leading-tight truncate',
+                            'text-[11px] font-medium leading-tight truncate hidden lg:block',
                             isCurrent ? 'text-foreground' : 'text-muted-foreground'
                           )}>
                             {step.shortLabel}
                           </p>
-                        </div>
-                        {isCompleted && stat && (
-                          <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="text-[9px] text-primary font-medium leading-tight mt-0.5 ml-5"
-                          >
-                            {stat.value} {stat.label}
-                          </motion.p>
-                        )}
-                      </div>
-                    </motion.button>
+                          {isCompleted && stat && (
+                            <span className="text-[9px] text-primary font-medium hidden lg:inline">
+                              {stat.value}
+                            </span>
+                          )}
+                        </motion.button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">
+                        <p>{step.label}</p>
+                        {stat && <p className="text-primary">{stat.value} {stat.label}</p>}
+                      </TooltipContent>
+                    </Tooltip>
                     {i < 3 && (
                       <Connector filled={stepNum < currentStep} delay={i * 0.1} />
                     )}
