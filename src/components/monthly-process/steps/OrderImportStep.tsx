@@ -214,32 +214,38 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         }
       }
     } else {
-      // Auto-detect mapping
+      // Auto-detect mapping with prioritized patterns (most specific first)
       const autoMap: OrderColumnMapping = { customer_code: '', cip13: '', quantity: '', unit_price: '' }
-      for (const h of hdrs) {
-        const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '')
-        if (lower.includes('client') || lower.includes('customer') || lower.includes('code')) {
-          if (!autoMap.customer_code) {
-            autoMap.customer_code = h
-            confidenceMap.push({ field: 'customer_code', source: 'auto' })
-          }
-        }
-        if (lower.includes('cip13') || lower.includes('cip')) {
-          if (!autoMap.cip13) {
-            autoMap.cip13 = h
-            confidenceMap.push({ field: 'cip13', source: 'auto' })
-          }
-        }
-        if (lower.includes('qty') || lower.includes('quantit') || lower.includes('quantity')) {
-          if (!autoMap.quantity) {
-            autoMap.quantity = h
-            confidenceMap.push({ field: 'quantity', source: 'auto' })
-          }
-        }
-        if (lower.includes('prix') || lower.includes('price') || lower.includes('unitprice')) {
-          if (!autoMap.unit_price) {
-            autoMap.unit_price = h
-            confidenceMap.push({ field: 'unit_price', source: 'auto' })
+      const usedHeaders = new Set<string>()
+
+      // Define patterns per field, ordered by priority (most specific first)
+      const fieldPatterns: { field: keyof OrderColumnMapping; patterns: RegExp[] }[] = [
+        {
+          field: 'cip13',
+          patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i],
+        },
+        {
+          field: 'customer_code',
+          patterns: [/client.*code/i, /code.*client/i, /customer/i, /^client/i, /^code$/i],
+        },
+        {
+          field: 'quantity',
+          patterns: [/qte.*command/i, /quantit/i, /^qty/i, /quantity/i, /^qte/i, /commandee?/i],
+        },
+        {
+          field: 'unit_price',
+          patterns: [/prix.*unit/i, /unit.*pri/i, /price/i, /^prix/i, /^pfht$/i],
+        },
+      ]
+
+      for (const { field, patterns } of fieldPatterns) {
+        for (const pattern of patterns) {
+          if (autoMap[field]) break
+          const match = hdrs.find(h => !usedHeaders.has(h) && pattern.test(h))
+          if (match) {
+            autoMap[field] = match
+            usedHeaders.add(match)
+            confidenceMap.push({ field, source: 'auto' })
           }
         }
       }
@@ -292,7 +298,22 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
 
       // Fetch all customers and products for matching
       const { data: customers } = await supabase.from('customers').select('id, code, name')
-      const { data: products } = await supabase.from('products').select('id, cip13, name')
+
+      // Products table can exceed Supabase default 1000-row limit — paginate to fetch all
+      let allProducts: { id: string; cip13: string; name: string }[] = []
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        const { data: page } = await supabase
+          .from('products')
+          .select('id, cip13, name')
+          .range(from, from + pageSize - 1)
+        if (!page || page.length === 0) break
+        allProducts = allProducts.concat(page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+      const products = allProducts
 
       const customersList = (customers ?? []) as Pick<Customer, 'id' | 'code' | 'name'>[]
       const productsList = (products ?? []) as Pick<Product, 'id' | 'cip13' | 'name'>[]
