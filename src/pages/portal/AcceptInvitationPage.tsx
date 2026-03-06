@@ -59,13 +59,14 @@ export default function AcceptInvitationPage() {
       if (authError) throw authError
       if (!authData.user) throw new Error('Erreur creation compte')
 
-      // 2. Link to customer
+      // 2. Link to customer (store email for admin display)
       const { error: linkError } = await supabase
         .from('customer_users')
         .insert({
           auth_user_id: authData.user.id,
           customer_id: invitation.customer_id,
           role: invitation.role,
+          email: invitation.email,
         })
       if (linkError) throw linkError
 

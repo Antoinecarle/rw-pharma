@@ -100,18 +100,14 @@ export default function CustomersPage() {
     },
   })
 
-  // Fetch portal users for all customers
+  // Fetch portal users for all customers (email stored directly in customer_users)
   const { data: portalUsers } = useQuery({
     queryKey: ['customer-portal-users'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('customer_users')
-        .select('id, customer_id, role, created_at, auth_user_id')
+        .select('id, customer_id, role, email, created_at')
       if (error) throw error
-      // Fetch emails from auth user ids
-      const userIds = (data ?? []).map((u: any) => u.auth_user_id)
-      if (userIds.length === 0) return []
-      // We can't query auth.users directly, so we'll use the invitation email or show the ID
       return data ?? []
     },
   })
@@ -486,55 +482,64 @@ export default function CustomersPage() {
                         <CheckCircle2 className="h-3 w-3" style={{ color: 'var(--ivory-accent)' }} />
                         Comptes actifs
                       </p>
-                      {getCustomerPortalUsers(editing.id).map((u: any) => {
-                        const matchingInvite = (invitations ?? []).find((i: any) => i.customer_id === editing.id && i.status === 'accepted')
-                        return (
+                      {getCustomerPortalUsers(editing.id).map((u: any) => (
                           <div key={u.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px]" style={{ background: 'rgba(34,197,94,0.04)', border: '1px solid rgba(34,197,94,0.1)' }}>
                             <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                            <Mail className="h-3 w-3 shrink-0" style={{ color: 'var(--ivory-text-muted)' }} />
                             <span className="flex-1 truncate" style={{ color: 'var(--ivory-text-heading)' }}>
-                              {matchingInvite?.email ?? `User ${u.auth_user_id.slice(0, 8)}...`}
+                              {u.email ?? 'Email inconnu'}
                             </span>
                             <Badge variant="outline" className="text-[10px]">{u.role}</Badge>
+                            <span className="text-[10px]" style={{ color: 'var(--ivory-text-muted)' }}>
+                              {new Date(u.created_at).toLocaleDateString('fr-FR')}
+                            </span>
                           </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {/* Invitations */}
-                  {getCustomerInvitations(editing.id).length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
-                        <Clock className="h-3 w-3" />
-                        Invitations
-                      </p>
-                      {getCustomerInvitations(editing.id).map((inv: any) => (
-                        <div key={inv.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px]"
-                          style={{
-                            background: inv.status === 'accepted' ? 'rgba(34,197,94,0.04)' : 'rgba(234,179,8,0.04)',
-                            border: `1px solid ${inv.status === 'accepted' ? 'rgba(34,197,94,0.1)' : 'rgba(234,179,8,0.1)'}`,
-                          }}>
-                          {inv.status === 'accepted'
-                            ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                            : <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
-                          <span className="flex-1 truncate" style={{ color: 'var(--ivory-text-heading)' }}>{inv.email}</span>
-                          <Badge variant="outline" className="text-[10px]">
-                            {inv.status === 'pending' ? 'En attente' : inv.status === 'accepted' ? 'Acceptee' : 'Expiree'}
-                          </Badge>
-                          {inv.status === 'pending' && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => copyInviteLink(inv.token)}>
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Copier le lien</TooltipContent>
-                            </Tooltip>
-                          )}
-                        </div>
                       ))}
                     </div>
                   )}
+
+                  {/* Pending invitations only (accepted ones show as active users above) */}
+                  {(() => {
+                    const pendingInvites = getCustomerInvitations(editing.id).filter((i: any) => i.status === 'pending')
+                    if (pendingInvites.length === 0) return null
+                    return (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
+                          <Clock className="h-3 w-3" />
+                          Invitations en attente
+                        </p>
+                        {pendingInvites.map((inv: any) => {
+                          const isExpired = new Date(inv.expires_at) < new Date()
+                          return (
+                            <div key={inv.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px]"
+                              style={{
+                                background: isExpired ? 'rgba(239,68,68,0.04)' : 'rgba(234,179,8,0.04)',
+                                border: `1px solid ${isExpired ? 'rgba(239,68,68,0.1)' : 'rgba(234,179,8,0.1)'}`,
+                              }}>
+                              {isExpired
+                                ? <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                                : <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+                              <Mail className="h-3 w-3 shrink-0" style={{ color: 'var(--ivory-text-muted)' }} />
+                              <span className="flex-1 truncate" style={{ color: 'var(--ivory-text-heading)' }}>{inv.email}</span>
+                              <Badge variant="outline" className="text-[10px]">
+                                {isExpired ? 'Expiree' : 'En attente'}
+                              </Badge>
+                              {!isExpired && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => copyInviteLink(inv.token)}>
+                                      <Copy className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Copier le lien d'invitation</TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
 
                   {getCustomerPortalUsers(editing.id).length === 0 && getCustomerInvitations(editing.id).length === 0 && (
                     <div className="flex flex-col items-center py-8 text-center">
