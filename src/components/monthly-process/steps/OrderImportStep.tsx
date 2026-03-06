@@ -234,8 +234,6 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
     setQueue(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f))
   }, [])
 
-  const activeFile = queue.find(f => f.id === activeFileId)
-
   const allDone = queue.length > 0 && queue.every(f => f.status === 'done')
   const hasActiveImport = queue.some(f => f.status === 'importing')
   const totalImported = queue.filter(f => f.status === 'done').reduce((s, f) => s + f.importResult.inserted, 0)
