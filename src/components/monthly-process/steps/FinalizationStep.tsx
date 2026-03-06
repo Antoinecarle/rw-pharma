@@ -27,7 +27,7 @@ const MONTH_NAMES = [
   'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre',
 ]
 
-type ExportMode = 'global_csv' | 'by_wholesaler' | 'by_customer' | 'global_excel'
+type ExportMode = 'global_csv' | 'by_wholesaler' | 'by_customer' | 'global_excel' | 'delivery_notes'
 
 interface FinalizationStepProps {
   process: MonthlyProcess
@@ -37,8 +37,10 @@ interface AllocationRow {
   id: string
   requested_quantity: number
   allocated_quantity: number
+  prix_applique: number | null
   status: string
-  customer: { code: string; name: string } | null
+  metadata: Record<string, unknown> | null
+  customer: { code: string; name: string; country: string | null } | null
   product: { cip13: string; name: string } | null
   wholesaler: { code: string; name: string } | null
 }
@@ -46,7 +48,7 @@ interface AllocationRow {
 async function fetchAllocations(processId: string): Promise<AllocationRow[]> {
   const { data, error } = await supabase
     .from('allocations')
-    .select('id, requested_quantity, allocated_quantity, status, customer:customers(code, name), product:products(cip13, name), wholesaler:wholesalers(code, name)')
+    .select('id, requested_quantity, allocated_quantity, prix_applique, status, metadata, customer:customers(code, name, country), product:products(cip13, name), wholesaler:wholesalers(code, name)')
     .eq('monthly_process_id', processId)
   if (error) throw error
   return (data ?? []) as unknown as AllocationRow[]
@@ -74,6 +76,74 @@ function downloadBlob(blob: Blob, filename: string) {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+function generateDeliveryNotes(allocs: AllocationRow[], filePrefix: string) {
+  // Group by customer
+  const byCustomer = new Map<string, { code: string; name: string; country: string | null; rows: AllocationRow[] }>()
+  for (const a of allocs) {
+    const code = a.customer?.code ?? 'INCONNU'
+    const group = byCustomer.get(code) ?? { code, name: a.customer?.name ?? code, country: a.customer?.country ?? null, rows: [] }
+    group.rows.push(a)
+    byCustomer.set(code, group)
+  }
+
+  const wb = XLSX.utils.book_new()
+
+  for (const [code, group] of byCustomer) {
+    // Build delivery note with lot traceability
+    const headerRow = ['Produit', 'CIP13', 'Lot', 'Expiration', 'Grossiste', 'Qte', 'Prix unitaire', 'Total']
+    const dataRows: (string | number)[][] = []
+    let grandTotal = 0
+    let grandQty = 0
+
+    // Group by product within customer
+    const byProduct = new Map<string, AllocationRow[]>()
+    for (const a of group.rows) {
+      const cip = a.product?.cip13 ?? '?'
+      const list = byProduct.get(cip) ?? []
+      list.push(a)
+      byProduct.set(cip, list)
+    }
+
+    for (const [, productAllocs] of byProduct) {
+      for (const a of productAllocs) {
+        const meta = (a.metadata ?? {}) as Record<string, unknown>
+        const lotNumber = (meta.lot_number as string) ?? '-'
+        const expiryDate = (meta.expiry_date as string) ?? '-'
+        const expFormatted = expiryDate !== '-' ? new Date(expiryDate).toLocaleDateString('fr-FR', { month: '2-digit', year: 'numeric' }) : '-'
+        const price = a.prix_applique ?? 0
+        const lineTotal = a.allocated_quantity * price
+        grandTotal += lineTotal
+        grandQty += a.allocated_quantity
+        dataRows.push([
+          a.product?.name ?? '',
+          a.product?.cip13 ?? '',
+          lotNumber,
+          expFormatted,
+          a.wholesaler?.code ?? '',
+          a.allocated_quantity,
+          price,
+          lineTotal,
+        ])
+      }
+    }
+
+    // Add total row
+    dataRows.push(['TOTAL', '', '', '', '', grandQty, '', grandTotal])
+
+    const wsData = [headerRow, ...dataRows]
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+    ws['!cols'] = [
+      { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 12 },
+    ]
+
+    const sheetLabel = `${code}${group.country ? ` (${group.country})` : ''}`
+    XLSX.utils.book_append_sheet(wb, ws, sheetLabel.slice(0, 31))
+  }
+
+  XLSX.writeFile(wb, `${filePrefix}-bons-de-livraison.xlsx`)
+  return byCustomer.size
 }
 
 function generateExcelWorkbook(rows: AllocationRow[], sheetName: string): XLSX.WorkBook {
@@ -113,7 +183,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [exportMode, setExportMode] = useState<ExportMode>('global_csv')
+  const [exportMode, setExportMode] = useState<ExportMode>('delivery_notes')
   const [exporting, setExporting] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
 
@@ -321,6 +391,12 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
             XLSX.writeFile(wb, `${filePrefix}-par-client.xlsx`)
           }
           toast.success(`Export par client telecharge (${groups.size} clients)`)
+          break
+        }
+
+        case 'delivery_notes': {
+          const count = generateDeliveryNotes(allocs, filePrefix)
+          toast.success(`Bons de livraison telecharges (${count} clients)`)
           break
         }
       }
@@ -567,8 +643,9 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
               <h4 className="text-sm font-semibold">Exporter les allocations</h4>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               {([
+                { value: 'delivery_notes' as const, label: 'Bons de livraison', icon: Package, desc: 'Par client + lots' },
                 { value: 'global_csv' as const, label: 'CSV Global', icon: FileSpreadsheet, desc: 'Fichier unique CSV' },
                 { value: 'global_excel' as const, label: 'Excel Global', icon: FileSpreadsheet, desc: 'Fichier unique .xlsx' },
                 { value: 'by_wholesaler' as const, label: 'Par Grossiste', icon: Truck, desc: '1 onglet par grossiste' },

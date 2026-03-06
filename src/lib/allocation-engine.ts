@@ -682,7 +682,6 @@ export async function runAllocation(
   // Persist quota_used back to DB
   const quotaUtilization = quotaTracker.getUtilization()
   if (quotaUtilization.length > 0) {
-    // Build a map of (wholesaler_id, product_id) -> used from the tracker
     const usedByQuota = quotaTracker.getDetailedUsage()
     for (const { quotaId, used } of usedByQuota) {
       if (used > 0) {
@@ -692,6 +691,24 @@ export async function runAllocation(
           .eq('id', quotaId)
       }
     }
+  }
+
+  // Persist allocated_quantity + status on orders
+  const orderAllocMap = new Map<string, number>()
+  for (const a of allocations) {
+    orderAllocMap.set(a.order_id, (orderAllocMap.get(a.order_id) ?? 0) + a.allocated_quantity)
+  }
+  for (const order of sortedOrders) {
+    const totalAlloc = orderAllocMap.get(order.id) ?? 0
+    const newStatus = totalAlloc <= 0
+      ? 'pending'
+      : totalAlloc >= order.quantity
+        ? 'allocated'
+        : 'partially_allocated'
+    await supabase
+      .from('orders')
+      .update({ allocated_quantity: totalAlloc, status: newStatus })
+      .eq('id', order.id)
   }
 
   return { allocations, logs }

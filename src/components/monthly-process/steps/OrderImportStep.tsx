@@ -13,7 +13,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, User, X } from 'lucide-react'
+import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, User, X, Keyboard } from 'lucide-react'
 import { toast } from 'sonner'
 import SkippedItemsReviewModal, {
   type SkippedItem, type ResolvedItem,
@@ -197,8 +197,10 @@ interface OrderImportStepProps {
 }
 
 export default function OrderImportStep({ process, onNext }: OrderImportStepProps) {
+  type ImportSource = 'excel' | 'manual'
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
+  const [importSource, setImportSource] = useState<ImportSource>('excel')
   const [queue, setQueue] = useState<QueuedFile[]>([])
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
@@ -206,6 +208,9 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
   const [skippedModalFileId, setSkippedModalFileId] = useState<string | null>(null)
   const [cachedCustomers, setCachedCustomers] = useState<Pick<Customer, 'id' | 'code' | 'name'>[]>([])
   const [cachedProducts, setCachedProducts] = useState<Pick<Product, 'id' | 'cip13' | 'name'>[]>([])
+  // Manual entry state
+  const [manualCustomer, setManualCustomer] = useState('')
+  const [manualRows, setManualRows] = useState<{ cip13: string; quantity: string; unit_price: string; comment: string }[]>([{ cip13: '', quantity: '', unit_price: '', comment: '' }])
 
   const { data: existingOrders } = useQuery({
     queryKey: ['orders', process.id, 'count'],
@@ -519,6 +524,76 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
     return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && !!clientCode
   }
 
+  // --------------- Manual entry mutation ---------------
+
+  const manualImportMut = useMutation({
+    mutationFn: async () => {
+      if (!manualCustomer) throw new Error('Selectionnez un client')
+      const customer = (customers ?? []).find(c => c.code === manualCustomer)
+      if (!customer) throw new Error('Client introuvable')
+
+      // Load products for CIP13 lookup
+      let allProducts: { id: string; cip13: string }[] = []
+      let from = 0
+      while (true) {
+        const { data: page } = await supabase.from('products').select('id, cip13').range(from, from + 999)
+        if (!page || page.length === 0) break
+        allProducts = allProducts.concat(page)
+        if (page.length < 1000) break
+        from += 1000
+      }
+      const productMap = new Map(allProducts.map(p => [p.cip13, p]))
+
+      const validRows = manualRows
+        .filter(r => r.cip13.trim() && parseInt(r.quantity) > 0)
+        .map(r => {
+          const product = productMap.get(r.cip13.trim())
+          if (!product) return null
+          return {
+            monthly_process_id: process.id,
+            customer_id: customer.id,
+            product_id: product.id,
+            quantity: parseInt(r.quantity),
+            unit_price: r.unit_price ? parseFloat(r.unit_price.replace(',', '.')) : null,
+            comment: r.comment || null,
+            status: 'pending',
+            data_source: 'manual',
+            metadata: {},
+          }
+        })
+        .filter(Boolean)
+
+      if (validRows.length === 0) throw new Error('Aucune ligne valide')
+
+      const { error } = await supabase.from('orders').insert(validRows)
+      if (error) throw error
+
+      await supabase
+        .from('monthly_processes')
+        .update({ status: 'importing_orders' })
+        .eq('id', process.id)
+
+      return validRows.length
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+      queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
+      toast.success(`${count} commandes ajoutees manuellement`)
+      setManualRows([{ cip13: '', quantity: '', unit_price: '', comment: '' }])
+      setManualCustomer('')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  const addManualRow = () => setManualRows(prev => [...prev, { cip13: '', quantity: '', unit_price: '', comment: '' }])
+  const updateManualRow = (i: number, field: string, value: string) => {
+    setManualRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
+  }
+  const removeManualRow = (i: number) => {
+    if (manualRows.length <= 1) return
+    setManualRows(prev => prev.filter((_, idx) => idx !== i))
+  }
+
   // --------------- File card render ---------------
 
   const renderFileCard = (f: QueuedFile) => {
@@ -776,9 +851,98 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       <div>
         <h3 className="text-lg font-semibold">Importation des Commandes</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Importez les fichiers Excel de commandes clients pour ce mois. Un fichier par client.
+          Importez les fichiers Excel de commandes clients ou saisissez-les directement.
         </p>
       </div>
+
+      {/* Source toggle */}
+      <div className="flex gap-1.5">
+        {([
+          { value: 'excel' as ImportSource, label: 'Fichier Excel', icon: FileSpreadsheet },
+          { value: 'manual' as ImportSource, label: 'Saisie directe', icon: Keyboard },
+        ]).map(opt => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => setImportSource(opt.value)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1.5 ${
+              importSource === opt.value
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border hover:bg-muted text-muted-foreground'
+            }`}
+          >
+            <opt.icon className="h-3 w-3" />
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Manual entry form */}
+      {importSource === 'manual' && (
+        <Card>
+          <CardContent className="p-4 space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Client *</Label>
+              <Select value={manualCustomer || 'none'} onValueChange={(v) => setManualCustomer(v === 'none' ? '' : v)}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selectionner le client..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- Selectionner --</SelectItem>
+                  {(customers ?? []).map(c => (
+                    <SelectItem key={c.id} value={c.code ?? c.id}>{c.code} — {c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Lignes de commande</Label>
+              <div className="border rounded-lg overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>CIP13 *</TableHead>
+                      <TableHead>Quantite *</TableHead>
+                      <TableHead>Prix unitaire</TableHead>
+                      <TableHead>Commentaire</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {manualRows.map((row, i) => (
+                      <TableRow key={i}>
+                        <TableCell><input className="w-full bg-transparent border-b border-border/50 focus:border-primary outline-none text-sm font-mono py-1" placeholder="3400930..." value={row.cip13} onChange={e => updateManualRow(i, 'cip13', e.target.value)} /></TableCell>
+                        <TableCell><input type="number" className="w-20 bg-transparent border-b border-border/50 focus:border-primary outline-none text-sm py-1" placeholder="0" value={row.quantity} onChange={e => updateManualRow(i, 'quantity', e.target.value)} /></TableCell>
+                        <TableCell><input className="w-20 bg-transparent border-b border-border/50 focus:border-primary outline-none text-sm py-1" placeholder="0.00" value={row.unit_price} onChange={e => updateManualRow(i, 'unit_price', e.target.value)} /></TableCell>
+                        <TableCell><input className="w-full bg-transparent border-b border-border/50 focus:border-primary outline-none text-sm py-1" placeholder="" value={row.comment} onChange={e => updateManualRow(i, 'comment', e.target.value)} /></TableCell>
+                        <TableCell>
+                          {manualRows.length > 1 && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeManualRow(i)}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <Button variant="outline" size="sm" onClick={addManualRow} className="gap-1">
+                <Plus className="h-3 w-3" /> Ajouter une ligne
+              </Button>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={() => manualImportMut.mutate()}
+                disabled={manualImportMut.isPending || !manualCustomer || manualRows.every(r => !r.cip13.trim())}
+                className="gap-2"
+              >
+                {manualImportMut.isPending ? 'Import en cours...' : 'Importer les commandes'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {existingOrders != null && existingOrders > 0 && queue.length === 0 && (
         <Card className="ivory-card-highlight">
@@ -791,8 +955,8 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         </Card>
       )}
 
-      {/* File queue */}
-      {queue.length > 0 && (
+      {/* File queue (Excel mode only) */}
+      {importSource === 'excel' && queue.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-sm font-medium">{queue.length} fichier{queue.length > 1 ? 's' : ''}</span>
@@ -813,8 +977,8 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         </div>
       )}
 
-      {/* Drop zone */}
-      <div
+      {/* Drop zone (Excel mode only) */}
+      {importSource === 'excel' && <div
         className={`border-2 border-dashed rounded-xl text-center cursor-pointer transition-all duration-200 ${
           queue.length > 0 ? 'p-6' : 'p-10'
         } ${
@@ -846,11 +1010,11 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         <p className="text-xs text-muted-foreground mt-1">
           .xlsx, .xls, .csv — Un fichier par client (ORI, MPA, AXI...)
         </p>
-      </div>
+      </div>}
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileInput} multiple className="hidden" />
 
       {/* Import history */}
-      {queue.length === 0 && importHistory.length > 0 && (
+      {importSource === 'excel' && queue.length === 0 && importHistory.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
             <History className="h-3 w-3" /> Derniers imports

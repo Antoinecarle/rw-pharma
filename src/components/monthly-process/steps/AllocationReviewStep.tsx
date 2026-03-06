@@ -30,7 +30,7 @@ interface AllocationReviewStepProps {
   onBack?: () => void
 }
 
-type ViewMode = 'all' | 'partial'
+type ViewMode = 'all' | 'partial' | 'by_lot'
 
 interface EditState {
   allocId: string
@@ -196,6 +196,63 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
 
   const lotAllocCount = allocations?.filter(a => (a.metadata as Record<string, unknown>)?.lot_number).length ?? 0
   const proposedCount = allocations?.filter((a) => a.status === 'proposed').length ?? 0
+
+  // Consolidated lot view (Notion spec: Lot, Produit, Exp, Stock total, Grossistes, A allouer)
+  const lotConsolidated = useMemo(() => {
+    const map = new Map<string, {
+      lotNumber: string
+      productName: string
+      productCip13: string
+      expiryDate: string
+      totalStock: number
+      wholesalers: Map<string, { code: string; qty: number }>
+      allocations: { customerCode: string; qty: number; price: number | null; status: string }[]
+      totalAllocated: number
+    }>()
+
+    for (const a of allocations ?? []) {
+      const meta = (a.metadata ?? {}) as Record<string, unknown>
+      const lotNumber = meta.lot_number as string | undefined
+      if (!lotNumber) continue
+
+      const prod = a.product as unknown as { cip13: string; name: string } | undefined
+      const ws = a.wholesaler as unknown as { code: string } | undefined
+      const cust = a.customer as unknown as { code: string } | undefined
+      const key = `${lotNumber}::${a.product_id}`
+
+      if (!map.has(key)) {
+        map.set(key, {
+          lotNumber,
+          productName: prod?.name ?? '?',
+          productCip13: prod?.cip13 ?? '?',
+          expiryDate: (meta.expiry_date as string) ?? '',
+          totalStock: 0,
+          wholesalers: new Map(),
+          allocations: [],
+          totalAllocated: 0,
+        })
+      }
+
+      const lot = map.get(key)!
+      lot.totalAllocated += a.allocated_quantity
+
+      // Track wholesaler contributions
+      if (ws?.code) {
+        const existing = lot.wholesalers.get(ws.code)
+        if (existing) existing.qty += a.allocated_quantity
+        else lot.wholesalers.set(ws.code, { code: ws.code, qty: a.allocated_quantity })
+      }
+
+      lot.allocations.push({
+        customerCode: cust?.code ?? '?',
+        qty: a.allocated_quantity,
+        price: a.prix_applique,
+        status: a.status,
+      })
+    }
+
+    return [...map.values()].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate))
+  }, [allocations])
 
   const filteredAllocations = useMemo(() => {
     if (!allocations) return []
@@ -381,6 +438,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         <div className="flex gap-1.5">
           {[
             { value: 'all' as ViewMode, label: `Toutes (${allocations?.length ?? 0})` },
+            { value: 'by_lot' as ViewMode, label: `Par lot (${lotConsolidated.length})` },
             { value: 'partial' as ViewMode, label: `Sous-allouees (${allocations?.filter(a => a.allocated_quantity < a.requested_quantity).length ?? 0})` },
           ].map(opt => (
             <button
@@ -402,12 +460,89 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         </span>
       </div>
 
+      {/* Consolidated lot view */}
+      {viewMode === 'by_lot' && lotConsolidated.length > 0 && (
+        <div className="border rounded-lg overflow-x-auto max-h-[500px] overflow-y-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Lot</TableHead>
+                <TableHead>Produit</TableHead>
+                <TableHead>Exp</TableHead>
+                <TableHead>Grossistes</TableHead>
+                <TableHead className="text-right">Alloue</TableHead>
+                <TableHead>Repartition clients</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {lotConsolidated.map((lot) => {
+                const isExpiringSoon = lot.expiryDate && (() => {
+                  const exp = new Date(lot.expiryDate)
+                  const now = new Date()
+                  const diffMonths = (exp.getFullYear() - now.getFullYear()) * 12 + (exp.getMonth() - now.getMonth())
+                  return diffMonths <= 3
+                })()
+                return (
+                  <TableRow key={`${lot.lotNumber}::${lot.productCip13}`}>
+                    <TableCell>
+                      <Badge variant="secondary" className="font-mono text-[10px] gap-0.5">
+                        <Boxes className="h-2.5 w-2.5" />
+                        {lot.lotNumber}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <span className="font-mono text-xs">{lot.productCip13}</span>
+                        <p className="text-xs text-muted-foreground truncate max-w-[160px]">{lot.productName}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-xs tabular-nums flex items-center gap-1 ${isExpiringSoon ? 'text-red-600 font-semibold' : ''}`}>
+                        <Calendar className="h-3 w-3 text-muted-foreground" />
+                        {lot.expiryDate ? new Date(lot.expiryDate).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) : '-'}
+                        {isExpiringSoon && <AlertTriangle className="h-3 w-3 text-red-500" />}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {[...lot.wholesalers.values()].map(ws => (
+                          <Badge key={ws.code} variant="outline" className="text-[9px] gap-0.5">
+                            {ws.code} ({ws.qty})
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {lot.totalAllocated.toLocaleString('fr-FR')}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {lot.allocations.map((alloc, i) => (
+                          <Badge
+                            key={i}
+                            variant={alloc.status === 'confirmed' ? 'default' : alloc.status === 'rejected' ? 'destructive' : 'secondary'}
+                            className="text-[9px] gap-0.5"
+                          >
+                            {alloc.customerCode}: {alloc.qty}u.
+                            {alloc.price != null && <span className="text-muted-foreground ml-0.5">@{alloc.price}€</span>}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
       {/* Allocations table */}
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
         </div>
-      ) : filteredAllocations.length > 0 ? (
+      ) : viewMode !== 'by_lot' && filteredAllocations.length > 0 ? (
         <div className="border rounded-lg overflow-x-auto max-h-[450px] overflow-y-auto">
           <Table>
             <TableHeader>

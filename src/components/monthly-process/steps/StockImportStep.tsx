@@ -13,7 +13,8 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X, PackageCheck } from 'lucide-react'
+import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X, PackageCheck, Keyboard } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import type { MonthlyProcess, Wholesaler } from '@/types/database'
 
@@ -247,13 +248,21 @@ interface StockImportStepProps {
   onNext: () => void
 }
 
+type StockImportSource = 'excel' | 'manual'
+
 export default function StockImportStep({ process, onNext }: StockImportStepProps) {
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
+  const [importSource, setImportSource] = useState<StockImportSource>('excel')
   const [queue, setQueue] = useState<QueuedStockFile[]>([])
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [showSkipped, setShowSkipped] = useState<string | null>(null)
+  // Manual stock entry
+  const [manualWholesaler, setManualWholesaler] = useState('')
+  const [manualStockRows, setManualStockRows] = useState<{ cip13: string; lot_number: string; expiry_date: string; quantity: string; unit_cost: string }[]>([
+    { cip13: '', lot_number: '', expiry_date: '', quantity: '', unit_cost: '' },
+  ])
 
   const { data: existingStock } = useQuery({
     queryKey: ['collected_stock', process.id, 'count'],
@@ -478,9 +487,43 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
         skipped += batch.length - validBatch.length
 
         if (validBatch.length > 0) {
+          // Upsert lots first (deduplicate by cip13+lot_number)
+          const uniqueLots = new Map<string, { product_id: string; cip13: string; lot_number: string; expiry_date: string; monthly_process_id: string }>()
+          for (const item of validBatch) {
+            const key = `${item.cip13}::${item.lot_number}`
+            if (!uniqueLots.has(key)) {
+              uniqueLots.set(key, {
+                product_id: item.product_id!,
+                cip13: item.cip13,
+                lot_number: item.lot_number,
+                expiry_date: item.expiry_date,
+                monthly_process_id: process.id,
+              })
+            }
+          }
+
+          // Upsert lots (conflict on cip13+lot_number)
+          const lotRows = [...uniqueLots.values()]
+          const { data: upsertedLots } = await supabase
+            .from('lots')
+            .upsert(lotRows, { onConflict: 'cip13,lot_number' })
+            .select('id, cip13, lot_number')
+
+          // Build lot lookup
+          const lotLookup = new Map<string, string>()
+          for (const lot of upsertedLots ?? []) {
+            lotLookup.set(`${lot.cip13}::${lot.lot_number}`, lot.id)
+          }
+
+          // Add lot_id to each stock row
+          const stockWithLots = validBatch.map(item => ({
+            ...item,
+            lot_id: lotLookup.get(`${item.cip13}::${item.lot_number}`) ?? null,
+          }))
+
           const { error, data } = await supabase
             .from('collected_stock')
-            .insert(validBatch)
+            .insert(stockWithLots)
             .select('id')
 
           if (error) {
@@ -534,6 +577,108 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
       toast.error(`Erreur: ${err.message}`)
     },
   })
+
+  // --------------- Manual stock import ---------------
+
+  const manualStockMut = useMutation({
+    mutationFn: async () => {
+      if (!manualWholesaler) throw new Error('Selectionnez un grossiste')
+      const ws = (wholesalers ?? []).find(w => w.code === manualWholesaler)
+      if (!ws) throw new Error('Grossiste introuvable')
+
+      let allProducts: { id: string; cip13: string }[] = []
+      let from = 0
+      while (true) {
+        const { data: page } = await supabase.from('products').select('id, cip13').range(from, from + 999)
+        if (!page || page.length === 0) break
+        allProducts = allProducts.concat(page)
+        if (page.length < 1000) break
+        from += 1000
+      }
+      const productMap = new Map(allProducts.map(p => [p.cip13, p]))
+
+      const validRows = manualStockRows
+        .filter(r => r.cip13.trim() && r.lot_number.trim() && parseInt(r.quantity) > 0)
+        .map(r => {
+          const product = productMap.get(r.cip13.trim())
+          if (!product) return null
+          const expiry = parseExpiryDate(r.expiry_date)
+          if (!expiry) return null
+          return {
+            monthly_process_id: process.id,
+            monthly_order_id: null,
+            wholesaler_id: ws.id,
+            product_id: product.id,
+            cip13: r.cip13.trim(),
+            lot_number: r.lot_number.trim(),
+            expiry_date: expiry,
+            quantity: parseInt(r.quantity),
+            unit_cost: r.unit_cost ? parseFloat(r.unit_cost.replace(',', '.')) : null,
+            status: 'received',
+            data_source: 'manual',
+            metadata: {},
+          }
+        })
+        .filter(Boolean) as Record<string, unknown>[]
+
+      if (validRows.length === 0) throw new Error('Aucune ligne valide')
+
+      // Upsert lots
+      const uniqueLots = new Map<string, Record<string, unknown>>()
+      for (const item of validRows) {
+        const key = `${item.cip13}::${item.lot_number}`
+        if (!uniqueLots.has(key)) {
+          uniqueLots.set(key, {
+            product_id: item.product_id,
+            cip13: item.cip13,
+            lot_number: item.lot_number,
+            expiry_date: item.expiry_date,
+            monthly_process_id: process.id,
+          })
+        }
+      }
+      const { data: upsertedLots } = await supabase
+        .from('lots')
+        .upsert([...uniqueLots.values()], { onConflict: 'cip13,lot_number' })
+        .select('id, cip13, lot_number')
+      const lotLookup = new Map<string, string>()
+      for (const lot of upsertedLots ?? []) {
+        lotLookup.set(`${lot.cip13}::${lot.lot_number}`, lot.id)
+      }
+
+      const stockWithLots = validRows.map(item => ({
+        ...item,
+        lot_id: lotLookup.get(`${item.cip13}::${item.lot_number}`) ?? null,
+      }))
+
+      const { error } = await supabase.from('collected_stock').insert(stockWithLots)
+      if (error) throw error
+
+      await supabase
+        .from('monthly_processes')
+        .update({ status: 'collecting_stock' })
+        .eq('id', process.id)
+
+      return validRows.length
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['collected_stock'] })
+      queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
+      toast.success(`${count} lots ajoutes manuellement`)
+      setManualStockRows([{ cip13: '', lot_number: '', expiry_date: '', quantity: '', unit_cost: '' }])
+      setManualWholesaler('')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  const addManualStockRow = () => setManualStockRows(prev => [...prev, { cip13: '', lot_number: '', expiry_date: '', quantity: '', unit_cost: '' }])
+  const updateManualStockRow = (i: number, field: string, value: string) => {
+    setManualStockRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
+  }
+  const removeManualStockRow = (i: number) => {
+    if (manualStockRows.length <= 1) return
+    setManualStockRows(prev => prev.filter((_, idx) => idx !== i))
+  }
 
   // --------------- Render helpers ---------------
 
@@ -835,9 +980,100 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
       <div>
         <h3 className="text-lg font-semibold">Reception des Stocks Collectes</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Importez les fichiers de stocks recus des grossistes (numero de lot, date d'expiration, quantite). Un fichier par grossiste.
+          Importez les stocks recus des grossistes ou saisissez-les directement.
         </p>
       </div>
+
+      {/* Source toggle */}
+      <div className="flex gap-1.5">
+        {([
+          { value: 'excel' as StockImportSource, label: 'Fichier Excel', icon: FileSpreadsheet },
+          { value: 'manual' as StockImportSource, label: 'Saisie directe', icon: Keyboard },
+        ]).map(opt => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => setImportSource(opt.value)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1.5 ${
+              importSource === opt.value
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border hover:bg-muted text-muted-foreground'
+            }`}
+          >
+            <opt.icon className="h-3 w-3" />
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Manual stock entry */}
+      {importSource === 'manual' && (
+        <Card>
+          <CardContent className="p-4 space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Grossiste *</Label>
+              <Select value={manualWholesaler || 'none'} onValueChange={(v) => setManualWholesaler(v === 'none' ? '' : v)}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selectionner le grossiste..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- Selectionner --</SelectItem>
+                  {(wholesalers ?? []).map(w => (
+                    <SelectItem key={w.id} value={w.code ?? w.id}>{w.code} — {w.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Lignes de stock</Label>
+              <div className="border rounded-lg overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>CIP13 *</TableHead>
+                      <TableHead>N° Lot *</TableHead>
+                      <TableHead>Expiration *</TableHead>
+                      <TableHead>Quantite *</TableHead>
+                      <TableHead>Cout unit.</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {manualStockRows.map((row, i) => (
+                      <TableRow key={i}>
+                        <TableCell><Input className="h-7 text-sm font-mono" placeholder="3400930..." value={row.cip13} onChange={e => updateManualStockRow(i, 'cip13', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-7 text-sm" placeholder="D800305N" value={row.lot_number} onChange={e => updateManualStockRow(i, 'lot_number', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-7 text-sm" placeholder="2026-09-01" value={row.expiry_date} onChange={e => updateManualStockRow(i, 'expiry_date', e.target.value)} /></TableCell>
+                        <TableCell><Input type="number" className="h-7 text-sm w-20" placeholder="0" value={row.quantity} onChange={e => updateManualStockRow(i, 'quantity', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-7 text-sm w-20" placeholder="0.00" value={row.unit_cost} onChange={e => updateManualStockRow(i, 'unit_cost', e.target.value)} /></TableCell>
+                        <TableCell>
+                          {manualStockRows.length > 1 && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeManualStockRow(i)}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <Button variant="outline" size="sm" onClick={addManualStockRow} className="gap-1">
+                <Plus className="h-3 w-3" /> Ajouter une ligne
+              </Button>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={() => manualStockMut.mutate()}
+                disabled={manualStockMut.isPending || !manualWholesaler || manualStockRows.every(r => !r.cip13.trim())}
+                className="gap-2"
+              >
+                {manualStockMut.isPending ? 'Import en cours...' : 'Importer les stocks'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {existingStock != null && existingStock > 0 && queue.length === 0 && (
         <Card className="ivory-card-highlight">
@@ -850,8 +1086,8 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
         </Card>
       )}
 
-      {/* File queue */}
-      {queue.length > 0 && (
+      {/* File queue (Excel mode) */}
+      {importSource === 'excel' && queue.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-sm font-medium">{queue.length} fichier{queue.length > 1 ? 's' : ''}</span>
@@ -872,8 +1108,8 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
         </div>
       )}
 
-      {/* Drop zone */}
-      <div
+      {/* Drop zone (Excel mode) */}
+      {importSource === 'excel' && <div
         className={`border-2 border-dashed rounded-xl text-center cursor-pointer transition-all duration-200 ${
           queue.length > 0 ? 'p-6' : 'p-10'
         } ${
@@ -905,11 +1141,11 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
         <p className="text-xs text-muted-foreground mt-1">
           .xlsx, .xls, .csv — Un fichier par grossiste avec lots, dates d'expiration et quantites
         </p>
-      </div>
+      </div>}
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileInput} multiple className="hidden" />
 
-      {/* Import history */}
-      {queue.length === 0 && importHistory.length > 0 && (
+      {/* Import history (Excel mode) */}
+      {importSource === 'excel' && queue.length === 0 && importHistory.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
             <History className="h-3 w-3" /> Derniers imports stock

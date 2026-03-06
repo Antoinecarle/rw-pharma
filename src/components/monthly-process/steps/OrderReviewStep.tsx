@@ -424,10 +424,10 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={order.status === 'validated' ? 'default' : order.status === 'rejected' ? 'destructive' : 'secondary'}
+                        variant={order.status === 'validated' ? 'default' : order.status === 'allocated' ? 'default' : order.status === 'partially_allocated' ? 'secondary' : order.status === 'rejected' ? 'destructive' : 'secondary'}
                         className="text-[10px]"
                       >
-                        {order.status === 'validated' ? 'Valide' : order.status === 'rejected' ? 'Rejete' : 'En attente'}
+                        {order.status === 'validated' ? 'Valide' : order.status === 'allocated' ? 'Alloue' : order.status === 'partially_allocated' ? 'Partiel' : order.status === 'rejected' ? 'Rejete' : 'En attente'}
                       </Badge>
                     </TableCell>
                     <TableCell>

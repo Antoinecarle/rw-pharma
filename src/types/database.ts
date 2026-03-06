@@ -117,7 +117,7 @@ export interface MonthlyProcess {
 export type MonthlyProcessInsert = Omit<MonthlyProcess, 'id' | 'created_at' | 'updated_at' | 'orders_count' | 'allocations_count'>
 export type MonthlyProcessUpdate = Partial<MonthlyProcessInsert>
 
-export type OrderStatus = 'pending' | 'validated' | 'allocated' | 'rejected'
+export type OrderStatus = 'pending' | 'validated' | 'partially_allocated' | 'allocated' | 'rejected'
 
 export interface Order {
   id: string
@@ -126,7 +126,10 @@ export interface Order {
   product_id: string
   quantity: number
   unit_price: number | null
+  allocated_quantity: number
   status: OrderStatus
+  comment: string | null
+  data_source: string
   metadata: Record<string, unknown>
   created_at: string
   // Joined fields
@@ -161,6 +164,53 @@ export interface Allocation {
 
 export type AllocationInsert = Omit<Allocation, 'id' | 'created_at' | 'customer' | 'product' | 'wholesaler'>
 export type AllocationUpdate = Partial<AllocationInsert>
+
+// ── Lots ─────────────────────────────────────────────────────────
+
+export interface Lot {
+  id: string
+  product_id: string | null
+  cip13: string
+  lot_number: string
+  expiry_date: string
+  manufacture_date: string | null
+  origin: string | null
+  monthly_process_id: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+  // Joined
+  product?: Product
+}
+
+export type LotInsert = Omit<Lot, 'id' | 'created_at' | 'product'>
+export type LotUpdate = Partial<LotInsert>
+
+// ── Collected Stock ──────────────────────────────────────────────
+
+export interface CollectedStock {
+  id: string
+  monthly_order_id: string | null
+  monthly_process_id: string | null
+  wholesaler_id: string
+  product_id: string | null
+  cip13: string
+  lot_id: string | null
+  lot_number: string
+  expiry_date: string
+  quantity: number
+  unit_cost: number | null
+  date_reception: string | null
+  import_file_id: string | null
+  import_file_name: string | null
+  data_source: string
+  status: string
+  metadata: Record<string, unknown>
+  created_at: string
+  // Joined
+  wholesaler?: Wholesaler
+  product?: Product
+  lot?: Lot
+}
 
 // ── ANSM ──────────────────────────────────────────────────────────
 
