@@ -13,30 +13,29 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap } from 'lucide-react'
+import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, User, X } from 'lucide-react'
 import { toast } from 'sonner'
 import SkippedItemsReviewModal, {
   type SkippedItem, type ResolvedItem,
 } from '@/components/allocations/SkippedItemsReviewModal'
 import type { MonthlyProcess, Customer, Product } from '@/types/database'
 
+// --------------- Types ---------------
+
 interface OrderColumnMapping {
-  customer_code: string
   cip13: string
   quantity: string
   unit_price: string
 }
 
 const FIELD_LABELS: Record<keyof OrderColumnMapping, string> = {
-  customer_code: 'Code Client *',
   cip13: 'CIP13 Produit *',
   quantity: 'Quantite *',
   unit_price: 'Prix unitaire',
 }
 
-const REQUIRED_FIELDS: (keyof OrderColumnMapping)[] = ['customer_code', 'cip13', 'quantity']
+const REQUIRED_FIELDS: (keyof OrderColumnMapping)[] = ['cip13', 'quantity']
 
-// Known client codes for auto-detection from filename
 const CLIENT_CODES = ['ORI', 'MPA', 'MEDCOR', 'CC', 'ABA', 'BMODESTO', 'AXI', 'BROCACEF', '2CARE4', 'MELY']
 
 const STORAGE_KEY = 'rw-pharma-import-history'
@@ -88,6 +87,110 @@ interface MappingConfidence {
   source: 'auto' | 'saved' | 'manual' | 'none'
 }
 
+type FileStatus = 'pending' | 'mapping' | 'preview' | 'importing' | 'done' | 'error'
+
+interface QueuedFile {
+  id: string
+  file: File
+  fileName: string
+  detectedClient: string | null
+  manualClient: string | null
+  status: FileStatus
+  headers: string[]
+  rows: Record<string, string>[]
+  sheetNames: string[]
+  selectedSheet: string
+  workbook: XLSX.WorkBook | null
+  mapping: OrderColumnMapping
+  confidence: MappingConfidence[]
+  importResult: { inserted: number; errors: number; skipped: number }
+  importProgress: { current: number; total: number; phase: string }
+  skippedItems: SkippedItem[]
+}
+
+function createQueuedFile(file: File): QueuedFile {
+  const fileName = file.name
+  const detectedClient = detectClientFromFilename(fileName)
+  return {
+    id: crypto.randomUUID(),
+    file,
+    fileName,
+    detectedClient,
+    manualClient: null,
+    status: 'pending',
+    headers: [],
+    rows: [],
+    sheetNames: [],
+    selectedSheet: '',
+    workbook: null,
+    mapping: { cip13: '', quantity: '', unit_price: '' },
+    confidence: [],
+    importResult: { inserted: 0, errors: 0, skipped: 0 },
+    importProgress: { current: 0, total: 0, phase: '' },
+    skippedItems: [],
+  }
+}
+
+// --------------- Auto-detect column mapping ---------------
+
+function autoDetectMapping(headers: string[], clientCode: string | null): { mapping: OrderColumnMapping; confidence: MappingConfidence[] } {
+  const saved = clientCode ? getSavedMapping(clientCode) : null
+  const confidenceMap: MappingConfidence[] = []
+
+  if (saved && headers.includes(saved.cip13) && headers.includes(saved.quantity)) {
+    const resultMapping = { ...saved }
+    for (const field of Object.keys(saved) as (keyof OrderColumnMapping)[]) {
+      if (saved[field] && headers.includes(saved[field])) {
+        confidenceMap.push({ field, source: 'saved' })
+      } else {
+        resultMapping[field] = ''
+        confidenceMap.push({ field, source: 'none' })
+      }
+    }
+    return { mapping: resultMapping, confidence: confidenceMap }
+  }
+
+  const autoMap: OrderColumnMapping = { cip13: '', quantity: '', unit_price: '' }
+  const usedHeaders = new Set<string>()
+
+  const fieldPatterns: { field: keyof OrderColumnMapping; patterns: RegExp[] }[] = [
+    {
+      field: 'cip13',
+      patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i, /artikelnummer/i, /code.*cip/i, /product.*code/i],
+    },
+    {
+      field: 'quantity',
+      patterns: [/qte.*command/i, /quantit/i, /^qty/i, /quantity/i, /^qte/i, /commandee?/i, /menge/i, /bestell/i, /ordered/i],
+    },
+    {
+      field: 'unit_price',
+      patterns: [/prix.*unit/i, /unit.*pri/i, /price/i, /^prix/i, /^pfht$/i, /einkaufspreis/i, /preis/i],
+    },
+  ]
+
+  for (const { field, patterns } of fieldPatterns) {
+    for (const pattern of patterns) {
+      if (autoMap[field]) break
+      const match = headers.find(h => !usedHeaders.has(h) && pattern.test(h))
+      if (match) {
+        autoMap[field] = match
+        usedHeaders.add(match)
+        confidenceMap.push({ field, source: 'auto' })
+      }
+    }
+  }
+
+  for (const field of Object.keys(FIELD_LABELS) as (keyof OrderColumnMapping)[]) {
+    if (!confidenceMap.find(c => c.field === field)) {
+      confidenceMap.push({ field, source: autoMap[field] ? 'auto' : 'none' })
+    }
+  }
+
+  return { mapping: autoMap, confidence: confidenceMap }
+}
+
+// --------------- Props ---------------
+
 interface OrderImportStepProps {
   process: MonthlyProcess
   onNext: () => void
@@ -96,25 +199,13 @@ interface OrderImportStepProps {
 export default function OrderImportStep({ process, onNext }: OrderImportStepProps) {
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [step, setStep] = useState<'upload' | 'mapping' | 'preview' | 'importing' | 'done'>('upload')
-  const [headers, setHeaders] = useState<string[]>([])
-  const [rows, setRows] = useState<Record<string, string>[]>([])
-  const [sheetNames, setSheetNames] = useState<string[]>([])
-  const [selectedSheet, setSelectedSheet] = useState<string>('')
-  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null)
-  const [mapping, setMapping] = useState<OrderColumnMapping>({
-    customer_code: '', cip13: '', quantity: '', unit_price: '',
-  })
-  const [confidence, setConfidence] = useState<MappingConfidence[]>([])
-  const [importResult, setImportResult] = useState({ inserted: 0, errors: 0, skipped: 0 })
-  const [importProgress, setImportProgress] = useState({ current: 0, total: 0, phase: '' })
-  const [skippedItems, setSkippedItems] = useState<SkippedItem[]>([])
+  const [queue, setQueue] = useState<QueuedFile[]>([])
+  const [activeFileId, setActiveFileId] = useState<string | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
   const [skippedModalOpen, setSkippedModalOpen] = useState(false)
+  const [skippedModalFileId, setSkippedModalFileId] = useState<string | null>(null)
   const [cachedCustomers, setCachedCustomers] = useState<Pick<Customer, 'id' | 'code' | 'name'>[]>([])
   const [cachedProducts, setCachedProducts] = useState<Pick<Product, 'id' | 'cip13' | 'name'>[]>([])
-  const [fileName, setFileName] = useState('')
-  const [detectedClient, setDetectedClient] = useState<string | null>(null)
-  const [isDragOver, setIsDragOver] = useState(false)
 
   const { data: existingOrders } = useQuery({
     queryKey: ['orders', process.id, 'count'],
@@ -127,201 +218,155 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
     },
   })
 
+  const { data: customers } = useQuery({
+    queryKey: ['customers', 'all'],
+    queryFn: async () => {
+      const { data } = await supabase.from('customers').select('id, code, name')
+      return (data ?? []) as Pick<Customer, 'id' | 'code' | 'name'>[]
+    },
+  })
+
   const importHistory = getImportHistory()
 
-  const reset = () => {
-    setStep('upload')
-    setHeaders([])
-    setRows([])
-    setSheetNames([])
-    setSelectedSheet('')
-    setWorkbook(null)
-    setMapping({ customer_code: '', cip13: '', quantity: '', unit_price: '' })
-    setConfidence([])
-    setImportResult({ inserted: 0, errors: 0, skipped: 0 })
-    setImportProgress({ current: 0, total: 0, phase: '' })
-    setFileName('')
-    setDetectedClient(null)
-    setIsDragOver(false)
-    if (fileRef.current) fileRef.current.value = ''
-  }
+  // --------------- Queue helpers ---------------
 
-  const processFile = (file: File) => {
-    const name = file.name
-    setFileName(name)
-    const client = detectClientFromFilename(name)
-    setDetectedClient(client)
+  const updateFile = useCallback((id: string, updates: Partial<QueuedFile>) => {
+    setQueue(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f))
+  }, [])
+
+  const activeFile = queue.find(f => f.id === activeFileId)
+
+  const allDone = queue.length > 0 && queue.every(f => f.status === 'done')
+  const hasActiveImport = queue.some(f => f.status === 'importing')
+  const totalImported = queue.filter(f => f.status === 'done').reduce((s, f) => s + f.importResult.inserted, 0)
+
+  const getClientCode = (f: QueuedFile) => f.detectedClient ?? f.manualClient
+
+  // --------------- File processing ---------------
+
+  const processFile = useCallback((file: File) => {
+    const qf = createQueuedFile(file)
 
     const reader = new FileReader()
     reader.onload = (evt) => {
       const data = new Uint8Array(evt.target?.result as ArrayBuffer)
       const wb = XLSX.read(data, { type: 'array' })
-      setWorkbook(wb)
-      setSheetNames(wb.SheetNames)
-      setSelectedSheet(wb.SheetNames[0])
-      loadSheet(wb, wb.SheetNames[0], client)
+      const sheetName = wb.SheetNames[0]
+      const ws = wb.Sheets[sheetName]
+      const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: '' })
+
+      if (json.length === 0) {
+        toast.error(`Fichier "${file.name}" vide`)
+        return
+      }
+
+      const hdrs = Object.keys(json[0])
+      const clientCode = qf.detectedClient
+      const { mapping, confidence } = autoDetectMapping(hdrs, clientCode)
+
+      const updatedFile: QueuedFile = {
+        ...qf,
+        status: 'mapping',
+        headers: hdrs,
+        rows: json,
+        sheetNames: wb.SheetNames,
+        selectedSheet: sheetName,
+        workbook: wb,
+        mapping,
+        confidence,
+      }
+
+      setQueue(prev => [...prev, updatedFile])
+      setActiveFileId(updatedFile.id)
     }
     reader.readAsArrayBuffer(file)
-  }
+  }, [])
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    processFile(file)
+  const handleFiles = useCallback((files: FileList | File[]) => {
+    for (const file of Array.from(files)) {
+      processFile(file)
+    }
+  }, [processFile])
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    handleFiles(files)
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
-    const file = e.dataTransfer.files[0]
-    if (file) processFile(file)
-  }, [])
+    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files)
+  }, [handleFiles])
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(true)
-  }, [])
+  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true) }, [])
+  const handleDragLeave = useCallback(() => setIsDragOver(false), [])
 
-  const handleDragLeave = useCallback(() => {
-    setIsDragOver(false)
-  }, [])
-
-  const loadSheet = (wb: XLSX.WorkBook, sheetName: string, clientCode?: string | null) => {
-    const ws = wb.Sheets[sheetName]
+  const handleSheetChange = (fileId: string, sheetName: string) => {
+    const f = queue.find(x => x.id === fileId)
+    if (!f || !f.workbook) return
+    const ws = f.workbook.Sheets[sheetName]
     const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: '' })
     if (json.length === 0) { toast.error('Feuille vide'); return }
     const hdrs = Object.keys(json[0])
-    setHeaders(hdrs)
-    setRows(json)
-
-    // Try saved mapping for this client first
-    const client = clientCode ?? detectedClient
-    const saved = client ? getSavedMapping(client) : null
-    const confidenceMap: MappingConfidence[] = []
-
-    let resultMapping: OrderColumnMapping
-
-    if (saved && hdrs.includes(saved.customer_code) && hdrs.includes(saved.cip13) && hdrs.includes(saved.quantity)) {
-      // Use saved mapping — all required columns still exist
-      resultMapping = { ...saved }
-      // Validate each field still exists in headers
-      for (const field of Object.keys(saved) as (keyof OrderColumnMapping)[]) {
-        if (saved[field] && hdrs.includes(saved[field])) {
-          confidenceMap.push({ field, source: 'saved' })
-        } else {
-          resultMapping[field] = ''
-          confidenceMap.push({ field, source: 'none' })
-        }
-      }
-    } else {
-      // Auto-detect mapping with prioritized patterns (most specific first)
-      const autoMap: OrderColumnMapping = { customer_code: '', cip13: '', quantity: '', unit_price: '' }
-      const usedHeaders = new Set<string>()
-
-      // Define patterns per field, ordered by priority (most specific first)
-      const fieldPatterns: { field: keyof OrderColumnMapping; patterns: RegExp[] }[] = [
-        {
-          field: 'cip13',
-          patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i],
-        },
-        {
-          field: 'customer_code',
-          patterns: [/client.*code/i, /code.*client/i, /customer/i, /^client/i, /^code$/i],
-        },
-        {
-          field: 'quantity',
-          patterns: [/qte.*command/i, /quantit/i, /^qty/i, /quantity/i, /^qte/i, /commandee?/i],
-        },
-        {
-          field: 'unit_price',
-          patterns: [/prix.*unit/i, /unit.*pri/i, /price/i, /^prix/i, /^pfht$/i],
-        },
-      ]
-
-      for (const { field, patterns } of fieldPatterns) {
-        for (const pattern of patterns) {
-          if (autoMap[field]) break
-          const match = hdrs.find(h => !usedHeaders.has(h) && pattern.test(h))
-          if (match) {
-            autoMap[field] = match
-            usedHeaders.add(match)
-            confidenceMap.push({ field, source: 'auto' })
-          }
-        }
-      }
-      // Fill missing confidence entries
-      for (const field of Object.keys(FIELD_LABELS) as (keyof OrderColumnMapping)[]) {
-        if (!confidenceMap.find(c => c.field === field)) {
-          confidenceMap.push({ field, source: autoMap[field] ? 'auto' : 'none' })
-        }
-      }
-      resultMapping = autoMap
-    }
-
-    setMapping(resultMapping)
-    setConfidence(confidenceMap)
-    setStep('mapping')
+    const clientCode = getClientCode(f)
+    const { mapping, confidence } = autoDetectMapping(hdrs, clientCode)
+    updateFile(fileId, { selectedSheet: sheetName, headers: hdrs, rows: json, mapping, confidence })
   }
 
-  const handleSheetChange = (name: string) => {
-    setSelectedSheet(name)
-    if (workbook) loadSheet(workbook, name)
+  const updateMapping = (fileId: string, field: keyof OrderColumnMapping, value: string) => {
+    const f = queue.find(x => x.id === fileId)
+    if (!f) return
+    const newMapping = { ...f.mapping, [field]: value === 'none' ? '' : value }
+    const newConfidence = f.confidence.map(c =>
+      c.field === field ? { ...c, source: value === 'none' ? 'none' as const : 'manual' as const } : c
+    )
+    updateFile(fileId, { mapping: newMapping, confidence: newConfidence })
   }
 
-  const updateMapping = (field: keyof OrderColumnMapping, value: string) => {
-    setMapping(prev => ({ ...prev, [field]: value === 'none' ? '' : value }))
-    setConfidence(prev => prev.map(c =>
-      c.field === field ? { ...c, source: value === 'none' ? 'none' : 'manual' as const } : c
-    ))
+  const removeFile = (fileId: string) => {
+    setQueue(prev => prev.filter(f => f.id !== fileId))
+    if (activeFileId === fileId) setActiveFileId(null)
   }
 
-  const canProceed = REQUIRED_FIELDS.every((f) => mapping[f])
-
-  const getConfidenceBadge = (field: keyof OrderColumnMapping) => {
-    const c = confidence.find(c => c.field === field)
-    if (!c || c.source === 'none') return null
-    if (c.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Memorise</Badge>
-    if (c.source === 'auto') return <Badge variant="secondary" className="text-[9px] h-4 gap-0.5"><Zap className="h-2.5 w-2.5" /> Auto</Badge>
-    return null
-  }
-
-  const getSampleValues = (field: keyof OrderColumnMapping) => {
-    const col = mapping[field]
-    if (!col) return []
-    return rows.slice(0, 3).map(r => String(r[col] || '').trim()).filter(Boolean)
-  }
+  // --------------- Import mutation ---------------
 
   const importMut = useMutation({
-    mutationFn: async () => {
-      setStep('importing')
-      setImportProgress({ current: 0, total: rows.length, phase: 'Chargement des references...' })
+    mutationFn: async (fileId: string) => {
+      const f = queue.find(x => x.id === fileId)
+      if (!f) throw new Error('Fichier introuvable')
 
-      // Fetch all customers and products for matching
-      const { data: customers } = await supabase.from('customers').select('id, code, name')
+      const clientCode = getClientCode(f)
 
-      // Products table can exceed Supabase default 1000-row limit — paginate to fetch all
+      updateFile(fileId, { status: 'importing', importProgress: { current: 0, total: f.rows.length, phase: 'Chargement des references...' } })
+
+      const { data: custData } = await supabase.from('customers').select('id, code, name')
+
       let allProducts: { id: string; cip13: string; name: string }[] = []
       let from = 0
       const pageSize = 1000
       while (true) {
-        const { data: page } = await supabase
-          .from('products')
-          .select('id, cip13, name')
-          .range(from, from + pageSize - 1)
+        const { data: page } = await supabase.from('products').select('id, cip13, name').range(from, from + pageSize - 1)
         if (!page || page.length === 0) break
         allProducts = allProducts.concat(page)
         if (page.length < pageSize) break
         from += pageSize
       }
-      const products = allProducts
 
-      const customersList = (customers ?? []) as Pick<Customer, 'id' | 'code' | 'name'>[]
-      const productsList = (products ?? []) as Pick<Product, 'id' | 'cip13' | 'name'>[]
+      const customersList = (custData ?? []) as Pick<Customer, 'id' | 'code' | 'name'>[]
+      const productsList = allProducts as Pick<Product, 'id' | 'cip13' | 'name'>[]
       setCachedCustomers(customersList)
       setCachedProducts(productsList)
 
-      const customerMap = new Map(customersList.map((c) => [c.code?.toUpperCase(), c.id]))
-      const productMap = new Map(productsList.map((p) => [p.cip13, p.id]))
+      const customerMap = new Map(customersList.map(c => [c.code?.toUpperCase(), c.id]))
+      const productMap = new Map(productsList.map(p => [p.cip13, p.id]))
+
+      const fileCustomerId = clientCode ? customerMap.get(clientCode.toUpperCase()) : undefined
+      if (!fileCustomerId) {
+        throw new Error(`Client "${clientCode ?? '?'}" introuvable en base. Verifiez le code client.`)
+      }
 
       let inserted = 0
       let errors = 0
@@ -329,28 +374,22 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       const skippedDetails: SkippedItem[] = []
       const batchSize = 100
 
-      setImportProgress({ current: 0, total: rows.length, phase: 'Validation et insertion...' })
+      updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: 'Validation et insertion...' } })
 
-      for (let i = 0; i < rows.length; i += batchSize) {
-        const batch = rows.slice(i, i + batchSize).map((row, batchIdx) => {
+      for (let i = 0; i < f.rows.length; i += batchSize) {
+        const batch = f.rows.slice(i, i + batchSize).map((row, batchIdx) => {
           const rowIndex = i + batchIdx
-          const code = String(row[mapping.customer_code] || '').trim().toUpperCase()
-          const cip13 = String(row[mapping.cip13] || '').trim()
-          const qty = parseInt(String(row[mapping.quantity] || '0'), 10)
-          const price = mapping.unit_price ? parseFloat(String(row[mapping.unit_price]).replace(',', '.')) || null : null
+          const cip13 = String(row[f.mapping.cip13] || '').trim()
+          const qty = parseInt(String(row[f.mapping.quantity] || '0'), 10)
+          const price = f.mapping.unit_price ? parseFloat(String(row[f.mapping.unit_price]).replace(',', '.')) || null : null
 
-          const customerId = customerMap.get(code)
           const productId = productMap.get(cip13)
 
-          if (!customerId || !productId || qty <= 0) {
-            let reason: SkippedItem['reason'] = 'invalid_quantity'
-            if (!customerId && !productId) reason = 'both_unknown'
-            else if (!customerId) reason = 'unknown_customer'
-            else if (!productId) reason = 'unknown_product'
-
+          if (!productId || qty <= 0) {
+            const reason: SkippedItem['reason'] = !productId ? 'unknown_product' : 'invalid_quantity'
             skippedDetails.push({
               rowIndex,
-              customerCode: code,
+              customerCode: clientCode ?? '',
               cip13,
               quantity: qty,
               unitPrice: price,
@@ -361,7 +400,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
 
           return {
             monthly_process_id: process.id,
-            customer_id: customerId,
+            customer_id: fileCustomerId,
             product_id: productId,
             quantity: qty,
             unit_price: price,
@@ -374,11 +413,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         skipped += batch.length - validBatch.length
 
         if (validBatch.length > 0) {
-          const { error, data } = await supabase
-            .from('orders')
-            .insert(validBatch)
-            .select('id')
-
+          const { error, data } = await supabase.from('orders').insert(validBatch).select('id')
           if (error) {
             errors += validBatch.length
             console.error('Batch error:', error)
@@ -387,51 +422,58 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
           }
         }
 
-        setImportProgress({
-          current: Math.min(i + batchSize, rows.length),
-          total: rows.length,
-          phase: `${Math.min(i + batchSize, rows.length)} / ${rows.length} lignes traitees`,
+        updateFile(fileId, {
+          importProgress: {
+            current: Math.min(i + batchSize, f.rows.length),
+            total: f.rows.length,
+            phase: `${Math.min(i + batchSize, f.rows.length)} / ${f.rows.length} lignes traitees`,
+          },
         })
       }
 
-      // Update process orders_count
+      // Compute total across all done files + this one
+      const doneInserted = queue
+        .filter(x => x.id !== fileId && x.status === 'done')
+        .reduce((s, x) => s + x.importResult.inserted, 0)
+      const currentTotal = (existingOrders ?? 0) + doneInserted + inserted
+
       await supabase
         .from('monthly_processes')
-        .update({ orders_count: (existingOrders ?? 0) + inserted, status: 'importing' })
+        .update({ orders_count: currentTotal, status: 'importing' })
         .eq('id', process.id)
 
-      // Save mapping for this client
-      if (detectedClient) {
-        saveMappingForCustomer(detectedClient, mapping)
+      if (clientCode) {
+        saveMappingForCustomer(clientCode, f.mapping)
       }
 
-      // Save import history
       addImportHistory({
-        fileName,
+        fileName: f.fileName,
         date: new Date().toISOString(),
-        rowCount: rows.length,
-        clientCode: detectedClient,
+        rowCount: f.rows.length,
+        clientCode,
       })
 
-      setSkippedItems(skippedDetails)
-      return { inserted, errors, skipped }
+      return { fileId, inserted, errors, skipped, skippedDetails }
     },
     onSuccess: (result) => {
-      setImportResult(result)
-      setStep('done')
+      updateFile(result.fileId, {
+        status: 'done',
+        importResult: { inserted: result.inserted, errors: result.errors, skipped: result.skipped },
+        skippedItems: result.skippedDetails,
+      })
       queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
       toast.success(`${result.inserted} commandes importees`)
     },
-    onError: (err: Error) => {
+    onError: (err: Error, fileId: string) => {
+      updateFile(fileId, { status: 'mapping' })
       toast.error(`Erreur: ${err.message}`)
-      setStep('preview')
     },
   })
 
   const handleResolvedItems = async (resolved: ResolvedItem[]) => {
-    if (resolved.length === 0) return
-    const ordersToInsert = resolved.map((r) => ({
+    if (resolved.length === 0 || !skippedModalFileId) return
+    const ordersToInsert = resolved.map(r => ({
       monthly_process_id: process.id,
       customer_id: r.customerId,
       product_id: r.productId,
@@ -442,41 +484,305 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
     }))
 
     const { error, data } = await supabase.from('orders').insert(ordersToInsert).select('id')
-    if (error) {
-      toast.error(`Erreur lors de l'insertion: ${error.message}`)
-      return
-    }
-    const count = data?.length ?? resolved.length
-    setImportResult((prev) => ({
-      ...prev,
-      inserted: prev.inserted + count,
-      skipped: prev.skipped - count,
-    }))
-    const resolvedIndexes = new Set(resolved.map((r) => r.rowIndex))
-    setSkippedItems((prev) => prev.filter((s) => !resolvedIndexes.has(s.rowIndex)))
+    if (error) { toast.error(`Erreur: ${error.message}`); return }
 
-    await supabase
-      .from('monthly_processes')
-      .update({ orders_count: (existingOrders ?? 0) + importResult.inserted + count })
-      .eq('id', process.id)
+    const count = data?.length ?? resolved.length
+    const f = queue.find(x => x.id === skippedModalFileId)
+    if (f) {
+      const resolvedIndexes = new Set(resolved.map(r => r.rowIndex))
+      updateFile(skippedModalFileId, {
+        importResult: { ...f.importResult, inserted: f.importResult.inserted + count, skipped: f.importResult.skipped - count },
+        skippedItems: f.skippedItems.filter(s => !resolvedIndexes.has(s.rowIndex)),
+      })
+    }
 
     queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
     queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
     toast.success(`${count} commandes recuperees`)
   }
 
-  const progressPercent = importProgress.total > 0 ? (importProgress.current / importProgress.total) * 100 : 0
+  // --------------- Render helpers ---------------
+
+  const getConfidenceBadge = (conf: MappingConfidence) => {
+    if (conf.source === 'none') return null
+    if (conf.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Memorise</Badge>
+    if (conf.source === 'auto') return <Badge variant="secondary" className="text-[9px] h-4 gap-0.5"><Zap className="h-2.5 w-2.5" /> Auto</Badge>
+    return null
+  }
+
+  const getSampleValues = (f: QueuedFile, field: keyof OrderColumnMapping) => {
+    const col = f.mapping[field]
+    if (!col) return []
+    return f.rows.slice(0, 3).map(r => String(r[col] || '').trim()).filter(Boolean)
+  }
+
+  const canProceed = (f: QueuedFile) => {
+    const clientCode = getClientCode(f)
+    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && !!clientCode
+  }
+
+  // --------------- File card render ---------------
+
+  const renderFileCard = (f: QueuedFile) => {
+    const isActive = activeFileId === f.id
+    const clientCode = getClientCode(f)
+    const progressPercent = f.importProgress.total > 0 ? (f.importProgress.current / f.importProgress.total) * 100 : 0
+
+    return (
+      <div key={f.id} className="space-y-0">
+        {/* Card header */}
+        <Card
+          className={`transition-all cursor-pointer ${
+            f.status === 'done'
+              ? 'border-green-200 bg-green-50/30 dark:bg-green-950/20'
+              : f.status === 'error'
+                ? 'border-red-200 bg-red-50/30'
+                : isActive
+                  ? 'border-primary/40 bg-primary/[0.02]'
+                  : 'hover:border-primary/20'
+          }`}
+          onClick={() => {
+            if (f.status !== 'importing') setActiveFileId(isActive ? null : f.id)
+          }}
+        >
+          <CardContent className="p-3.5 flex items-center gap-3">
+            <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
+              f.status === 'done' ? 'bg-green-100 dark:bg-green-900' : 'bg-muted'
+            }`}>
+              {f.status === 'done'
+                ? <Check className="h-4 w-4 text-green-600" />
+                : f.status === 'importing'
+                  ? <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+                  : <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+              }
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium truncate">{f.fileName}</span>
+                <span className="text-xs text-muted-foreground">{f.rows.length} lignes</span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                {clientCode ? (
+                  <Badge variant={f.detectedClient ? 'default' : 'secondary'} className="text-[10px] h-4 gap-0.5">
+                    {f.detectedClient ? <Sparkles className="h-2.5 w-2.5" /> : <User className="h-2.5 w-2.5" />}
+                    {clientCode}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-200">
+                    Client non defini
+                  </Badge>
+                )}
+                {f.status === 'done' && (
+                  <span className="text-[11px] text-green-600 font-medium">
+                    {f.importResult.inserted} importees
+                    {f.importResult.skipped > 0 && <span className="text-amber-600"> / {f.importResult.skipped} ignorees</span>}
+                  </span>
+                )}
+                {f.confidence.some(c => c.source === 'saved') && f.status !== 'done' && (
+                  <Badge variant="secondary" className="text-[9px] h-4 gap-0.5">
+                    <History className="h-2.5 w-2.5" /> Mapping memorise
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {f.status !== 'done' && f.status !== 'importing' && (
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); removeFile(f.id) }}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+
+            {f.status === 'done' && (
+              <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center shrink-0">
+                <Check className="h-4 w-4 text-green-600" />
+              </div>
+            )}
+          </CardContent>
+
+          {f.status === 'importing' && (
+            <div className="px-3.5 pb-3">
+              <Progress value={progressPercent} className="h-1.5" />
+              <p className="text-[11px] text-muted-foreground mt-1">{f.importProgress.phase}</p>
+            </div>
+          )}
+        </Card>
+
+        {/* Expanded mapping/preview */}
+        {isActive && f.status !== 'done' && f.status !== 'importing' && (
+          <Card className="border-t-0 rounded-t-none border-primary/20">
+            <CardContent className="p-4 space-y-4">
+              {/* Client selector (when not auto-detected) */}
+              {!f.detectedClient && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <User className="h-3 w-3" /> Client pour ce fichier *
+                  </Label>
+                  <Select
+                    value={f.manualClient ?? 'none'}
+                    onValueChange={(v) => updateFile(f.id, { manualClient: v === 'none' ? null : v })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Selectionner le client..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">-- Selectionner --</SelectItem>
+                      {(customers ?? []).map(c => (
+                        <SelectItem key={c.id} value={c.code ?? c.id}>{c.code} — {c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Sheet selector */}
+              {f.sheetNames.length > 1 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Feuille</Label>
+                  <Select value={f.selectedSheet} onValueChange={(v) => handleSheetChange(f.id, v)}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {f.sheetNames.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Column mapping */}
+              {(f.status === 'mapping' || f.status === 'pending') && (
+                <>
+                  <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs commande.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {(Object.keys(FIELD_LABELS) as (keyof OrderColumnMapping)[]).map((field) => {
+                      const samples = getSampleValues(f, field)
+                      const conf = f.confidence.find(c => c.field === field)
+                      return (
+                        <div key={field} className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs">{FIELD_LABELS[field]}</Label>
+                            {conf && getConfidenceBadge(conf)}
+                            {f.mapping[field] && <Check className="h-3 w-3 text-green-500 ml-auto" />}
+                          </div>
+                          <Select
+                            value={f.mapping[field] || 'none'}
+                            onValueChange={(v) => updateMapping(f.id, field, v)}
+                          >
+                            <SelectTrigger className="h-9"><SelectValue placeholder="Non mappe" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-- Non mappe --</SelectItem>
+                              {f.headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          {samples.length > 0 && (
+                            <p className="text-[10px] text-muted-foreground font-mono truncate">
+                              Ex: {samples.join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Progress
+                      value={(Object.values(f.mapping).filter(Boolean).length / Object.keys(f.mapping).length) * 100}
+                      className="h-1.5 flex-1"
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {Object.values(f.mapping).filter(Boolean).length}/{Object.keys(f.mapping).length} champs
+                    </span>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (canProceed(f)) updateFile(f.id, { status: 'preview' })
+                        else toast.error('Champs obligatoires manquants (CIP13, Quantite, Client)')
+                      }}
+                      disabled={!canProceed(f)}
+                    >
+                      Apercu
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {/* Preview */}
+              {f.status === 'preview' && (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Apercu des 10 premieres lignes sur {f.rows.length} total. Client : <strong>{clientCode}</strong>
+                  </p>
+                  <div className="border rounded-lg overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-10">#</TableHead>
+                          <TableHead>CIP13</TableHead>
+                          <TableHead>Quantite</TableHead>
+                          <TableHead>Prix</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {f.rows.slice(0, 10).map((row, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
+                            <TableCell className="font-mono text-sm">{row[f.mapping.cip13]}</TableCell>
+                            <TableCell>{row[f.mapping.quantity]}</TableCell>
+                            <TableCell>{f.mapping.unit_price ? row[f.mapping.unit_price] : '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="flex justify-between">
+                    <Button variant="outline" size="sm" onClick={() => updateFile(f.id, { status: 'mapping' })}>
+                      Retour au mapping
+                    </Button>
+                    <Button size="sm" onClick={() => importMut.mutate(f.id)} disabled={hasActiveImport}>
+                      Importer {f.rows.length} commandes
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Skipped items warning */}
+        {f.status === 'done' && f.skippedItems.length > 0 && (
+          <Card className="border-t-0 rounded-t-none border-amber-200/60 bg-amber-50/30 dark:bg-amber-950/20">
+            <CardContent className="p-3 flex items-center gap-3">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <p className="text-xs flex-1">{f.skippedItems.length} lignes ignorees (produits inconnus / quantites invalides)</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 shrink-0 text-xs h-7"
+                onClick={(e) => { e.stopPropagation(); setSkippedModalFileId(f.id); setSkippedModalOpen(true) }}
+              >
+                <Eye className="h-3 w-3" /> Examiner
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    )
+  }
+
+  // --------------- Main render ---------------
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <h3 className="text-lg font-semibold">Importation des Commandes</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Importez les fichiers Excel de commandes clients pour ce mois.
+          Importez les fichiers Excel de commandes clients pour ce mois. Un fichier par client.
         </p>
       </div>
 
-      {existingOrders != null && existingOrders > 0 && (
+      {existingOrders != null && existingOrders > 0 && queue.length === 0 && (
         <Card className="ivory-card-highlight">
           <CardContent className="p-4 flex items-center gap-3">
             <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
@@ -487,275 +793,105 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         </Card>
       )}
 
-      {step === 'upload' && (
-        <div className="space-y-4">
-          <div
-            className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 ${
-              isDragOver
-                ? 'border-primary bg-primary/5 scale-[1.01]'
-                : 'hover:border-primary/50 hover:bg-muted/30'
-            }`}
-            onClick={() => fileRef.current?.click()}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-          >
-            <div className={`h-14 w-14 rounded-2xl mx-auto mb-4 flex items-center justify-center transition-all ${
-              isDragOver ? 'bg-primary/20 scale-110' : 'bg-muted'
-            }`}>
-              <Upload className={`h-7 w-7 transition-colors ${isDragOver ? 'text-primary' : 'text-muted-foreground'}`} />
-            </div>
-            <p className="text-sm font-medium">
-              {isDragOver ? 'Deposez le fichier ici' : 'Deposez un fichier Excel ou cliquez pour selectionner'}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">.xlsx, .xls, .csv — Formats commandes clients (ORI, MPA, AXI...)</p>
-          </div>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="hidden" />
-
-          {/* Import history */}
-          {importHistory.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <History className="h-3 w-3" /> Derniers imports
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {importHistory.map((h, i) => (
-                  <Badge key={i} variant="outline" className="gap-1.5 py-1 px-2.5 text-xs">
-                    <FileSpreadsheet className="h-3 w-3" />
-                    {h.fileName.length > 25 ? h.fileName.slice(0, 25) + '...' : h.fileName}
-                    <span className="text-muted-foreground">
-                      {h.rowCount} lignes
-                      {h.clientCode && <> &middot; {h.clientCode}</>}
-                    </span>
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {existingOrders != null && existingOrders > 0 && (
-            <div className="flex justify-end">
-              <Button onClick={onNext} className="gap-2">
-                Passer a l'etape suivante <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {step === 'mapping' && (
-        <div className="space-y-4">
-          {/* File info + detected client */}
-          <Card className="border-muted">
-            <CardContent className="p-3 flex items-center gap-3 flex-wrap">
-              <Badge variant="outline" className="gap-1.5 py-1">
-                <FileSpreadsheet className="h-3 w-3" />
-                {fileName}
+      {/* File queue */}
+      {queue.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-medium">{queue.length} fichier{queue.length > 1 ? 's' : ''}</span>
+            <Badge variant="secondary" className="text-xs gap-1">
+              <Check className="h-3 w-3" />
+              {queue.filter(f => f.status === 'done').length}/{queue.length} importes
+            </Badge>
+            {(totalImported > 0 || (existingOrders ?? 0) > 0) && (
+              <Badge variant="default" className="text-xs gap-1">
+                {totalImported + (existingOrders ?? 0)} commandes total
               </Badge>
-              <span className="text-xs text-muted-foreground">{rows.length} lignes</span>
-              {detectedClient && (
-                <Badge variant="default" className="gap-1 text-xs">
-                  <Sparkles className="h-3 w-3" />
-                  Client detecte : {detectedClient}
-                </Badge>
-              )}
-              {confidence.some(c => c.source === 'saved') && (
-                <Badge variant="secondary" className="gap-1 text-xs">
-                  <History className="h-3 w-3" />
-                  Mapping memorise applique
-                </Badge>
-              )}
-            </CardContent>
-          </Card>
+            )}
+          </div>
 
-          {sheetNames.length > 1 && (
-            <div className="space-y-2">
-              <Label>Feuille</Label>
-              <Select value={selectedSheet} onValueChange={handleSheetChange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {sheetNames.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="space-y-2">
+            {queue.map(f => renderFileCard(f))}
+          </div>
+        </div>
+      )}
 
-          <p className="text-sm text-muted-foreground">
-            Mappez les colonnes aux champs commande.
+      {/* Drop zone */}
+      <div
+        className={`border-2 border-dashed rounded-xl text-center cursor-pointer transition-all duration-200 ${
+          queue.length > 0 ? 'p-6' : 'p-10'
+        } ${
+          isDragOver
+            ? 'border-primary bg-primary/5 scale-[1.01]'
+            : 'hover:border-primary/50 hover:bg-muted/30'
+        }`}
+        onClick={() => fileRef.current?.click()}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+      >
+        <div className={`mx-auto mb-3 flex items-center justify-center transition-all ${
+          queue.length > 0 ? 'h-10 w-10 rounded-xl' : 'h-14 w-14 rounded-2xl'
+        } ${isDragOver ? 'bg-primary/20 scale-110' : 'bg-muted'}`}>
+          {queue.length > 0
+            ? <Plus className={`h-5 w-5 transition-colors ${isDragOver ? 'text-primary' : 'text-muted-foreground'}`} />
+            : <Upload className={`h-7 w-7 transition-colors ${isDragOver ? 'text-primary' : 'text-muted-foreground'}`} />
+          }
+        </div>
+        <p className="text-sm font-medium">
+          {isDragOver
+            ? 'Deposez les fichiers ici'
+            : queue.length > 0
+              ? 'Ajouter un autre fichier client'
+              : 'Deposez des fichiers Excel ou cliquez pour selectionner'
+          }
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          .xlsx, .xls, .csv — Un fichier par client (ORI, MPA, AXI...)
+        </p>
+      </div>
+      <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileInput} multiple className="hidden" />
+
+      {/* Import history */}
+      {queue.length === 0 && importHistory.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <History className="h-3 w-3" /> Derniers imports
           </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(Object.keys(FIELD_LABELS) as (keyof OrderColumnMapping)[]).map((field) => {
-              const samples = getSampleValues(field)
-              return (
-                <div key={field} className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs">{FIELD_LABELS[field]}</Label>
-                    {getConfidenceBadge(field)}
-                    {mapping[field] && (
-                      <Check className="h-3 w-3 text-green-500 ml-auto" />
-                    )}
-                  </div>
-                  <Select
-                    value={mapping[field] || 'none'}
-                    onValueChange={(v) => updateMapping(field, v)}
-                  >
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Non mappe" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">-- Non mappe --</SelectItem>
-                      {headers.map((h) => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {/* Sample values preview */}
-                  {samples.length > 0 && (
-                    <p className="text-[10px] text-muted-foreground font-mono truncate">
-                      Ex: {samples.join(', ')}
-                    </p>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Mapping completeness indicator */}
-          <div className="flex items-center gap-2">
-            <Progress
-              value={(Object.values(mapping).filter(Boolean).length / Object.keys(mapping).length) * 100}
-              className="h-1.5 flex-1"
-            />
-            <span className="text-xs text-muted-foreground">
-              {Object.values(mapping).filter(Boolean).length}/{Object.keys(mapping).length} champs mappes
-            </span>
-          </div>
-
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={reset}>Retour</Button>
-            <Button onClick={() => { if (canProceed) setStep('preview'); else toast.error('Champs obligatoires manquants') }} disabled={!canProceed}>
-              Apercu
-            </Button>
+          <div className="flex flex-wrap gap-2">
+            {importHistory.map((h, i) => (
+              <Badge key={i} variant="outline" className="gap-1.5 py-1 px-2.5 text-xs">
+                <FileSpreadsheet className="h-3 w-3" />
+                {h.fileName.length > 25 ? h.fileName.slice(0, 25) + '...' : h.fileName}
+                <span className="text-muted-foreground">
+                  {h.rowCount} lignes
+                  {h.clientCode && <> &middot; {h.clientCode}</>}
+                </span>
+              </Badge>
+            ))}
           </div>
         </div>
       )}
 
-      {step === 'preview' && (
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Apercu des 10 premieres lignes sur {rows.length} total.
-          </p>
-          <div className="border rounded-lg overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10">#</TableHead>
-                  <TableHead>Code Client</TableHead>
-                  <TableHead>CIP13</TableHead>
-                  <TableHead>Quantite</TableHead>
-                  <TableHead>Prix</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.slice(0, 10).map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
-                    <TableCell className="font-mono text-sm">{row[mapping.customer_code]}</TableCell>
-                    <TableCell className="font-mono text-sm">{row[mapping.cip13]}</TableCell>
-                    <TableCell>{row[mapping.quantity]}</TableCell>
-                    <TableCell>{mapping.unit_price ? row[mapping.unit_price] : '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setStep('mapping')}>Retour</Button>
-            <Button onClick={() => importMut.mutate()}>
-              Importer {rows.length} commandes
-            </Button>
-          </div>
-        </div>
+      {/* Next step */}
+      <div className="flex justify-end">
+        {(allDone || (existingOrders != null && existingOrders > 0)) && !hasActiveImport && (
+          <Button onClick={onNext} className="gap-2">
+            Passer a l'etape suivante <ArrowRight className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Skipped items modal */}
+      {skippedModalFileId && (
+        <SkippedItemsReviewModal
+          open={skippedModalOpen}
+          onOpenChange={setSkippedModalOpen}
+          skippedItems={queue.find(x => x.id === skippedModalFileId)?.skippedItems ?? []}
+          existingCustomers={cachedCustomers}
+          existingProducts={cachedProducts}
+          onResolved={handleResolvedItems}
+        />
       )}
-
-      {step === 'importing' && (
-        <div className="py-10 text-center space-y-4">
-          <div className="relative mx-auto w-16 h-16">
-            <div className="animate-spin h-16 w-16 border-4 border-primary border-t-transparent rounded-full" />
-            <FileSpreadsheet className="h-6 w-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-          </div>
-          <p className="font-medium">Import en cours...</p>
-          <div className="max-w-xs mx-auto space-y-2">
-            <Progress value={progressPercent} className="h-2" />
-            <p className="text-sm text-muted-foreground">{importProgress.phase}</p>
-          </div>
-        </div>
-      )}
-
-      {step === 'done' && (
-        <div className="py-8 text-center space-y-4">
-          <div className="h-16 w-16 rounded-2xl bg-green-100 dark:bg-green-950 flex items-center justify-center mx-auto">
-            <Check className="h-8 w-8 text-green-600" />
-          </div>
-          <div>
-            <p className="text-lg font-medium">Import termine</p>
-            <div className="flex items-center justify-center gap-4 mt-2">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">{importResult.inserted}</p>
-                <p className="text-xs text-muted-foreground">Importees</p>
-              </div>
-              {importResult.skipped > 0 && (
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-amber-600">{importResult.skipped}</p>
-                  <p className="text-xs text-muted-foreground">Ignorees</p>
-                </div>
-              )}
-              {importResult.errors > 0 && (
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-red-600">{importResult.errors}</p>
-                  <p className="text-xs text-muted-foreground">Erreurs</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {skippedItems.length > 0 && (
-            <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 text-left max-w-md mx-auto">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                  <p className="text-sm font-medium">{skippedItems.length} lignes a verifier</p>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Clients ou produits non reconnus. Vous pouvez les creer ou les mapper sans quitter ce flow.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSkippedModalOpen(true)}
-                  className="gap-1.5 w-full"
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  Examiner les lignes ignorees
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="flex justify-center gap-3">
-            <Button variant="outline" onClick={reset}>Importer un autre fichier</Button>
-            <Button onClick={onNext} className="gap-2">
-              Etape suivante <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <SkippedItemsReviewModal
-        open={skippedModalOpen}
-        onOpenChange={setSkippedModalOpen}
-        skippedItems={skippedItems}
-        existingCustomers={cachedCustomers}
-        existingProducts={cachedProducts}
-        onResolved={handleResolvedItems}
-      />
     </div>
   )
 }
