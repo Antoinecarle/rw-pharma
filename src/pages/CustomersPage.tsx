@@ -88,6 +88,7 @@ export default function CustomersPage() {
   const [prefs, setPrefs] = useState<AllocationPrefs>({})
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviting, setInviting] = useState(false)
   const { user } = useAuth()
 
   const { data: customers, isLoading } = useQuery({
