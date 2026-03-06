@@ -1,12 +1,15 @@
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { Check, FileUp, ClipboardCheck, Cpu, SearchCheck, Flag } from 'lucide-react'
+import { Check, FileUp, ClipboardCheck, Cpu, SearchCheck, Flag, BarChart3, Send, PackageCheck } from 'lucide-react'
 
 const STEPS = [
+  { label: 'Import Quotas', icon: BarChart3 },
   { label: 'Import Commandes', icon: FileUp },
   { label: 'Revue Commandes', icon: ClipboardCheck },
-  { label: 'Allocation', icon: Cpu },
-  { label: 'Revue Allocations', icon: SearchCheck },
+  { label: 'Allocation Macro', icon: Cpu },
+  { label: 'Export Grossistes', icon: Send },
+  { label: 'Reception Stocks', icon: PackageCheck },
+  { label: 'Allocation Lots', icon: SearchCheck },
   { label: 'Finalisation', icon: Flag },
 ]
 

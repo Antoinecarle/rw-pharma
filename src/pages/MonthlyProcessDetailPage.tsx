@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import confetti from 'canvas-confetti'
 import ProcessStepper from '@/components/monthly-process/ProcessStepper'
 import StepQualityScore from '@/components/monthly-process/StepQualityScore'
+import QuotaImportStep from '@/components/monthly-process/steps/QuotaImportStep'
 import OrderImportStep from '@/components/monthly-process/steps/OrderImportStep'
 import OrderReviewStep from '@/components/monthly-process/steps/OrderReviewStep'
 import AllocationExecutionStep from '@/components/monthly-process/steps/AllocationExecutionStep'
@@ -26,9 +27,13 @@ const MONTH_NAMES = [
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Brouillon',
-  importing: 'Importation',
+  importing_quotas: 'Import quotas',
+  importing_orders: 'Import commandes',
   reviewing_orders: 'Revue commandes',
-  allocating: 'Allocation',
+  macro_allocating: 'Allocation macro',
+  exporting_wholesalers: 'Export grossistes',
+  collecting_stock: 'Reception stocks',
+  allocating_lots: 'Allocation lots',
   reviewing_allocations: 'Revue allocations',
   finalizing: 'Finalisation',
   completed: 'Termine',
@@ -201,10 +206,11 @@ export default function MonthlyProcessDetailPage() {
               }}
               stepStats={(() => {
                 const stats: Record<number, { value: string | number; label: string }> = {}
-                if (process.orders_count > 0) stats[1] = { value: process.orders_count, label: 'commandes' }
-                if (process.orders_count > 0 && currentStep > 2) stats[2] = { value: 'validees', label: '' }
-                if (process.allocations_count > 0) stats[3] = { value: process.allocations_count, label: 'allocations' }
-                if (process.allocations_count > 0 && currentStep > 4) stats[4] = { value: 'confirmees', label: '' }
+                if ((process.quotas_count ?? 0) > 0) stats[1] = { value: process.quotas_count ?? 0, label: 'quotas' }
+                if (process.orders_count > 0) stats[2] = { value: process.orders_count, label: 'commandes' }
+                if (process.orders_count > 0 && currentStep > 3) stats[3] = { value: 'validees', label: '' }
+                if (process.allocations_count > 0) stats[4] = { value: process.allocations_count, label: 'allocations' }
+                if (process.allocations_count > 0 && currentStep > 7) stats[7] = { value: 'confirmees', label: '' }
                 return stats
               })()}
             />
@@ -223,18 +229,36 @@ export default function MonthlyProcessDetailPage() {
           transition={stepTransition.transition}
         >
           {currentStep === 1 && (
-            <OrderImportStep process={process} onNext={() => advanceStep(2)} />
+            <QuotaImportStep process={process} onNext={() => advanceStep(2)} />
           )}
           {currentStep === 2 && (
-            <OrderReviewStep process={process} onNext={() => advanceStep(3)} onBack={() => setActiveStep(1)} />
+            <OrderImportStep process={process} onNext={() => advanceStep(3)} />
           )}
           {currentStep === 3 && (
-            <AllocationExecutionStep process={process} onNext={() => advanceStep(4)} />
+            <OrderReviewStep process={process} onNext={() => advanceStep(4)} onBack={() => setActiveStep(2)} />
           )}
           {currentStep === 4 && (
-            <AllocationReviewStep process={process} onNext={() => advanceStep(5)} onBack={() => setActiveStep(3)} />
+            <AllocationExecutionStep process={process} onNext={() => advanceStep(5)} />
           )}
+          {/* Steps 5-6 (Export Grossistes, Reception Stocks) — coming soon */}
           {currentStep === 5 && (
+            <div className="ivory-glass p-8 text-center space-y-3">
+              <p className="text-lg font-semibold">Export vers Grossistes</p>
+              <p className="text-sm text-muted-foreground">Cette etape sera implementee dans la prochaine iteration.</p>
+              <Button onClick={() => advanceStep(6)}>Passer a l'etape suivante</Button>
+            </div>
+          )}
+          {currentStep === 6 && (
+            <div className="ivory-glass p-8 text-center space-y-3">
+              <p className="text-lg font-semibold">Reception des Stocks</p>
+              <p className="text-sm text-muted-foreground">Cette etape sera implementee dans la prochaine iteration.</p>
+              <Button onClick={() => advanceStep(7)}>Passer a l'etape suivante</Button>
+            </div>
+          )}
+          {currentStep === 7 && (
+            <AllocationReviewStep process={process} onNext={() => advanceStep(8)} onBack={() => setActiveStep(6)} />
+          )}
+          {currentStep === 8 && (
             <FinalizationStep process={process} />
           )}
         </motion.div>

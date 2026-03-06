@@ -61,9 +61,11 @@ export interface WholesalerQuota {
   id: string
   wholesaler_id: string
   product_id: string
+  monthly_process_id: string | null
   month: string
   quota_quantity: number
   extra_available: number
+  import_file_name: string | null
   metadata: Record<string, unknown>
   created_at: string
 }
@@ -89,7 +91,7 @@ export interface Customer {
 export type CustomerInsert = Omit<Customer, 'id' | 'created_at' | 'updated_at'>
 export type CustomerUpdate = Partial<CustomerInsert>
 
-export type MonthlyProcessStatus = 'draft' | 'importing' | 'reviewing_orders' | 'allocating' | 'reviewing_allocations' | 'finalizing' | 'completed'
+export type MonthlyProcessStatus = 'draft' | 'importing_quotas' | 'importing_orders' | 'reviewing_orders' | 'macro_allocating' | 'exporting_wholesalers' | 'collecting_stock' | 'allocating_lots' | 'reviewing_allocations' | 'finalizing' | 'completed'
 
 export interface MonthlyProcess {
   id: string
@@ -97,6 +99,7 @@ export interface MonthlyProcess {
   year: number
   status: MonthlyProcessStatus
   current_step: number
+  quotas_count: number
   orders_count: number
   allocations_count: number
   notes: string | null

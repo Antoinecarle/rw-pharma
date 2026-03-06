@@ -162,7 +162,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
     mutationFn: async () => {
       const { error } = await supabase
         .from('monthly_processes')
-        .update({ status: 'completed', current_step: 5 })
+        .update({ status: 'completed', current_step: 8 })
         .eq('id', process.id)
       if (error) throw error
     },

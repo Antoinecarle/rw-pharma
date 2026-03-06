@@ -18,7 +18,7 @@ interface QualityResult {
 }
 
 function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
-  // Step 1: Import quality
+  // Steps 2-3: Order quality
   const { data: orders } = useQuery({
     queryKey: ['orders', process.id, 'quality'],
     queryFn: async () => {
@@ -29,10 +29,10 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
       if (error) throw error
       return data ?? []
     },
-    enabled: step <= 2,
+    enabled: step >= 2 && step <= 3,
   })
 
-  // Step 3-4: Allocation quality
+  // Steps 4-7: Allocation quality
   const { data: allocations } = useQuery({
     queryKey: ['allocations', process.id, 'quality'],
     queryFn: async () => {
@@ -43,7 +43,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
       if (error) throw error
       return data ?? []
     },
-    enabled: step >= 3,
+    enabled: step >= 4,
   })
 
   return useMemo(() => {
@@ -52,7 +52,25 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
 
     switch (step) {
       case 1: {
-        // Import step: score based on having orders
+        // Quota import: score based on having quotas
+        const count = process.quotas_count ?? 0
+        if (count === 0) {
+          score = 0
+          details.push('Aucun quota importe')
+        } else if (count < 100) {
+          score = 40
+          details.push(`${count} quotas (faible volume)`)
+        } else if (count < 500) {
+          score = 70
+          details.push(`${count} quotas importes`)
+        } else {
+          score = 100
+          details.push(`${count} quotas importes`)
+        }
+        break
+      }
+      case 2: {
+        // Order import: score based on having orders
         const count = process.orders_count ?? 0
         if (count === 0) {
           score = 0
@@ -69,7 +87,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         }
         break
       }
-      case 2: {
+      case 3: {
         // Review step: validated vs total
         if (!orders || orders.length === 0) {
           score = 0
@@ -88,8 +106,8 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         if (rejected > 0) details.push(`${rejected} rejetees`)
         break
       }
-      case 3: {
-        // Allocation execution: fulfillment rate
+      case 4: {
+        // Macro allocation: fulfillment rate
         if (!allocations || allocations.length === 0) {
           score = 0
           details.push("Lancer l'allocation")
@@ -104,8 +122,15 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         if (zeros > 0) details.push(`${zeros} produits a 0`)
         break
       }
-      case 4: {
-        // Allocation review: confirmed vs total
+      case 5:
+      case 6: {
+        // Export/Stock collection: placeholder
+        score = 50
+        details.push('Etape en attente')
+        break
+      }
+      case 7: {
+        // Lot allocation review: confirmed vs total
         if (!allocations || allocations.length === 0) {
           score = 0
           details.push('Aucune allocation')
@@ -123,7 +148,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         if (partial > 0) details.push(`${partial} allocations partielles`)
         break
       }
-      case 5: {
+      case 8: {
         // Finalization: process completed
         if (process.status === 'completed') {
           score = 100

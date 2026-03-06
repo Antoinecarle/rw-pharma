@@ -47,9 +47,11 @@ CREATE TABLE IF NOT EXISTS wholesaler_quotas (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   wholesaler_id UUID NOT NULL REFERENCES wholesalers(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  monthly_process_id UUID REFERENCES monthly_processes(id) ON DELETE SET NULL,
   month DATE NOT NULL,
   quota_quantity INTEGER NOT NULL,
   extra_available INTEGER DEFAULT 0,
+  import_file_name VARCHAR(255),
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(wholesaler_id, product_id, month)
@@ -58,6 +60,7 @@ CREATE TABLE IF NOT EXISTS wholesaler_quotas (
 CREATE INDEX IF NOT EXISTS idx_quotas_wholesaler ON wholesaler_quotas(wholesaler_id);
 CREATE INDEX IF NOT EXISTS idx_quotas_product ON wholesaler_quotas(product_id);
 CREATE INDEX IF NOT EXISTS idx_quotas_month ON wholesaler_quotas(month);
+CREATE INDEX IF NOT EXISTS idx_quotas_process ON wholesaler_quotas(monthly_process_id);
 
 -- =============================================
 -- Table: customers (clients importateurs ~10)
@@ -83,8 +86,9 @@ CREATE TABLE IF NOT EXISTS monthly_processes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
   year INTEGER NOT NULL CHECK (year BETWEEN 2020 AND 2100),
-  status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'importing', 'reviewing_orders', 'allocating', 'reviewing_allocations', 'finalizing', 'completed')),
-  current_step INTEGER NOT NULL DEFAULT 1 CHECK (current_step BETWEEN 1 AND 5),
+  status VARCHAR(30) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'importing_quotas', 'importing_orders', 'reviewing_orders', 'macro_allocating', 'exporting_wholesalers', 'collecting_stock', 'allocating_lots', 'reviewing_allocations', 'finalizing', 'completed')),
+  current_step INTEGER NOT NULL DEFAULT 1,
+  quotas_count INTEGER DEFAULT 0,
   orders_count INTEGER DEFAULT 0,
   allocations_count INTEGER DEFAULT 0,
   notes TEXT,

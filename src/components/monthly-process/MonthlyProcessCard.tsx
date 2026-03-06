@@ -10,15 +10,20 @@ const MONTH_NAMES = [
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   draft: { label: 'Brouillon', color: 'var(--ivory-text-muted)', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.06)' },
-  importing: { label: 'Importation', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
+  importing_quotas: { label: 'Import quotas', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
+  importing_orders: { label: 'Import commandes', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
   reviewing_orders: { label: 'Revue commandes', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
-  allocating: { label: 'Allocation', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
+  macro_allocating: { label: 'Allocation macro', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
+  exporting_wholesalers: { label: 'Export grossistes', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.15)' },
+  collecting_stock: { label: 'Reception stocks', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.15)' },
+  allocating_lots: { label: 'Allocation lots', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
   reviewing_allocations: { label: 'Revue allocations', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
   finalizing: { label: 'Finalisation', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
   completed: { label: 'Termine', color: 'var(--ivory-teal)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
 }
 
-const STEP_LABELS = ['', 'Importation', 'Revue commandes', 'Allocation', 'Revue allocations', 'Finalisation']
+const TOTAL_STEPS = 8
+const STEP_LABELS = ['', 'Import quotas', 'Import commandes', 'Revue commandes', 'Allocation macro', 'Export grossistes', 'Reception stocks', 'Allocation lots', 'Finalisation']
 
 interface MonthlyProcessCardProps {
   process: MonthlyProcess
@@ -29,7 +34,7 @@ export default function MonthlyProcessCard({ process, index = 0 }: MonthlyProces
   const statusCfg = STATUS_CONFIG[process.status] ?? STATUS_CONFIG.draft
   const monthName = MONTH_NAMES[process.month - 1] ?? ''
   const isCompleted = process.status === 'completed'
-  const progress = (process.current_step / 5) * 100
+  const progress = (process.current_step / TOTAL_STEPS) * 100
 
   return (
     <Link to={`/monthly-processes/${process.id}`}>
@@ -59,7 +64,7 @@ export default function MonthlyProcessCard({ process, index = 0 }: MonthlyProces
                 <div>
                   <h3 className="ivory-heading text-[14px]">{monthName} {process.year}</h3>
                   <p className="text-[11px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>
-                    Etape {process.current_step}/5 — {STEP_LABELS[process.current_step]}
+                    Etape {process.current_step}/{TOTAL_STEPS} — {STEP_LABELS[process.current_step]}
                   </p>
                 </div>
               </div>
@@ -88,26 +93,22 @@ export default function MonthlyProcessCard({ process, index = 0 }: MonthlyProces
 
             {/* Step progress */}
             <div className="mt-3.5 flex items-center gap-1.5">
-              {[1, 2, 3, 4, 5].map(step => {
+              {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map(step => {
                 const isDone = step < process.current_step
                 const isActive = step === process.current_step
                 return (
                   <div key={step} className="flex items-center flex-1 last:flex-none">
                     <div className="relative">
                       <div
-                        className={`h-2.5 w-2.5 rounded-full transition-all ${isActive ? 'animate-subtle-pulse' : ''}`}
+                        className={`h-2 w-2 rounded-full transition-all ${isActive ? 'animate-subtle-pulse' : ''}`}
                         style={{
                           background: isDone || isActive
                             ? (isCompleted ? 'var(--ivory-teal)' : 'var(--ivory-accent)')
                             : 'rgba(0,0,0,0.06)',
                         }}
-                      >
-                        {isDone && (
-                          <Check className="h-2 w-2 text-white absolute inset-0 m-auto" />
-                        )}
-                      </div>
+                      />
                     </div>
-                    {step < 5 && (
+                    {step < TOTAL_STEPS && (
                       <div
                         className="flex-1 h-0.5 mx-0.5 rounded-full"
                         style={{

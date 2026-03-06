@@ -13,38 +13,33 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, User, X } from 'lucide-react'
+import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X } from 'lucide-react'
 import { toast } from 'sonner'
-import SkippedItemsReviewModal, {
-  type SkippedItem, type ResolvedItem,
-} from '@/components/allocations/SkippedItemsReviewModal'
-import type { MonthlyProcess, Customer, Product } from '@/types/database'
+import type { MonthlyProcess, Wholesaler, Product } from '@/types/database'
 
 // --------------- Types ---------------
 
-interface OrderColumnMapping {
+interface QuotaColumnMapping {
   cip13: string
   quantity: string
-  unit_price: string
+  extra: string
 }
 
-const FIELD_LABELS: Record<keyof OrderColumnMapping, string> = {
+const FIELD_LABELS: Record<keyof QuotaColumnMapping, string> = {
   cip13: 'CIP13 Produit *',
-  quantity: 'Quantite *',
-  unit_price: 'Prix unitaire',
+  quantity: 'Quantite quota *',
+  extra: 'Extra disponible',
 }
 
-const REQUIRED_FIELDS: (keyof OrderColumnMapping)[] = ['cip13', 'quantity']
+const REQUIRED_FIELDS: (keyof QuotaColumnMapping)[] = ['cip13', 'quantity']
 
-const CLIENT_CODES = ['ORI', 'MPA', 'MEDCOR', 'CC', 'ABA', 'BMODESTO', 'AXI', 'BROCACEF', '2CARE4', 'MELY']
-
-const STORAGE_KEY = 'rw-pharma-import-history'
+const STORAGE_KEY = 'rw-pharma-quota-import-history'
 
 interface ImportHistoryEntry {
   fileName: string
   date: string
   rowCount: number
-  clientCode: string | null
+  wholesalerCode: string | null
 }
 
 function getImportHistory(): ImportHistoryEntry[] {
@@ -59,87 +54,95 @@ function addImportHistory(entry: ImportHistoryEntry) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 5)))
 }
 
-function detectClientFromFilename(filename: string): string | null {
-  const upper = filename.toUpperCase()
-  for (const code of CLIENT_CODES) {
-    if (upper.includes(code)) return code
-  }
-  return null
+function getMappingStorageKey(wholesalerCode: string) {
+  return `rw-pharma-quota-mapping-${wholesalerCode}`
 }
 
-function getMappingStorageKey(customerCode: string) {
-  return `rw-pharma-mapping-${customerCode}`
-}
-
-function getSavedMapping(customerCode: string): OrderColumnMapping | null {
+function getSavedMapping(wholesalerCode: string): QuotaColumnMapping | null {
   try {
-    const saved = localStorage.getItem(getMappingStorageKey(customerCode))
+    const saved = localStorage.getItem(getMappingStorageKey(wholesalerCode))
     return saved ? JSON.parse(saved) : null
   } catch { return null }
 }
 
-function saveMappingForCustomer(customerCode: string, mapping: OrderColumnMapping) {
-  localStorage.setItem(getMappingStorageKey(customerCode), JSON.stringify(mapping))
+function saveMappingForWholesaler(wholesalerCode: string, mapping: QuotaColumnMapping) {
+  localStorage.setItem(getMappingStorageKey(wholesalerCode), JSON.stringify(mapping))
 }
 
 interface MappingConfidence {
-  field: keyof OrderColumnMapping
+  field: keyof QuotaColumnMapping
   source: 'auto' | 'saved' | 'manual' | 'none'
 }
 
 type FileStatus = 'pending' | 'mapping' | 'preview' | 'importing' | 'done' | 'error'
 
-interface QueuedFile {
+interface SkippedQuotaItem {
+  rowIndex: number
+  cip13: string
+  quantity: number
+  reason: 'unknown_product' | 'invalid_quantity' | 'ansm_blocked'
+}
+
+interface QueuedQuotaFile {
   id: string
   file: File
   fileName: string
-  detectedClient: string | null
-  manualClient: string | null
+  detectedWholesaler: string | null
+  manualWholesaler: string | null
   status: FileStatus
   headers: string[]
   rows: Record<string, string>[]
   sheetNames: string[]
   selectedSheet: string
   workbook: XLSX.WorkBook | null
-  mapping: OrderColumnMapping
+  mapping: QuotaColumnMapping
   confidence: MappingConfidence[]
-  importResult: { inserted: number; errors: number; skipped: number }
+  importResult: { inserted: number; updated: number; errors: number; skipped: number }
   importProgress: { current: number; total: number; phase: string }
-  skippedItems: SkippedItem[]
+  skippedItems: SkippedQuotaItem[]
 }
 
-function createQueuedFile(file: File): QueuedFile {
-  const fileName = file.name
-  const detectedClient = detectClientFromFilename(fileName)
+function createQueuedFile(file: File): QueuedQuotaFile {
   return {
     id: crypto.randomUUID(),
     file,
-    fileName,
-    detectedClient,
-    manualClient: null,
+    fileName: file.name,
+    detectedWholesaler: null,
+    manualWholesaler: null,
     status: 'pending',
     headers: [],
     rows: [],
     sheetNames: [],
     selectedSheet: '',
     workbook: null,
-    mapping: { cip13: '', quantity: '', unit_price: '' },
+    mapping: { cip13: '', quantity: '', extra: '' },
     confidence: [],
-    importResult: { inserted: 0, errors: 0, skipped: 0 },
+    importResult: { inserted: 0, updated: 0, errors: 0, skipped: 0 },
     importProgress: { current: 0, total: 0, phase: '' },
     skippedItems: [],
   }
 }
 
+// --------------- Auto-detect wholesaler from filename ---------------
+
+function detectWholesalerFromFilename(filename: string, wholesalers: Pick<Wholesaler, 'code' | 'name'>[]): string | null {
+  const upper = filename.toUpperCase()
+  for (const w of wholesalers) {
+    if (w.code && upper.includes(w.code.toUpperCase())) return w.code
+    if (w.name && upper.includes(w.name.toUpperCase())) return w.code ?? w.name
+  }
+  return null
+}
+
 // --------------- Auto-detect column mapping ---------------
 
-function autoDetectMapping(headers: string[], clientCode: string | null): { mapping: OrderColumnMapping; confidence: MappingConfidence[] } {
-  const saved = clientCode ? getSavedMapping(clientCode) : null
+function autoDetectMapping(headers: string[], wholesalerCode: string | null): { mapping: QuotaColumnMapping; confidence: MappingConfidence[] } {
+  const saved = wholesalerCode ? getSavedMapping(wholesalerCode) : null
   const confidenceMap: MappingConfidence[] = []
 
   if (saved && headers.includes(saved.cip13) && headers.includes(saved.quantity)) {
     const resultMapping = { ...saved }
-    for (const field of Object.keys(saved) as (keyof OrderColumnMapping)[]) {
+    for (const field of Object.keys(saved) as (keyof QuotaColumnMapping)[]) {
       if (saved[field] && headers.includes(saved[field])) {
         confidenceMap.push({ field, source: 'saved' })
       } else {
@@ -150,21 +153,21 @@ function autoDetectMapping(headers: string[], clientCode: string | null): { mapp
     return { mapping: resultMapping, confidence: confidenceMap }
   }
 
-  const autoMap: OrderColumnMapping = { cip13: '', quantity: '', unit_price: '' }
+  const autoMap: QuotaColumnMapping = { cip13: '', quantity: '', extra: '' }
   const usedHeaders = new Set<string>()
 
-  const fieldPatterns: { field: keyof OrderColumnMapping; patterns: RegExp[] }[] = [
+  const fieldPatterns: { field: keyof QuotaColumnMapping; patterns: RegExp[] }[] = [
     {
       field: 'cip13',
-      patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i, /artikelnummer/i, /code.*cip/i, /product.*code/i],
+      patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i, /code.*produit/i, /product.*code/i, /artikelnummer/i, /code.*cip/i],
     },
     {
       field: 'quantity',
-      patterns: [/qte.*command/i, /quantit/i, /^qty/i, /quantity/i, /^qte/i, /commandee?/i, /menge/i, /bestell/i, /ordered/i],
+      patterns: [/quota/i, /contingent/i, /quantit/i, /^qty/i, /alloue/i, /disponible/i, /menge/i, /quantity/i, /^qte/i],
     },
     {
-      field: 'unit_price',
-      patterns: [/prix.*unit/i, /unit.*pri/i, /price/i, /^prix/i, /^pfht$/i, /einkaufspreis/i, /preis/i],
+      field: 'extra',
+      patterns: [/extra/i, /suppl/i, /bonus/i, /additionn/i, /zusatz/i, /hors.*quota/i],
     },
   ]
 
@@ -180,7 +183,7 @@ function autoDetectMapping(headers: string[], clientCode: string | null): { mapp
     }
   }
 
-  for (const field of Object.keys(FIELD_LABELS) as (keyof OrderColumnMapping)[]) {
+  for (const field of Object.keys(FIELD_LABELS) as (keyof QuotaColumnMapping)[]) {
     if (!confidenceMap.find(c => c.field === field)) {
       confidenceMap.push({ field, source: autoMap[field] ? 'auto' : 'none' })
     }
@@ -191,38 +194,36 @@ function autoDetectMapping(headers: string[], clientCode: string | null): { mapp
 
 // --------------- Props ---------------
 
-interface OrderImportStepProps {
+interface QuotaImportStepProps {
   process: MonthlyProcess
   onNext: () => void
 }
 
-export default function OrderImportStep({ process, onNext }: OrderImportStepProps) {
+export default function QuotaImportStep({ process, onNext }: QuotaImportStepProps) {
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [queue, setQueue] = useState<QueuedFile[]>([])
+  const [queue, setQueue] = useState<QueuedQuotaFile[]>([])
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
-  const [skippedModalOpen, setSkippedModalOpen] = useState(false)
-  const [skippedModalFileId, setSkippedModalFileId] = useState<string | null>(null)
-  const [cachedCustomers, setCachedCustomers] = useState<Pick<Customer, 'id' | 'code' | 'name'>[]>([])
-  const [cachedProducts, setCachedProducts] = useState<Pick<Product, 'id' | 'cip13' | 'name'>[]>([])
+  const [showSkipped, setShowSkipped] = useState<string | null>(null)
 
-  const { data: existingOrders } = useQuery({
-    queryKey: ['orders', process.id, 'count'],
+  const { data: existingQuotas } = useQuery({
+    queryKey: ['wholesaler_quotas', process.id, 'count'],
     queryFn: async () => {
-      const { count } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('monthly_process_id', process.id)
-      return count ?? 0
+      const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}-01`
+      const { data } = await supabase
+        .from('wholesaler_quotas')
+        .select('id')
+        .eq('month', monthStr)
+      return data?.length ?? 0
     },
   })
 
-  const { data: customers } = useQuery({
-    queryKey: ['customers', 'all'],
+  const { data: wholesalers } = useQuery({
+    queryKey: ['wholesalers', 'all'],
     queryFn: async () => {
-      const { data } = await supabase.from('customers').select('id, code, name')
-      return (data ?? []) as Pick<Customer, 'id' | 'code' | 'name'>[]
+      const { data } = await supabase.from('wholesalers').select('id, code, name')
+      return (data ?? []) as Pick<Wholesaler, 'id' | 'code' | 'name'>[]
     },
   })
 
@@ -230,15 +231,16 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
 
   // --------------- Queue helpers ---------------
 
-  const updateFile = useCallback((id: string, updates: Partial<QueuedFile>) => {
+  const updateFile = useCallback((id: string, updates: Partial<QueuedQuotaFile>) => {
     setQueue(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f))
   }, [])
 
   const allDone = queue.length > 0 && queue.every(f => f.status === 'done')
   const hasActiveImport = queue.some(f => f.status === 'importing')
-  const totalImported = queue.filter(f => f.status === 'done').reduce((s, f) => s + f.importResult.inserted, 0)
+  const totalInserted = queue.filter(f => f.status === 'done').reduce((s, f) => s + f.importResult.inserted, 0)
+  const totalUpdated = queue.filter(f => f.status === 'done').reduce((s, f) => s + f.importResult.updated, 0)
 
-  const getClientCode = (f: QueuedFile) => f.detectedClient ?? f.manualClient
+  const getWholesalerCode = (f: QueuedQuotaFile) => f.detectedWholesaler ?? f.manualWholesaler
 
   // --------------- File processing ---------------
 
@@ -259,12 +261,13 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       }
 
       const hdrs = Object.keys(json[0])
-      const clientCode = qf.detectedClient
-      const { mapping, confidence } = autoDetectMapping(hdrs, clientCode)
+      const detected = wholesalers ? detectWholesalerFromFilename(file.name, wholesalers) : null
+      const { mapping, confidence } = autoDetectMapping(hdrs, detected)
 
-      const updatedFile: QueuedFile = {
+      const updatedFile: QueuedQuotaFile = {
         ...qf,
         status: 'mapping',
+        detectedWholesaler: detected,
         headers: hdrs,
         rows: json,
         sheetNames: wb.SheetNames,
@@ -278,7 +281,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       setActiveFileId(updatedFile.id)
     }
     reader.readAsArrayBuffer(file)
-  }, [])
+  }, [wholesalers])
 
   const handleFiles = useCallback((files: FileList | File[]) => {
     for (const file of Array.from(files)) {
@@ -309,12 +312,12 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
     const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: '' })
     if (json.length === 0) { toast.error('Feuille vide'); return }
     const hdrs = Object.keys(json[0])
-    const clientCode = getClientCode(f)
-    const { mapping, confidence } = autoDetectMapping(hdrs, clientCode)
+    const wholesalerCode = getWholesalerCode(f)
+    const { mapping, confidence } = autoDetectMapping(hdrs, wholesalerCode)
     updateFile(fileId, { selectedSheet: sheetName, headers: hdrs, rows: json, mapping, confidence })
   }
 
-  const updateMapping = (fileId: string, field: keyof OrderColumnMapping, value: string) => {
+  const updateMapping = (fileId: string, field: keyof QuotaColumnMapping, value: string) => {
     const f = queue.find(x => x.id === fileId)
     if (!f) return
     const newMapping = { ...f.mapping, [field]: value === 'none' ? '' : value }
@@ -329,6 +332,11 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
     if (activeFileId === fileId) setActiveFileId(null)
   }
 
+  const canProceed = (f: QueuedQuotaFile) => {
+    const wholesalerCode = getWholesalerCode(f)
+    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && !!wholesalerCode
+  }
+
   // --------------- Import mutation ---------------
 
   const importMut = useMutation({
@@ -336,40 +344,36 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       const f = queue.find(x => x.id === fileId)
       if (!f) throw new Error('Fichier introuvable')
 
-      const clientCode = getClientCode(f)
+      const wholesalerCode = getWholesalerCode(f)
 
       updateFile(fileId, { status: 'importing', importProgress: { current: 0, total: f.rows.length, phase: 'Chargement des references...' } })
 
-      const { data: custData } = await supabase.from('customers').select('id, code, name')
-
-      let allProducts: { id: string; cip13: string; name: string }[] = []
+      // Load all products (paginated to avoid 1000-row limit)
+      let allProducts: { id: string; cip13: string; name: string; is_ansm_blocked: boolean }[] = []
       let from = 0
       const pageSize = 1000
       while (true) {
-        const { data: page } = await supabase.from('products').select('id, cip13, name').range(from, from + pageSize - 1)
+        const { data: page } = await supabase.from('products').select('id, cip13, name, is_ansm_blocked').range(from, from + pageSize - 1)
         if (!page || page.length === 0) break
         allProducts = allProducts.concat(page)
         if (page.length < pageSize) break
         from += pageSize
       }
 
-      const customersList = (custData ?? []) as Pick<Customer, 'id' | 'code' | 'name'>[]
-      const productsList = allProducts as Pick<Product, 'id' | 'cip13' | 'name'>[]
-      setCachedCustomers(customersList)
-      setCachedProducts(productsList)
+      const productMap = new Map(allProducts.map(p => [p.cip13, p]))
+      const wholesalersList = wholesalers ?? []
+      const wholesaler = wholesalersList.find(w => w.code?.toUpperCase() === wholesalerCode?.toUpperCase())
 
-      const customerMap = new Map(customersList.map(c => [c.code?.toUpperCase(), c.id]))
-      const productMap = new Map(productsList.map(p => [p.cip13, p.id]))
-
-      const fileCustomerId = clientCode ? customerMap.get(clientCode.toUpperCase()) : undefined
-      if (!fileCustomerId) {
-        throw new Error(`Client "${clientCode ?? '?'}" introuvable en base. Verifiez le code client.`)
+      if (!wholesaler) {
+        throw new Error(`Grossiste "${wholesalerCode ?? '?'}" introuvable en base. Verifiez le code grossiste.`)
       }
 
+      const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}-01`
       let inserted = 0
+      let updated = 0
       let errors = 0
       let skipped = 0
-      const skippedDetails: SkippedItem[] = []
+      const skippedDetails: SkippedQuotaItem[] = []
       const batchSize = 100
 
       updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: 'Validation et insertion...' } })
@@ -378,31 +382,29 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         const batch = f.rows.slice(i, i + batchSize).map((row, batchIdx) => {
           const rowIndex = i + batchIdx
           const cip13 = String(row[f.mapping.cip13] || '').trim()
-          const qty = parseInt(String(row[f.mapping.quantity] || '0'), 10)
-          const price = f.mapping.unit_price ? parseFloat(String(row[f.mapping.unit_price]).replace(',', '.')) || null : null
+          const qty = parseInt(String(row[f.mapping.quantity] || '0').replace(/\s/g, ''), 10)
+          const extra = f.mapping.extra ? parseInt(String(row[f.mapping.extra] || '0').replace(/\s/g, ''), 10) || 0 : 0
 
-          const productId = productMap.get(cip13)
+          const product = productMap.get(cip13)
 
-          if (!productId || qty <= 0) {
-            const reason: SkippedItem['reason'] = !productId ? 'unknown_product' : 'invalid_quantity'
-            skippedDetails.push({
-              rowIndex,
-              customerCode: clientCode ?? '',
-              cip13,
-              quantity: qty,
-              unitPrice: price,
-              reason,
-            })
+          if (!product) {
+            skippedDetails.push({ rowIndex, cip13, quantity: qty, reason: 'unknown_product' })
+            return null
+          }
+
+          if (qty <= 0 && extra <= 0) {
+            skippedDetails.push({ rowIndex, cip13, quantity: qty, reason: 'invalid_quantity' })
             return null
           }
 
           return {
+            wholesaler_id: wholesaler.id,
+            product_id: product.id,
             monthly_process_id: process.id,
-            customer_id: fileCustomerId,
-            product_id: productId,
-            quantity: qty,
-            unit_price: price,
-            status: 'pending' as const,
+            month: monthStr,
+            quota_quantity: qty > 0 ? qty : 0,
+            extra_available: extra,
+            import_file_name: f.fileName,
             metadata: {},
           }
         })
@@ -411,11 +413,17 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         skipped += batch.length - validBatch.length
 
         if (validBatch.length > 0) {
-          const { error, data } = await supabase.from('orders').insert(validBatch).select('id')
+          const { error, data } = await supabase
+            .from('wholesaler_quotas')
+            .upsert(validBatch, { onConflict: 'wholesaler_id,product_id,month', ignoreDuplicates: false })
+            .select('id')
+
           if (error) {
             errors += validBatch.length
             console.error('Batch error:', error)
           } else {
+            // We can't easily distinguish inserted vs updated from upsert response,
+            // so we count all as "processed" and track separately
             inserted += data?.length ?? validBatch.length
           }
         }
@@ -429,75 +437,41 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         })
       }
 
-      // Compute total across all done files + this one
-      const doneInserted = queue
-        .filter(x => x.id !== fileId && x.status === 'done')
-        .reduce((s, x) => s + x.importResult.inserted, 0)
-      const currentTotal = (existingOrders ?? 0) + doneInserted + inserted
-
+      // Update quotas_count on the process
+      const totalQuotas = (existingQuotas ?? 0) + inserted
       await supabase
         .from('monthly_processes')
-        .update({ orders_count: currentTotal, status: 'importing_orders' })
+        .update({ quotas_count: totalQuotas, status: 'importing_quotas' })
         .eq('id', process.id)
 
-      if (clientCode) {
-        saveMappingForCustomer(clientCode, f.mapping)
+      if (wholesalerCode) {
+        saveMappingForWholesaler(wholesalerCode, f.mapping)
       }
 
       addImportHistory({
         fileName: f.fileName,
         date: new Date().toISOString(),
         rowCount: f.rows.length,
-        clientCode,
+        wholesalerCode,
       })
 
-      return { fileId, inserted, errors, skipped, skippedDetails }
+      return { fileId, inserted, updated, errors, skipped, skippedDetails }
     },
     onSuccess: (result) => {
       updateFile(result.fileId, {
         status: 'done',
-        importResult: { inserted: result.inserted, errors: result.errors, skipped: result.skipped },
+        importResult: { inserted: result.inserted, updated: result.updated, errors: result.errors, skipped: result.skipped },
         skippedItems: result.skippedDetails,
       })
-      queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
+      queryClient.invalidateQueries({ queryKey: ['wholesaler_quotas'] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      toast.success(`${result.inserted} commandes importees`)
+      toast.success(`${result.inserted} quotas importes`)
     },
     onError: (err: Error, fileId: string) => {
       updateFile(fileId, { status: 'mapping' })
       toast.error(`Erreur: ${err.message}`)
     },
   })
-
-  const handleResolvedItems = async (resolved: ResolvedItem[]) => {
-    if (resolved.length === 0 || !skippedModalFileId) return
-    const ordersToInsert = resolved.map(r => ({
-      monthly_process_id: process.id,
-      customer_id: r.customerId,
-      product_id: r.productId,
-      quantity: r.quantity,
-      unit_price: r.unitPrice,
-      status: 'pending' as const,
-      metadata: {},
-    }))
-
-    const { error, data } = await supabase.from('orders').insert(ordersToInsert).select('id')
-    if (error) { toast.error(`Erreur: ${error.message}`); return }
-
-    const count = data?.length ?? resolved.length
-    const f = queue.find(x => x.id === skippedModalFileId)
-    if (f) {
-      const resolvedIndexes = new Set(resolved.map(r => r.rowIndex))
-      updateFile(skippedModalFileId, {
-        importResult: { ...f.importResult, inserted: f.importResult.inserted + count, skipped: f.importResult.skipped - count },
-        skippedItems: f.skippedItems.filter(s => !resolvedIndexes.has(s.rowIndex)),
-      })
-    }
-
-    queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
-    queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-    toast.success(`${count} commandes recuperees`)
-  }
 
   // --------------- Render helpers ---------------
 
@@ -508,27 +482,21 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
     return null
   }
 
-  const getSampleValues = (f: QueuedFile, field: keyof OrderColumnMapping) => {
+  const getSampleValues = (f: QueuedQuotaFile, field: keyof QuotaColumnMapping) => {
     const col = f.mapping[field]
     if (!col) return []
     return f.rows.slice(0, 3).map(r => String(r[col] || '').trim()).filter(Boolean)
   }
 
-  const canProceed = (f: QueuedFile) => {
-    const clientCode = getClientCode(f)
-    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && !!clientCode
-  }
-
   // --------------- File card render ---------------
 
-  const renderFileCard = (f: QueuedFile) => {
+  const renderFileCard = (f: QueuedQuotaFile) => {
     const isActive = activeFileId === f.id
-    const clientCode = getClientCode(f)
+    const wholesalerCode = getWholesalerCode(f)
     const progressPercent = f.importProgress.total > 0 ? (f.importProgress.current / f.importProgress.total) * 100 : 0
 
     return (
       <div key={f.id} className="space-y-0">
-        {/* Card header */}
         <Card
           className={`transition-all cursor-pointer ${
             f.status === 'done'
@@ -561,20 +529,20 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                 <span className="text-xs text-muted-foreground">{f.rows.length} lignes</span>
               </div>
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                {clientCode ? (
-                  <Badge variant={f.detectedClient ? 'default' : 'secondary'} className="text-[10px] h-4 gap-0.5">
-                    {f.detectedClient ? <Sparkles className="h-2.5 w-2.5" /> : <User className="h-2.5 w-2.5" />}
-                    {clientCode}
+                {wholesalerCode ? (
+                  <Badge variant={f.detectedWholesaler ? 'default' : 'secondary'} className="text-[10px] h-4 gap-0.5">
+                    {f.detectedWholesaler ? <Sparkles className="h-2.5 w-2.5" /> : <Warehouse className="h-2.5 w-2.5" />}
+                    {wholesalerCode}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-200">
-                    Client non defini
+                    Grossiste non defini
                   </Badge>
                 )}
                 {f.status === 'done' && (
                   <span className="text-[11px] text-green-600 font-medium">
-                    {f.importResult.inserted} importees
-                    {f.importResult.skipped > 0 && <span className="text-amber-600"> / {f.importResult.skipped} ignorees</span>}
+                    {f.importResult.inserted} importes
+                    {f.importResult.skipped > 0 && <span className="text-amber-600"> / {f.importResult.skipped} ignores</span>}
                   </span>
                 )}
                 {f.confidence.some(c => c.source === 'saved') && f.status !== 'done' && (
@@ -610,23 +578,23 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         {isActive && f.status !== 'done' && f.status !== 'importing' && (
           <Card className="border-t-0 rounded-t-none border-primary/20">
             <CardContent className="p-4 space-y-4">
-              {/* Client selector (when not auto-detected) */}
-              {!f.detectedClient && (
+              {/* Wholesaler selector (when not auto-detected) */}
+              {!f.detectedWholesaler && (
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold flex items-center gap-1.5">
-                    <User className="h-3 w-3" /> Client pour ce fichier *
+                    <Warehouse className="h-3 w-3" /> Grossiste pour ce fichier *
                   </Label>
                   <Select
-                    value={f.manualClient ?? 'none'}
-                    onValueChange={(v) => updateFile(f.id, { manualClient: v === 'none' ? null : v })}
+                    value={f.manualWholesaler ?? 'none'}
+                    onValueChange={(v) => updateFile(f.id, { manualWholesaler: v === 'none' ? null : v })}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Selectionner le client..." />
+                      <SelectValue placeholder="Selectionner le grossiste..." />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">-- Selectionner --</SelectItem>
-                      {(customers ?? []).map(c => (
-                        <SelectItem key={c.id} value={c.code ?? c.id}>{c.code} — {c.name}</SelectItem>
+                      {(wholesalers ?? []).map(w => (
+                        <SelectItem key={w.id} value={w.code ?? w.id}>{w.code} — {w.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -649,9 +617,9 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
               {/* Column mapping */}
               {(f.status === 'mapping' || f.status === 'pending') && (
                 <>
-                  <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs commande.</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {(Object.keys(FIELD_LABELS) as (keyof OrderColumnMapping)[]).map((field) => {
+                  <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs quotas.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {(Object.keys(FIELD_LABELS) as (keyof QuotaColumnMapping)[]).map((field) => {
                       const samples = getSampleValues(f, field)
                       const conf = f.confidence.find(c => c.field === field)
                       return (
@@ -696,7 +664,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                       size="sm"
                       onClick={() => {
                         if (canProceed(f)) updateFile(f.id, { status: 'preview' })
-                        else toast.error('Champs obligatoires manquants (CIP13, Quantite, Client)')
+                        else toast.error('Champs obligatoires manquants (CIP13, Quantite, Grossiste)')
                       }}
                       disabled={!canProceed(f)}
                     >
@@ -710,7 +678,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
               {f.status === 'preview' && (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Apercu des 10 premieres lignes sur {f.rows.length} total. Client : <strong>{clientCode}</strong>
+                    Apercu des 10 premieres lignes sur {f.rows.length} total. Grossiste : <strong>{wholesalerCode}</strong>
                   </p>
                   <div className="border rounded-lg overflow-x-auto">
                     <Table>
@@ -718,8 +686,8 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                         <TableRow>
                           <TableHead className="w-10">#</TableHead>
                           <TableHead>CIP13</TableHead>
-                          <TableHead>Quantite</TableHead>
-                          <TableHead>Prix</TableHead>
+                          <TableHead>Quantite quota</TableHead>
+                          <TableHead>Extra</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -728,7 +696,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                             <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
                             <TableCell className="font-mono text-sm">{row[f.mapping.cip13]}</TableCell>
                             <TableCell>{row[f.mapping.quantity]}</TableCell>
-                            <TableCell>{f.mapping.unit_price ? row[f.mapping.unit_price] : '-'}</TableCell>
+                            <TableCell>{f.mapping.extra ? row[f.mapping.extra] : '-'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -739,7 +707,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                       Retour au mapping
                     </Button>
                     <Button size="sm" onClick={() => importMut.mutate(f.id)} disabled={hasActiveImport}>
-                      Importer {f.rows.length} commandes
+                      Importer {f.rows.length} quotas
                     </Button>
                   </div>
                 </div>
@@ -758,11 +726,42 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                 variant="outline"
                 size="sm"
                 className="gap-1 shrink-0 text-xs h-7"
-                onClick={(e) => { e.stopPropagation(); setSkippedModalFileId(f.id); setSkippedModalOpen(true) }}
+                onClick={(e) => { e.stopPropagation(); setShowSkipped(showSkipped === f.id ? null : f.id) }}
               >
-                <Eye className="h-3 w-3" /> Examiner
+                <Eye className="h-3 w-3" /> {showSkipped === f.id ? 'Masquer' : 'Voir'}
               </Button>
             </CardContent>
+            {showSkipped === f.id && (
+              <div className="px-3 pb-3">
+                <div className="border rounded-lg overflow-x-auto max-h-48 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">Ligne</TableHead>
+                        <TableHead>CIP13</TableHead>
+                        <TableHead>Quantite</TableHead>
+                        <TableHead>Raison</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {f.skippedItems.slice(0, 50).map((item, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs">{item.rowIndex + 1}</TableCell>
+                          <TableCell className="font-mono text-xs">{item.cip13}</TableCell>
+                          <TableCell className="text-xs">{item.quantity}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-[9px]">
+                              {item.reason === 'unknown_product' ? 'Produit inconnu' :
+                               item.reason === 'invalid_quantity' ? 'Quantite invalide' : 'Bloque ANSM'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
           </Card>
         )}
       </div>
@@ -774,18 +773,18 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-semibold">Importation des Commandes</h3>
+        <h3 className="text-lg font-semibold">Import des Quotas Grossistes</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Importez les fichiers Excel de commandes clients pour ce mois. Un fichier par client.
+          Importez les fichiers de quotas recus des grossistes pour ce mois. Un fichier par grossiste.
         </p>
       </div>
 
-      {existingOrders != null && existingOrders > 0 && queue.length === 0 && (
+      {existingQuotas != null && existingQuotas > 0 && queue.length === 0 && (
         <Card className="ivory-card-highlight">
           <CardContent className="p-4 flex items-center gap-3">
             <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
             <p className="text-sm">
-              <strong>{existingOrders}</strong> commandes deja importees pour ce processus.
+              <strong>{existingQuotas}</strong> quotas deja importes pour ce mois.
             </p>
           </CardContent>
         </Card>
@@ -800,9 +799,9 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
               <Check className="h-3 w-3" />
               {queue.filter(f => f.status === 'done').length}/{queue.length} importes
             </Badge>
-            {(totalImported > 0 || (existingOrders ?? 0) > 0) && (
+            {(totalInserted > 0 || (existingQuotas ?? 0) > 0) && (
               <Badge variant="default" className="text-xs gap-1">
-                {totalImported + (existingOrders ?? 0)} commandes total
+                {totalInserted + (existingQuotas ?? 0)} quotas total
               </Badge>
             )}
           </div>
@@ -839,12 +838,12 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
           {isDragOver
             ? 'Deposez les fichiers ici'
             : queue.length > 0
-              ? 'Ajouter un autre fichier client'
-              : 'Deposez des fichiers Excel ou cliquez pour selectionner'
+              ? 'Ajouter un autre fichier grossiste'
+              : 'Deposez des fichiers Excel de quotas ou cliquez pour selectionner'
           }
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          .xlsx, .xls, .csv — Un fichier par client (ORI, MPA, AXI...)
+          .xlsx, .xls, .csv — Un fichier par grossiste (Alliance, CERP, OCP, Epsilon...)
         </p>
       </div>
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileInput} multiple className="hidden" />
@@ -853,7 +852,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       {queue.length === 0 && importHistory.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-            <History className="h-3 w-3" /> Derniers imports
+            <History className="h-3 w-3" /> Derniers imports quotas
           </p>
           <div className="flex flex-wrap gap-2">
             {importHistory.map((h, i) => (
@@ -862,7 +861,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                 {h.fileName.length > 25 ? h.fileName.slice(0, 25) + '...' : h.fileName}
                 <span className="text-muted-foreground">
                   {h.rowCount} lignes
-                  {h.clientCode && <> &middot; {h.clientCode}</>}
+                  {h.wholesalerCode && <> &middot; {h.wholesalerCode}</>}
                 </span>
               </Badge>
             ))}
@@ -872,24 +871,12 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
 
       {/* Next step */}
       <div className="flex justify-end">
-        {(allDone || (existingOrders != null && existingOrders > 0)) && !hasActiveImport && (
+        {(allDone || (existingQuotas != null && existingQuotas > 0)) && !hasActiveImport && (
           <Button onClick={onNext} className="gap-2">
-            Passer a l'etape suivante <ArrowRight className="h-4 w-4" />
+            Passer aux commandes <ArrowRight className="h-4 w-4" />
           </Button>
         )}
       </div>
-
-      {/* Skipped items modal */}
-      {skippedModalFileId && (
-        <SkippedItemsReviewModal
-          open={skippedModalOpen}
-          onOpenChange={setSkippedModalOpen}
-          skippedItems={queue.find(x => x.id === skippedModalFileId)?.skippedItems ?? []}
-          existingCustomers={cachedCustomers}
-          existingProducts={cachedProducts}
-          onResolved={handleResolvedItems}
-        />
-      )}
     </div>
   )
 }
