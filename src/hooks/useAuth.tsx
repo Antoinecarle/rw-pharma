@@ -48,20 +48,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    // Safety timeout: force loading=false after 3s no matter what
+    const timeout = setTimeout(() => setLoading(false), 3000)
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) await resolveRole(session.user.id)
-    }).finally(() => setLoading(false))
+    }).catch(() => {
+      // Session retrieval failed, clear state
+      setSession(null)
+      setUser(null)
+    }).finally(() => {
+      clearTimeout(timeout)
+      setLoading(false)
+    })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
-      if (session?.user) await resolveRole(session.user.id)
+      if (session?.user) {
+        await resolveRole(session.user.id)
+      }
       setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      clearTimeout(timeout)
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {
