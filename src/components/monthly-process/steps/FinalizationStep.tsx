@@ -9,9 +9,16 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import AnimatedCounter from '@/components/ui/animated-counter'
 import GaugeChart from '@/components/ui/gauge-chart'
-import { Flag, CheckCircle, Download, Package, BarChart3, Users, Truck, ArrowLeft, FileSpreadsheet, PartyPopper } from 'lucide-react'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
+import {
+  Tabs, TabsContent, TabsList, TabsTrigger,
+} from '@/components/ui/tabs'
+import HorizontalBarChart from '@/components/ui/horizontal-bar'
+import { Flag, CheckCircle, Download, Package, BarChart3, Users, Truck, ArrowLeft, FileSpreadsheet, PartyPopper, Eye } from 'lucide-react'
 import { toast } from 'sonner'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import type { MonthlyProcess } from '@/types/database'
 
@@ -167,6 +174,45 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
     },
     onError: (err: Error) => toast.error(err.message),
   })
+
+  const { data: allocations } = useQuery({
+    queryKey: ['monthly-process', process.id, 'final-allocations'],
+    queryFn: () => fetchAllocations(process.id),
+  })
+
+  // Summaries by wholesaler
+  const wholesalerSummary = useMemo(() => {
+    const map = new Map<string, { code: string; name: string; totalQty: number; totalReq: number; count: number }>()
+    for (const a of allocations ?? []) {
+      const code = a.wholesaler?.code ?? 'INCONNU'
+      const existing = map.get(code)
+      if (existing) {
+        existing.totalQty += a.allocated_quantity
+        existing.totalReq += a.requested_quantity
+        existing.count++
+      } else {
+        map.set(code, { code, name: a.wholesaler?.name ?? code, totalQty: a.allocated_quantity, totalReq: a.requested_quantity, count: 1 })
+      }
+    }
+    return [...map.values()].sort((a, b) => b.totalQty - a.totalQty)
+  }, [allocations])
+
+  // Summaries by customer
+  const customerSummary = useMemo(() => {
+    const map = new Map<string, { code: string; name: string; totalQty: number; totalReq: number; count: number }>()
+    for (const a of allocations ?? []) {
+      const code = a.customer?.code ?? 'INCONNU'
+      const existing = map.get(code)
+      if (existing) {
+        existing.totalQty += a.allocated_quantity
+        existing.totalReq += a.requested_quantity
+        existing.count++
+      } else {
+        map.set(code, { code, name: a.customer?.name ?? code, totalQty: a.allocated_quantity, totalReq: a.requested_quantity, count: 1 })
+      }
+    }
+    return [...map.values()].sort((a, b) => b.totalQty - a.totalQty)
+  }, [allocations])
 
   const isCompleted = process.status === 'completed'
   const monthName = MONTH_NAMES[process.month - 1] ?? ''
@@ -382,6 +428,135 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Visual breakdown */}
+      {allocations && allocations.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <Eye className="h-4 w-4 text-primary" />
+                <h4 className="text-sm font-semibold">Detail des allocations</h4>
+                <Badge variant="secondary" className="ml-auto text-[10px]">{allocations.length} lignes</Badge>
+              </div>
+
+              <Tabs defaultValue="charts" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="charts">Graphiques</TabsTrigger>
+                  <TabsTrigger value="by_customer">Par Client</TabsTrigger>
+                  <TabsTrigger value="table">Tableau</TabsTrigger>
+                </TabsList>
+
+                {/* Charts tab */}
+                <TabsContent value="charts" className="space-y-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {wholesalerSummary.length > 0 && (
+                      <div>
+                        <h5 className="text-xs font-semibold mb-3 flex items-center gap-1.5 text-muted-foreground">
+                          <Truck className="h-3.5 w-3.5" /> Repartition par grossiste
+                        </h5>
+                        <HorizontalBarChart
+                          items={wholesalerSummary.map(w => ({ label: w.name, code: w.code, value: w.totalQty }))}
+                          formatValue={(v) => `${v.toLocaleString('fr-FR')} u.`}
+                        />
+                      </div>
+                    )}
+                    {customerSummary.length > 0 && (
+                      <div>
+                        <h5 className="text-xs font-semibold mb-3 flex items-center gap-1.5 text-muted-foreground">
+                          <Users className="h-3.5 w-3.5" /> Repartition par client
+                        </h5>
+                        <HorizontalBarChart
+                          items={customerSummary.map(c => ({ label: c.name, code: c.code, value: c.totalQty }))}
+                          formatValue={(v) => `${v.toLocaleString('fr-FR')} u.`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                {/* By customer summary tab */}
+                <TabsContent value="by_customer" className="mt-4">
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Client</TableHead>
+                          <TableHead className="text-right">Lignes</TableHead>
+                          <TableHead className="text-right">Demande</TableHead>
+                          <TableHead className="text-right">Alloue</TableHead>
+                          <TableHead className="text-right">Couverture</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {customerSummary.map(c => {
+                          const rate = c.totalReq > 0 ? Math.round((c.totalQty / c.totalReq) * 100) : 0
+                          return (
+                            <TableRow key={c.code}>
+                              <TableCell>
+                                <span className="font-mono font-medium text-sm">{c.code}</span>
+                                <span className="text-xs text-muted-foreground ml-2">{c.name}</span>
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">{c.count}</TableCell>
+                              <TableCell className="text-right tabular-nums">{c.totalReq.toLocaleString('fr-FR')}</TableCell>
+                              <TableCell className="text-right tabular-nums font-medium">{c.totalQty.toLocaleString('fr-FR')}</TableCell>
+                              <TableCell className="text-right">
+                                <Badge variant={rate >= 80 ? 'default' : rate >= 50 ? 'secondary' : 'destructive'} className="text-[10px]">
+                                  {rate}%
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+
+                {/* Full table tab */}
+                <TabsContent value="table" className="mt-4">
+                  <div className="border rounded-lg overflow-x-auto max-h-[400px] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Client</TableHead>
+                          <TableHead>CIP13</TableHead>
+                          <TableHead className="hidden md:table-cell">Produit</TableHead>
+                          <TableHead>Grossiste</TableHead>
+                          <TableHead className="text-right">Demande</TableHead>
+                          <TableHead className="text-right">Alloue</TableHead>
+                          <TableHead className="text-right">Couverture</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {allocations.map(a => {
+                          const rate = a.requested_quantity > 0 ? Math.round((a.allocated_quantity / a.requested_quantity) * 100) : 0
+                          const isFull = a.allocated_quantity >= a.requested_quantity
+                          return (
+                            <TableRow key={a.id} className={!isFull ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}>
+                              <TableCell className="font-mono text-sm font-medium">{a.customer?.code ?? '-'}</TableCell>
+                              <TableCell className="font-mono text-sm">{a.product?.cip13 ?? '-'}</TableCell>
+                              <TableCell className="hidden md:table-cell text-muted-foreground max-w-[180px] truncate text-sm">{a.product?.name ?? '-'}</TableCell>
+                              <TableCell className="font-medium text-sm">{a.wholesaler?.code ?? '-'}</TableCell>
+                              <TableCell className="text-right tabular-nums">{a.requested_quantity.toLocaleString('fr-FR')}</TableCell>
+                              <TableCell className={`text-right tabular-nums font-medium ${!isFull ? 'text-amber-600' : ''}`}>{a.allocated_quantity.toLocaleString('fr-FR')}</TableCell>
+                              <TableCell className="text-right">
+                                <Badge variant={rate >= 100 ? 'default' : rate >= 50 ? 'secondary' : 'destructive'} className="text-[10px]">
+                                  {rate}%
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Export section */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
