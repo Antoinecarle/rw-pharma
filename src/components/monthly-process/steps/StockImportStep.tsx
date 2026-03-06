@@ -25,6 +25,7 @@ interface StockColumnMapping {
   expiry_date: string
   quantity: string
   unit_cost: string
+  date_reception: string
 }
 
 const FIELD_LABELS: Record<keyof StockColumnMapping, string> = {
@@ -33,6 +34,7 @@ const FIELD_LABELS: Record<keyof StockColumnMapping, string> = {
   expiry_date: 'Date expiration *',
   quantity: 'Quantite *',
   unit_cost: 'Cout unitaire',
+  date_reception: 'Date reception',
 }
 
 const REQUIRED_FIELDS: (keyof StockColumnMapping)[] = ['cip13', 'lot_number', 'expiry_date', 'quantity']
@@ -118,7 +120,7 @@ function createQueuedFile(file: File): QueuedStockFile {
     sheetNames: [],
     selectedSheet: '',
     workbook: null,
-    mapping: { cip13: '', lot_number: '', expiry_date: '', quantity: '', unit_cost: '' },
+    mapping: { cip13: '', lot_number: '', expiry_date: '', quantity: '', unit_cost: '', date_reception: '' },
     confidence: [],
     importResult: { inserted: 0, errors: 0, skipped: 0 },
     importProgress: { current: 0, total: 0, phase: '' },
@@ -156,7 +158,7 @@ function autoDetectMapping(headers: string[], wholesalerCode: string | null): { 
     return { mapping: resultMapping, confidence: confidenceMap }
   }
 
-  const autoMap: StockColumnMapping = { cip13: '', lot_number: '', expiry_date: '', quantity: '', unit_cost: '' }
+  const autoMap: StockColumnMapping = { cip13: '', lot_number: '', expiry_date: '', quantity: '', unit_cost: '', date_reception: '' }
   const usedHeaders = new Set<string>()
 
   const fieldPatterns: { field: keyof StockColumnMapping; patterns: RegExp[] }[] = [
@@ -179,6 +181,10 @@ function autoDetectMapping(headers: string[], wholesalerCode: string | null): { 
     {
       field: 'unit_cost',
       patterns: [/co[uû]t/i, /prix/i, /price/i, /cost/i, /tarif/i, /preis/i, /pu\b/i, /p\.u/i],
+    },
+    {
+      field: 'date_reception',
+      patterns: [/reception/i, /r[eé]ception/i, /date.*recep/i, /received/i, /eingangsdatum/i, /date.*livr/i],
     },
   ]
 
@@ -426,6 +432,8 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
           const unitCost = f.mapping.unit_cost
             ? parseFloat(String(row[f.mapping.unit_cost] || '0').replace(',', '.').replace(/\s/g, '')) || null
             : null
+          const dateReceptionRaw = f.mapping.date_reception ? String(row[f.mapping.date_reception] || '').trim() : ''
+          const dateReception = dateReceptionRaw ? parseExpiryDate(dateReceptionRaw) : null
 
           const product = productMap.get(cip13)
           if (!product) {
@@ -459,6 +467,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
             expiry_date: expiryDate,
             quantity: qty,
             unit_cost: unitCost,
+            date_reception: dateReception,
             status: 'received',
             import_file_name: f.fileName,
             metadata: {},

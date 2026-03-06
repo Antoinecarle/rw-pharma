@@ -43,7 +43,7 @@ interface AllocationPrefs { priority_level?: number; max_allocation_pct?: number
 
 const emptyCustomer: CustomerInsert = {
   name: '', code: null, country: null, contact_email: null, is_top_client: false,
-  allocation_preferences: {}, documents: null, excel_column_mapping: {}, metadata: {},
+  min_lot_acceptable: null, allocation_preferences: {}, documents: null, excel_column_mapping: {}, metadata: {},
 }
 
 function daysUntil(dateStr: string): number {
@@ -187,7 +187,7 @@ export default function CustomersPage() {
 
   const openEdit = (c: Customer) => {
     setEditing(c)
-    setForm({ name: c.name, code: c.code, country: c.country, contact_email: c.contact_email, is_top_client: c.is_top_client, allocation_preferences: c.allocation_preferences, documents: c.documents, excel_column_mapping: c.excel_column_mapping, metadata: c.metadata })
+    setForm({ name: c.name, code: c.code, country: c.country, contact_email: c.contact_email, is_top_client: c.is_top_client, min_lot_acceptable: c.min_lot_acceptable, allocation_preferences: c.allocation_preferences, documents: c.documents, excel_column_mapping: c.excel_column_mapping, metadata: c.metadata })
     setDocs((c.documents as CustomerDocuments) ?? (c.metadata as Record<string, unknown>)?.documents as CustomerDocuments ?? {})
     setPrefs((c.allocation_preferences as AllocationPrefs) ?? {})
     setDialogOpen(true)
@@ -437,6 +437,20 @@ export default function CustomersPage() {
                 <div className="space-y-1.5"><Label className="text-[13px] font-medium">Priorite</Label><StarRating value={prefs.priority_level ?? 3} onChange={(v) => setPrefs({ ...prefs, priority_level: v })} labels={['Haute', 'Elevee', 'Normal', 'Basse', 'Tres basse']} /></div>
                 <div className="space-y-1.5"><Label className="text-[13px] font-medium">% max stock</Label><GradientSlider value={prefs.max_allocation_pct ?? 30} onChange={(v) => setPrefs({ ...prefs, max_allocation_pct: v })} min={0} max={100} step={5} suffix="%" zones={[{ label: 'Conservateur', max: 20 }, { label: 'Modere', max: 50 }, { label: 'Agressif', max: 100 }]} /></div>
                 <div className="space-y-1.5"><Label className="text-[13px] font-medium">Expiry min</Label><StepperInput value={prefs.preferred_expiry_months} onChange={(v) => setPrefs({ ...prefs, preferred_expiry_months: v })} min={0} max={36} suffix=" mois" placeholder="Non defini" presets={[{ label: '3', value: 3 }, { label: '6', value: 6 }, { label: '9', value: 9 }, { label: '12', value: 12 }]} /></div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] font-medium">Lot minimum acceptable</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.min_lot_acceptable ?? ''}
+                    onChange={(e) => setForm({ ...form, min_lot_acceptable: e.target.value ? parseInt(e.target.value, 10) : null })}
+                    placeholder="Pas de minimum"
+                    className="text-[13px] h-10 rounded-xl"
+                  />
+                  <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>
+                    Quantite minimale par lot que le client accepte. Les allocations inferieures seront refusees.
+                  </p>
+                </div>
                 <div className="space-y-1.5"><Label className="text-[13px] font-medium">Notes</Label><Textarea value={prefs.notes ?? ''} onChange={(e) => setPrefs({ ...prefs, notes: e.target.value || undefined })} placeholder="Notes..." rows={2} className="text-[13px] rounded-xl" /></div>
               </TabsContent>
 
@@ -665,6 +679,13 @@ function CustomerCard({
                       {portalAccess.users > 0 && <span className="font-medium" style={{ color: 'var(--ivory-accent)' }}>{portalAccess.users} acces</span>}
                       {portalAccess.users > 0 && portalAccess.pending > 0 && ' + '}
                       {portalAccess.pending > 0 && <span className="text-amber-500">{portalAccess.pending} en attente</span>}
+                    </span>
+                  </div>
+                )}
+                {c.min_lot_acceptable && c.min_lot_acceptable > 0 && (
+                  <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(245,158,11,0.08)', color: 'rgb(180,120,0)' }}>
+                      Min {c.min_lot_acceptable} u.
                     </span>
                   </div>
                 )}

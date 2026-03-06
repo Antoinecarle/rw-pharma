@@ -16,7 +16,7 @@ import { Plus, Pencil, Trash2, ExternalLink, Truck, Mail, Building2, FolderOpen,
 import { toast } from 'sonner'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
-const emptyWholesaler: WholesalerInsert = { name: '', code: null, contact_email: null, drive_folder_url: null, metadata: {} }
+const emptyWholesaler: WholesalerInsert = { name: '', code: null, type: null, contact_email: null, drive_folder_url: null, metadata: {} }
 
 const cardVariants: Variants = {
   hidden: { opacity: 0, y: 16, scale: 0.98 },
@@ -74,7 +74,7 @@ export default function WholesalersPage() {
   })
 
   const openCreate = () => { setEditing(null); setForm(emptyWholesaler); setDialogOpen(true) }
-  const openEdit = (w: Wholesaler) => { setEditing(w); setForm({ name: w.name, code: w.code, contact_email: w.contact_email, drive_folder_url: w.drive_folder_url, metadata: w.metadata }); setDialogOpen(true) }
+  const openEdit = (w: Wholesaler) => { setEditing(w); setForm({ name: w.name, code: w.code, type: w.type, contact_email: w.contact_email, drive_folder_url: w.drive_folder_url, metadata: w.metadata }); setDialogOpen(true) }
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); upsert.mutate(editing ? { ...form, id: editing.id } : form) }
   const driveUrlValid = !form.drive_folder_url || isValidUrl(form.drive_folder_url)
 

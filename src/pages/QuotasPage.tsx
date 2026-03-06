@@ -55,7 +55,7 @@ export default function QuotasPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<WholesalerQuota | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [form, setForm] = useState<WholesalerQuotaInsert>({ wholesaler_id: '', product_id: '', month: monthFilter, quota_quantity: 0, extra_available: 0, monthly_process_id: null, import_file_name: null, metadata: {} })
+  const [form, setForm] = useState<WholesalerQuotaInsert>({ wholesaler_id: '', product_id: '', month: monthFilter, quota_quantity: 0, extra_available: 0, quota_used: 0, monthly_process_id: null, import_file_name: null, metadata: {} })
 
   const { data: wholesalers } = useQuery({ queryKey: ['wholesalers'], queryFn: async () => { const { data, error } = await supabase.from('wholesalers').select('*').order('name'); if (error) throw error; return data as Wholesaler[] } })
   const { data: products } = useQuery({ queryKey: ['products', 'all-for-select'], queryFn: async () => { const { data, error } = await supabase.from('products').select('id, cip13, name').order('name').limit(2000); if (error) throw error; return data as Pick<Product, 'id' | 'cip13' | 'name'>[] } })
@@ -85,8 +85,8 @@ export default function QuotasPage() {
     onError: (err: Error) => toast.error(err.message),
   })
 
-  const openCreate = () => { setEditing(null); setForm({ wholesaler_id: wholesalerFilter !== 'all' ? wholesalerFilter : '', product_id: '', month: monthFilter, quota_quantity: 0, extra_available: 0, monthly_process_id: null, import_file_name: null, metadata: {} }); setDialogOpen(true) }
-  const openEdit = (q: WholesalerQuota) => { setEditing(q); setForm({ wholesaler_id: q.wholesaler_id, product_id: q.product_id, month: q.month, quota_quantity: q.quota_quantity, extra_available: q.extra_available, monthly_process_id: q.monthly_process_id, import_file_name: q.import_file_name, metadata: q.metadata }); setDialogOpen(true) }
+  const openCreate = () => { setEditing(null); setForm({ wholesaler_id: wholesalerFilter !== 'all' ? wholesalerFilter : '', product_id: '', month: monthFilter, quota_quantity: 0, extra_available: 0, quota_used: 0, monthly_process_id: null, import_file_name: null, metadata: {} }); setDialogOpen(true) }
+  const openEdit = (q: WholesalerQuota) => { setEditing(q); setForm({ wholesaler_id: q.wholesaler_id, product_id: q.product_id, month: q.month, quota_quantity: q.quota_quantity, extra_available: q.extra_available, quota_used: q.quota_used, monthly_process_id: q.monthly_process_id, import_file_name: q.import_file_name, metadata: q.metadata }); setDialogOpen(true) }
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); upsert.mutate(editing ? { ...form, id: editing.id } : form) }
 
   const totalPages = Math.ceil((quotas?.count ?? 0) / PAGE_SIZE)
@@ -146,12 +146,13 @@ export default function QuotasPage() {
               <TableHead className="ivory-table-head py-3.5 text-right">Quota</TableHead>
               <TableHead className="ivory-table-head py-3.5 text-right">Extra</TableHead>
               <TableHead className="ivory-table-head py-3.5 text-right">Total</TableHead>
+              <TableHead className="ivory-table-head py-3.5 text-right">Utilise</TableHead>
               <TableHead className="w-20"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? <TableSkeleton /> : !quotas?.data.length ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-20">
+              <TableRow><TableCell colSpan={8} className="text-center py-20">
                 <motion.div className="flex flex-col items-center gap-3" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
                   <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.06)' }}><Package className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} /></div>
                   <p className="ivory-heading text-[14px]">Aucun quota pour {currentMonthLabel}</p>
@@ -170,6 +171,7 @@ export default function QuotasPage() {
                   <TableCell className="text-right tabular-nums font-semibold text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>{q.quota_quantity}</TableCell>
                   <TableCell className="text-right tabular-nums text-[13px]">{q.extra_available > 0 ? <span style={{ color: 'var(--ivory-teal)' }}>+{q.extra_available}</span> : <span style={{ color: 'var(--ivory-text-muted)' }}>{q.extra_available}</span>}</TableCell>
                   <TableCell className="text-right"><span className="font-bold tabular-nums text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>{total}</span></TableCell>
+                  <TableCell className="text-right tabular-nums text-[13px]">{q.quota_used > 0 ? <span style={{ color: q.quota_used >= total ? 'rgb(220,38,38)' : 'var(--ivory-accent)' }}>{q.quota_used}/{total}</span> : <span style={{ color: 'var(--ivory-text-muted)' }}>0</span>}</TableCell>
                   <TableCell>
                     <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
                       <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(13,148,136,0.06)]" onClick={() => openEdit(q)}><Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} /></Button></TooltipTrigger><TooltipContent>Modifier</TooltipContent></Tooltip>

@@ -11,6 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { motion } from 'framer-motion'
+import { Input } from '@/components/ui/input'
 import { Plus, Calendar, CalendarRange } from 'lucide-react'
 import { toast } from 'sonner'
 import MonthlyProcessCard from '@/components/monthly-process/MonthlyProcessCard'
@@ -25,6 +26,8 @@ export default function MonthlyProcessesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newMonth, setNewMonth] = useState(String(new Date().getMonth() + 1))
   const [newYear, setNewYear] = useState(String(currentYear))
+  const [dateOuverture, setDateOuverture] = useState('')
+  const [dateCloture, setDateCloture] = useState('')
 
   const { data: processes, isLoading } = useQuery({
     queryKey: ['monthly-processes'],
@@ -37,7 +40,15 @@ export default function MonthlyProcessesPage() {
 
   const createMut = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.from('monthly_processes').insert({ month: parseInt(newMonth, 10), year: parseInt(newYear, 10), status: 'draft', current_step: 1, metadata: {} }).select().single()
+      const { data, error } = await supabase.from('monthly_processes').insert({
+        month: parseInt(newMonth, 10),
+        year: parseInt(newYear, 10),
+        status: 'draft',
+        current_step: 1,
+        date_ouverture: dateOuverture || null,
+        date_cloture: dateCloture || null,
+        metadata: {},
+      }).select().single()
       if (error) throw error
       return data
     },
@@ -111,20 +122,32 @@ export default function MonthlyProcessesPage() {
             </DialogTitle>
             <DialogDescription className="text-[13px]">Selectionnez le mois et l'annee.</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-[13px] font-medium">Mois</Label>
-              <Select value={newMonth} onValueChange={setNewMonth}>
-                <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>{MONTH_NAMES.map((name, i) => <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>)}</SelectContent>
-              </Select>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium">Mois</Label>
+                <Select value={newMonth} onValueChange={setNewMonth}>
+                  <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>{MONTH_NAMES.map((name, i) => <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium">Annee</Label>
+                <Select value={newYear} onValueChange={setNewYear}>
+                  <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>{YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-[13px] font-medium">Annee</Label>
-              <Select value={newYear} onValueChange={setNewYear}>
-                <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>{YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium">Date ouverture</Label>
+                <Input type="date" value={dateOuverture} onChange={(e) => setDateOuverture(e.target.value)} className="text-[13px] h-10 rounded-xl" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium">Date cloture</Label>
+                <Input type="date" value={dateCloture} onChange={(e) => setDateCloture(e.target.value)} className="text-[13px] h-10 rounded-xl" />
+              </div>
             </div>
           </div>
           <DialogFooter>

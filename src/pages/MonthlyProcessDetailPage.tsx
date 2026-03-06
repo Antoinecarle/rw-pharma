@@ -176,6 +176,12 @@ export default function MonthlyProcessDetailPage() {
                 </Badge>
                 <span className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
                   {process.orders_count} commandes / {process.allocations_count} allocations
+                  {process.date_ouverture && (
+                    <> &middot; Ouvert {new Date(process.date_ouverture).toLocaleDateString('fr-FR')}</>
+                  )}
+                  {process.date_cloture && (
+                    <> &middot; Cloture {new Date(process.date_cloture).toLocaleDateString('fr-FR')}</>
+                  )}
                 </span>
               </div>
             </div>

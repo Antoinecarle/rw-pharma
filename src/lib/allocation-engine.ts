@@ -29,10 +29,12 @@ interface OrderRow {
   customer_id: string
   product_id: string
   quantity: number
-  customer: { id: string; code: string; name: string; is_top_client: boolean; allocation_preferences: AllocationPrefs } | null
+  unit_price: number | null
+  customer: { id: string; code: string; name: string; is_top_client: boolean; min_lot_acceptable: number | null; allocation_preferences: AllocationPrefs } | null
 }
 
 interface QuotaRow {
+  id: string
   wholesaler_id: string
   product_id: string
   quota_quantity: number
@@ -71,6 +73,7 @@ export interface AllocationResult {
   stock_id: string | null
   requested_quantity: number
   allocated_quantity: number
+  prix_applique: number | null
   status: 'proposed'
   metadata: {
     strategy: AllocationStrategy
@@ -89,6 +92,7 @@ export type AllocationReason =
   | 'fallback_single' // No quota/stock — single wholesaler
   | 'max_pct_cap'     // Quantity reduced by max_allocation_pct
   | 'ansm_blocked'    // Product blocked by ANSM — export forbidden
+  | 'min_lot_reject'  // Quantity below client's minimum lot acceptable
 
 export interface AllocationLog {
   step: number
@@ -130,7 +134,7 @@ async function fetchOrders(processId: string): Promise<OrderRow[]> {
   while (true) {
     const { data, error } = await supabase
       .from('orders')
-      .select('id, customer_id, product_id, quantity, customer:customers(id, code, name, is_top_client, allocation_preferences)')
+      .select('id, customer_id, product_id, quantity, unit_price, customer:customers(id, code, name, is_top_client, min_lot_acceptable, allocation_preferences)')
       .eq('monthly_process_id', processId)
       .in('status', ['validated', 'pending'])
       .range(from, from + pageSize - 1)
@@ -147,7 +151,7 @@ async function fetchQuotas(month: number, year: number): Promise<QuotaRow[]> {
   const monthDate = `${year}-${String(month).padStart(2, '0')}-01`
   const { data, error } = await supabase
     .from('wholesaler_quotas')
-    .select('wholesaler_id, product_id, quota_quantity, extra_available')
+    .select('id, wholesaler_id, product_id, quota_quantity, extra_available')
     .eq('month', monthDate)
   if (error) throw error
   return data ?? []
@@ -208,8 +212,8 @@ function getCustomerPriority(order: OrderRow): number {
 // ── Quota Tracking ───────────────────────────────────────────────────
 
 class QuotaTracker {
-  // Map: productId -> Map<wholesalerId, { total, remaining }>
-  private quotas = new Map<string, Map<string, { total: number; remaining: number }>>()
+  // Map: productId -> Map<wholesalerId, { quotaId, total, remaining }>
+  private quotas = new Map<string, Map<string, { quotaId: string; total: number; remaining: number }>>()
 
   constructor(quotaRows: QuotaRow[], excludedWholesalers: Set<string>) {
     for (const q of quotaRows) {
@@ -220,7 +224,7 @@ class QuotaTracker {
       if (!this.quotas.has(q.product_id)) {
         this.quotas.set(q.product_id, new Map())
       }
-      this.quotas.get(q.product_id)!.set(q.wholesaler_id, { total, remaining: total })
+      this.quotas.get(q.product_id)!.set(q.wholesaler_id, { quotaId: q.id, total, remaining: total })
     }
   }
 
@@ -259,6 +263,20 @@ class QuotaTracker {
       }
     }
     return [...stats.entries()].map(([wholesalerId, s]) => ({ wholesalerId, ...s }))
+  }
+
+  /** Get per-quota-row usage for DB persistence */
+  getDetailedUsage(): { quotaId: string; used: number }[] {
+    const result: { quotaId: string; used: number }[] = []
+    for (const productQuotas of this.quotas.values()) {
+      for (const [, q] of productQuotas.entries()) {
+        const used = q.total - q.remaining
+        if (used > 0) {
+          result.push({ quotaId: q.quotaId, used })
+        }
+      }
+    }
+    return result
   }
 
   hasQuotaFor(productId: string): boolean {
@@ -453,6 +471,14 @@ export async function runAllocation(
       continue
     }
 
+    // Min lot acceptable check: skip if order qty below client threshold
+    const minLot = order.customer?.min_lot_acceptable
+    if (minLot && minLot > 0 && order.quantity < minLot) {
+      pushLog(order, null, 0, remainingToAllocate, 'min_lot_reject',
+        `Quantite ${order.quantity} < seuil min lot client (${minLot})`)
+      continue
+    }
+
     // Apply max allocation % limit
     const maxPct = prefs.max_allocation_pct
     const cappedQty = maxAllocTracker.canAllocate(order.customer_id, maxPct, remainingToAllocate)
@@ -481,6 +507,7 @@ export async function runAllocation(
             stock_id: lot.id,
             requested_quantity: order.quantity,
             allocated_quantity: consumed,
+            prix_applique: order.unit_price ?? null,
             status: 'proposed',
             metadata: {
               strategy,
@@ -525,6 +552,7 @@ export async function runAllocation(
               stock_id: null,
               requested_quantity: order.quantity,
               allocated_quantity: consumed,
+              prix_applique: order.unit_price ?? null,
               status: 'proposed',
               metadata: { strategy, priority_score: priorityScore, quota_used: true },
             })
@@ -551,6 +579,7 @@ export async function runAllocation(
               stock_id: null,
               requested_quantity: order.quantity,
               allocated_quantity: consumed,
+              prix_applique: order.unit_price ?? null,
               status: 'proposed',
               metadata: { strategy, priority_score: priorityScore, quota_used: true },
             })
@@ -583,6 +612,7 @@ export async function runAllocation(
               stock_id: null,
               requested_quantity: order.quantity,
               allocated_quantity: consumed,
+              prix_applique: order.unit_price ?? null,
               status: 'proposed',
               metadata: { strategy, priority_score: priorityScore, quota_used: true },
             })
@@ -611,6 +641,7 @@ export async function runAllocation(
               stock_id: null,
               requested_quantity: order.quantity,
               allocated_quantity: qty,
+              prix_applique: order.unit_price ?? null,
               status: 'proposed',
               metadata: { strategy, priority_score: priorityScore, quota_used: false },
             })
@@ -632,6 +663,7 @@ export async function runAllocation(
             stock_id: null,
             requested_quantity: order.quantity,
             allocated_quantity: remainingToAllocate,
+            prix_applique: order.unit_price ?? null,
             status: 'proposed',
             metadata: { strategy, priority_score: priorityScore, quota_used: false },
           })
@@ -643,6 +675,21 @@ export async function runAllocation(
 
           remainingToAllocate = 0
         }
+      }
+    }
+  }
+
+  // Persist quota_used back to DB
+  const quotaUtilization = quotaTracker.getUtilization()
+  if (quotaUtilization.length > 0) {
+    // Build a map of (wholesaler_id, product_id) -> used from the tracker
+    const usedByQuota = quotaTracker.getDetailedUsage()
+    for (const { quotaId, used } of usedByQuota) {
+      if (used > 0) {
+        await supabase
+          .from('wholesaler_quotas')
+          .update({ quota_used: used })
+          .eq('id', quotaId)
       }
     }
   }

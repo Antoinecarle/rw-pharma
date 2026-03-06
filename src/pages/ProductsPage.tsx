@@ -34,6 +34,7 @@ const emptyProduct: ProductInsert = {
   pfht: null,
   laboratory: null,
   is_ansm_blocked: false,
+  categorie: null,
   expiry_dates: null,
   metadata: {},
 }
@@ -165,6 +166,7 @@ export default function ProductsPage() {
       pfht: p.pfht,
       laboratory: p.laboratory,
       is_ansm_blocked: p.is_ansm_blocked,
+      categorie: p.categorie,
       expiry_dates: p.expiry_dates,
       metadata: p.metadata,
     })

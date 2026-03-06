@@ -34,6 +34,7 @@ export interface Product {
   pfht: number | null
   laboratory: string | null
   is_ansm_blocked: boolean
+  categorie: string | null
   expiry_dates: string[] | null
   metadata: Record<string, unknown>
   created_at: string
@@ -47,6 +48,7 @@ export interface Wholesaler {
   id: string
   name: string
   code: string | null
+  type: string | null
   contact_email: string | null
   drive_folder_url: string | null
   metadata: Record<string, unknown>
@@ -65,6 +67,7 @@ export interface WholesalerQuota {
   month: string
   quota_quantity: number
   extra_available: number
+  quota_used: number
   import_file_name: string | null
   metadata: Record<string, unknown>
   created_at: string
@@ -80,6 +83,7 @@ export interface Customer {
   country: string | null
   contact_email: string | null
   is_top_client: boolean
+  min_lot_acceptable: number | null
   allocation_preferences: Record<string, unknown>
   documents: Record<string, unknown> | null
   excel_column_mapping: Record<string, unknown>
@@ -102,6 +106,8 @@ export interface MonthlyProcess {
   quotas_count: number
   orders_count: number
   allocations_count: number
+  date_ouverture: string | null
+  date_cloture: string | null
   notes: string | null
   metadata: Record<string, unknown>
   created_at: string
@@ -140,8 +146,10 @@ export interface Allocation {
   customer_id: string
   product_id: string
   wholesaler_id: string
+  stock_id: string | null
   requested_quantity: number
   allocated_quantity: number
+  prix_applique: number | null
   status: AllocationStatus
   metadata: Record<string, unknown>
   created_at: string
