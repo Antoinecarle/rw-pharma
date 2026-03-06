@@ -68,16 +68,16 @@ export default function DashboardPage() {
   const stats = [
     { name: 'Produits', value: productCount, loading: loadingProducts, icon: Pill, gradient: 'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.04))', iconColor: '#0D9488', href: '/products', target: 1760 },
     { name: 'Grossistes', value: wholesalerCount, loading: loadingWholesalers, icon: Truck, gradient: 'linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.04))', iconColor: '#3B82F6', href: '/wholesalers' },
-    { name: 'Clients', value: customerCount, loading: loadingCustomers, icon: Users, gradient: 'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(124,92,191,0.04))', iconColor: '#7C5CBF', href: '/customers' },
+    { name: 'Clients', value: customerCount, loading: loadingCustomers, icon: Users, gradient: 'linear-gradient(135deg, rgba(5,150,105,0.12), rgba(5,150,105,0.04))', iconColor: '#059669', href: '/customers' },
     { name: 'Quotas', value: quotaCount, loading: loadingQuotas, icon: ClipboardList, gradient: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04))', iconColor: '#F59E0B', href: '/quotas' },
     { name: 'ANSM', value: blockedCount, loading: loadingBlocked, icon: AlertTriangle, gradient: 'linear-gradient(135deg, rgba(220,74,74,0.10), rgba(220,74,74,0.03))', iconColor: '#DC4A4A', href: '/products', danger: true },
   ]
 
   const quickActions = [
-    { name: 'Allocations mensuelles', description: 'Lancer ou continuer un processus d\'allocation', href: '/monthly-processes', icon: CalendarRange, gradient: 'linear-gradient(135deg, rgba(124,92,191,0.10), rgba(124,92,191,0.03))', iconColor: 'var(--ivory-accent)' },
+    { name: 'Allocations mensuelles', description: 'Lancer ou continuer un processus d\'allocation', href: '/monthly-processes', icon: CalendarRange, gradient: 'linear-gradient(135deg, rgba(13,148,136,0.10), rgba(13,148,136,0.03))', iconColor: 'var(--ivory-accent)' },
     { name: 'Gerer les produits', description: 'Catalogue de 1 760 references, import Excel', href: '/products', icon: Pill, gradient: 'linear-gradient(135deg, rgba(13,148,136,0.10), rgba(13,148,136,0.03))', iconColor: '#0D9488' },
     { name: 'Gerer les grossistes', description: 'Alliance, CERP, OCP et partenaires', href: '/wholesalers', icon: Truck, gradient: 'linear-gradient(135deg, rgba(59,130,246,0.10), rgba(59,130,246,0.03))', iconColor: '#3B82F6' },
-    { name: 'Gerer les clients', description: 'Orifarm, MPA, Axicorp et importateurs', href: '/customers', icon: Users, gradient: 'linear-gradient(135deg, rgba(124,92,191,0.10), rgba(124,92,191,0.03))', iconColor: '#7C5CBF' },
+    { name: 'Gerer les clients', description: 'Orifarm, MPA, Axicorp et importateurs', href: '/customers', icon: Users, gradient: 'linear-gradient(135deg, rgba(5,150,105,0.10), rgba(5,150,105,0.03))', iconColor: '#059669' },
   ]
 
   const catalogProgress = productCount != null ? Math.min((productCount / 1760) * 100, 100) : 0
@@ -106,17 +106,17 @@ export default function DashboardPage() {
         <Link to={`/monthly-processes/${activeProcess.id}`}>
           <motion.div initial={{ opacity: 0, scale: 0.99 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.05 }} className="relative z-10">
             <div className="ivory-glass group cursor-pointer overflow-hidden"
-              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.04), rgba(13,148,136,0.02))', borderColor: 'rgba(124,92,191,0.15)' }}>
+              style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.04), rgba(13,148,136,0.02))', borderColor: 'rgba(13,148,136,0.15)' }}>
               <div className="p-5">
                 <div className="flex items-center gap-4">
                   <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-105"
-                    style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.15), rgba(124,92,191,0.05))' }}>
+                    style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.15), rgba(13,148,136,0.05))' }}>
                     <Play className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="ivory-heading text-[14px]">Processus en cours</h3>
-                      <span className="ivory-badge" style={{ background: 'rgba(124,92,191,0.08)', color: 'var(--ivory-accent)' }}>
+                      <span className="ivory-badge" style={{ background: 'rgba(13,148,136,0.08)', color: 'var(--ivory-accent)' }}>
                         Etape {activeProcess.current_step}/5
                       </span>
                     </div>
@@ -138,7 +138,7 @@ export default function DashboardPage() {
                               title={label}
                             />
                             {idx < STEP_LABELS.length - 1 && (
-                              <div className="w-4 h-0.5 rounded-full" style={{ background: isCompleted ? 'rgba(124,92,191,0.3)' : 'rgba(0,0,0,0.04)' }} />
+                              <div className="w-4 h-0.5 rounded-full" style={{ background: isCompleted ? 'rgba(13,148,136,0.3)' : 'rgba(0,0,0,0.04)' }} />
                             )}
                           </div>
                         )

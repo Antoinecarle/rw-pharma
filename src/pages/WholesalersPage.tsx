@@ -39,12 +39,12 @@ function isValidUrl(str: string): boolean { try { new URL(str); return true } ca
 const GRADIENTS = [
   'linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.04))',
   'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.04))',
-  'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(124,92,191,0.04))',
+  'linear-gradient(135deg, rgba(5,150,105,0.12), rgba(5,150,105,0.04))',
   'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04))',
   'linear-gradient(135deg, rgba(236,72,153,0.12), rgba(236,72,153,0.04))',
   'linear-gradient(135deg, rgba(6,182,212,0.12), rgba(6,182,212,0.04))',
 ]
-const ICON_COLORS = ['#3B82F6', '#0D9488', '#7C5CBF', '#F59E0B', '#EC4899', '#06B6D4']
+const ICON_COLORS = ['#3B82F6', '#0D9488', '#059669', '#F59E0B', '#EC4899', '#06B6D4']
 
 export default function WholesalersPage() {
   const queryClient = useQueryClient()
@@ -130,7 +130,7 @@ export default function WholesalersPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <h3 className="font-semibold text-[14px] truncate" style={{ color: 'var(--ivory-text-heading)' }}>{w.name}</h3>
-                          {w.code && <span className="ivory-mono text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0" style={{ background: 'rgba(124,92,191,0.06)', color: 'var(--ivory-accent)' }}>{w.code}</span>}
+                          {w.code && <span className="ivory-mono text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0" style={{ background: 'rgba(13,148,136,0.06)', color: 'var(--ivory-accent)' }}>{w.code}</span>}
                         </div>
                         <div className="mt-3 space-y-2">
                           {w.contact_email && <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{w.contact_email}</span></div>}
@@ -143,7 +143,7 @@ export default function WholesalersPage() {
                         </div>
                       </div>
                       <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
-                        <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(124,92,191,0.06)]" onClick={() => openEdit(w)}><Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} /></Button></TooltipTrigger><TooltipContent>Modifier</TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(13,148,136,0.06)]" onClick={() => openEdit(w)}><Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} /></Button></TooltipTrigger><TooltipContent>Modifier</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50" onClick={() => setDeleteId(w.id)}><Trash2 className="h-3.5 w-3.5 text-red-400" /></Button></TooltipTrigger><TooltipContent>Supprimer</TooltipContent></Tooltip>
                       </div>
                     </div>

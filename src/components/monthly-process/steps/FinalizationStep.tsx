@@ -330,7 +330,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
         {[
           { icon: Package, color: 'text-blue-600', value: stats?.orders ?? 0, label: 'Commandes' },
           { icon: BarChart3, color: 'text-emerald-600', value: stats?.allocations ?? 0, label: 'Allocations' },
-          { icon: Users, color: 'text-violet-600', value: stats?.uniqueCustomers ?? 0, label: 'Clients' },
+          { icon: Users, color: 'text-teal-600', value: stats?.uniqueCustomers ?? 0, label: 'Clients' },
           { icon: Truck, color: 'text-amber-600', value: stats?.uniqueWholesalers ?? 0, label: 'Grossistes' },
         ].map((stat, i) => (
           <motion.div key={stat.label} custom={i} variants={cardVariants} initial="hidden" animate="visible">

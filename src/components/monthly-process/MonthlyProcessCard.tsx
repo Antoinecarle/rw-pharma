@@ -12,7 +12,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   draft: { label: 'Brouillon', color: 'var(--ivory-text-muted)', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.06)' },
   importing: { label: 'Importation', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
   reviewing_orders: { label: 'Revue commandes', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
-  allocating: { label: 'Allocation', color: 'var(--ivory-accent)', bg: 'rgba(124,92,191,0.08)', border: 'rgba(124,92,191,0.15)' },
+  allocating: { label: 'Allocation', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
   reviewing_allocations: { label: 'Revue allocations', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
   finalizing: { label: 'Finalisation', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
   completed: { label: 'Termine', color: 'var(--ivory-teal)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
@@ -51,7 +51,7 @@ export default function MonthlyProcessCard({ process, index = 0 }: MonthlyProces
                   style={{
                     background: isCompleted
                       ? 'linear-gradient(135deg, rgba(13,148,136,0.15), rgba(13,148,136,0.05))'
-                      : 'linear-gradient(135deg, rgba(124,92,191,0.15), rgba(124,92,191,0.05))',
+                      : 'linear-gradient(135deg, rgba(13,148,136,0.15), rgba(13,148,136,0.05))',
                   }}
                 >
                   <Calendar className="h-5 w-5" style={{ color: isCompleted ? 'var(--ivory-teal)' : 'var(--ivory-accent)' }} />
@@ -112,7 +112,7 @@ export default function MonthlyProcessCard({ process, index = 0 }: MonthlyProces
                         className="flex-1 h-0.5 mx-0.5 rounded-full"
                         style={{
                           background: isDone
-                            ? (isCompleted ? 'rgba(13,148,136,0.3)' : 'rgba(124,92,191,0.3)')
+                            ? (isCompleted ? 'rgba(13,148,136,0.3)' : 'rgba(13,148,136,0.3)')
                             : 'rgba(0,0,0,0.04)',
                         }}
                       />

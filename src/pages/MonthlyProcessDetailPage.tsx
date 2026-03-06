@@ -156,7 +156,7 @@ export default function MonthlyProcessDetailPage() {
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3.5 flex-1">
             <div className="h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm shrink-0"
-              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(13,148,136,0.08))' }}>
+              style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.08))' }}>
               <CalendarRange className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
             </div>
             <div>

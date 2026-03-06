@@ -143,7 +143,7 @@ export default function CustomersPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm"
-              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(124,92,191,0.04))' }}>
+              style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.04))' }}>
               <Users className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
             </div>
             <div>
@@ -214,7 +214,7 @@ export default function CustomersPage() {
         >
           <div className="flex flex-col items-center py-20 gap-3">
             <div className="h-16 w-16 rounded-2xl flex items-center justify-center"
-              style={{ background: 'rgba(124,92,191,0.06)' }}>
+              style={{ background: 'rgba(13,148,136,0.06)' }}>
               <UserPlus className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} />
             </div>
             <p className="ivory-heading text-[14px]">Aucun client</p>
@@ -284,7 +284,7 @@ export default function CustomersPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base">
               <div className="h-8 w-8 rounded-xl flex items-center justify-center"
-                style={{ background: 'rgba(124,92,191,0.08)' }}>
+                style={{ background: 'rgba(13,148,136,0.08)' }}>
                 <Users className="h-4 w-4" style={{ color: 'var(--ivory-accent)' }} />
               </div>
               {editing ? 'Modifier le client' : 'Nouveau client'}
@@ -311,8 +311,8 @@ export default function CustomersPage() {
                         className="relative flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] transition-all"
                         style={{
                           border: form.country === country.code ? '1.5px solid var(--ivory-accent)' : '1px solid rgba(0,0,0,0.06)',
-                          background: form.country === country.code ? 'rgba(124,92,191,0.06)' : 'white',
-                          boxShadow: form.country === country.code ? '0 0 0 4px rgba(124,92,191,0.06)' : 'none',
+                          background: form.country === country.code ? 'rgba(13,148,136,0.06)' : 'white',
+                          boxShadow: form.country === country.code ? '0 0 0 4px rgba(13,148,136,0.06)' : 'none',
                         }}>
                         <span className="text-base">{FLAG_EMOJI[country.code]}</span>
                         <div className="text-left">
@@ -419,7 +419,7 @@ function CustomerCard({
           <div className="flex items-start gap-3.5">
             {/* Avatar */}
             <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 text-lg shadow-sm"
-              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.08), rgba(124,92,191,0.04))' }}>
+              style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.08), rgba(13,148,136,0.04))' }}>
               {c.country && FLAG_EMOJI[c.country]
                 ? <span className="text-xl">{FLAG_EMOJI[c.country]}</span>
                 : <Globe className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />}
@@ -441,7 +441,7 @@ function CustomerCard({
               <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                 {c.code && (
                   <span className="ivory-mono text-[10px] font-semibold px-2 py-0.5 rounded-md"
-                    style={{ background: 'rgba(124,92,191,0.06)', color: 'var(--ivory-accent)' }}>
+                    style={{ background: 'rgba(13,148,136,0.06)', color: 'var(--ivory-accent)' }}>
                     {c.code}
                   </span>
                 )}
@@ -496,7 +496,7 @@ function CustomerCard({
             <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(124,92,191,0.06)]" onClick={() => onEdit(c)}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(13,148,136,0.06)]" onClick={() => onEdit(c)}>
                     <Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} />
                   </Button>
                 </TooltipTrigger>

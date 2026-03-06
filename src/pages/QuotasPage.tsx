@@ -25,7 +25,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import ProductCombobox from '@/components/quotas/ProductCombobox'
 
 const PAGE_SIZE = 50
-const WHOLESALER_COLORS = ['#3B82F6', '#0D9488', '#7C5CBF', '#F59E0B', '#EC4899', '#06B6D4', '#F97316', '#6366F1']
+const WHOLESALER_COLORS = ['#3B82F6', '#0D9488', '#059669', '#F59E0B', '#EC4899', '#06B6D4', '#F97316', '#10B981']
 
 function TableSkeleton() {
   return (<>{Array.from({ length: 6 }).map((_, i) => (
@@ -165,14 +165,14 @@ export default function QuotasPage() {
               return (
                 <motion.tr key={q.id} custom={i} variants={rowVariants} initial="hidden" animate="visible" className="group ivory-table-row">
                   <TableCell className="px-4"><div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} /><span className="ivory-mono text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{ background: `${color}12`, color }}>{q.wholesaler?.code ?? q.wholesaler?.name ?? '-'}</span></div></TableCell>
-                  <TableCell><span className="ivory-mono text-[12px] font-medium px-2 py-0.5 rounded-md" style={{ color: 'var(--ivory-accent)', background: 'rgba(124,92,191,0.06)' }}>{q.product?.cip13 ?? '-'}</span></TableCell>
+                  <TableCell><span className="ivory-mono text-[12px] font-medium px-2 py-0.5 rounded-md" style={{ color: 'var(--ivory-accent)', background: 'rgba(13,148,136,0.06)' }}>{q.product?.cip13 ?? '-'}</span></TableCell>
                   <TableCell><span className="text-[13px] font-medium max-w-[200px] truncate block" style={{ color: 'var(--ivory-text-heading)' }}>{q.product?.name ?? '-'}</span></TableCell>
                   <TableCell className="text-right tabular-nums font-semibold text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>{q.quota_quantity}</TableCell>
                   <TableCell className="text-right tabular-nums text-[13px]">{q.extra_available > 0 ? <span style={{ color: 'var(--ivory-teal)' }}>+{q.extra_available}</span> : <span style={{ color: 'var(--ivory-text-muted)' }}>{q.extra_available}</span>}</TableCell>
                   <TableCell className="text-right"><span className="font-bold tabular-nums text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>{total}</span></TableCell>
                   <TableCell>
                     <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
-                      <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(124,92,191,0.06)]" onClick={() => openEdit(q)}><Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} /></Button></TooltipTrigger><TooltipContent>Modifier</TooltipContent></Tooltip>
+                      <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(13,148,136,0.06)]" onClick={() => openEdit(q)}><Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} /></Button></TooltipTrigger><TooltipContent>Modifier</TooltipContent></Tooltip>
                       <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50" onClick={() => setDeleteId(q.id)}><Trash2 className="h-3.5 w-3.5 text-red-400" /></Button></TooltipTrigger><TooltipContent>Supprimer</TooltipContent></Tooltip>
                     </div>
                   </TableCell>

@@ -4,84 +4,84 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Ivory Design System — Premium Light Mode */
-  --background: 40 20% 97%;
-  --foreground: 260 20% 12%;
+  /* Medical Green Design System — Premium Light Mode */
+  --background: 160 12% 97%;
+  --foreground: 170 20% 10%;
   --card: 0 0% 100%;
-  --card-foreground: 260 20% 12%;
+  --card-foreground: 170 20% 10%;
   --popover: 0 0% 100%;
-  --popover-foreground: 260 20% 12%;
-  --primary: 270 40% 55%;
+  --popover-foreground: 170 20% 10%;
+  --primary: 168 76% 36%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 40 12% 95%;
-  --secondary-foreground: 260 14% 35%;
-  --muted: 40 10% 95%;
-  --muted-foreground: 260 8% 55%;
-  --accent: 40 12% 93%;
-  --accent-foreground: 260 14% 25%;
+  --secondary: 160 12% 95%;
+  --secondary-foreground: 170 14% 35%;
+  --muted: 160 10% 95%;
+  --muted-foreground: 170 8% 48%;
+  --accent: 160 12% 93%;
+  --accent-foreground: 170 14% 25%;
   --destructive: 0 60% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 90%;
-  --input: 0 0% 88%;
-  --ring: 270 40% 55%;
+  --border: 160 6% 90%;
+  --input: 160 6% 88%;
+  --ring: 168 76% 36%;
   --radius: 0.75rem;
 
-  --chart-1: 270 40% 55%;
-  --chart-2: 174 62% 33%;
+  --chart-1: 168 76% 36%;
+  --chart-2: 152 62% 33%;
   --chart-3: 38 92% 50%;
-  --chart-4: 160 72% 40%;
+  --chart-4: 200 72% 40%;
   --chart-5: 0 60% 50%;
 
-  --sidebar: 38 16% 96%;
-  --sidebar-foreground: 260 20% 12%;
-  --sidebar-border: 0 0% 93%;
-  --sidebar-accent: 40 12% 93%;
+  --sidebar: 162 16% 96%;
+  --sidebar-foreground: 170 20% 10%;
+  --sidebar-border: 160 6% 93%;
+  --sidebar-accent: 160 12% 93%;
 
-  /* Ivory Extended Palette */
-  --ivory-bg: #F8F7F4;
+  /* Medical Green Extended Palette */
+  --ivory-bg: #F5F9F8;
   --ivory-surface: #FFFFFF;
-  --ivory-panel: #F3F2EF;
-  --ivory-accent: #7C5CBF;
-  --ivory-accent-hover: #6344A8;
-  --ivory-accent-strong: #5B3FA0;
-  --ivory-teal: #0D9488;
-  --ivory-text-heading: #1A1625;
-  --ivory-text-body: #2D2A35;
-  --ivory-text-muted: #8C899A;
+  --ivory-panel: #EFF5F4;
+  --ivory-accent: #0D9488;
+  --ivory-accent-hover: #0F766E;
+  --ivory-accent-strong: #115E59;
+  --ivory-teal: #059669;
+  --ivory-text-heading: #0C1F1D;
+  --ivory-text-body: #1A2F2C;
+  --ivory-text-muted: #6B8A85;
   --ivory-border-subtle: rgba(0,0,0,0.04);
   --ivory-border-default: rgba(0,0,0,0.08);
   --ivory-glass: rgba(255,255,255,0.72);
   --ivory-shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 0 rgba(0,0,0,0.02);
   --ivory-shadow-md: 0 4px 24px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   --ivory-shadow-lg: 0 16px 48px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.03);
-  --ivory-shadow-glow: 0 0 32px rgba(124,92,191,0.10);
+  --ivory-shadow-glow: 0 0 32px rgba(13,148,136,0.10);
 }
 
 .dark {
-  --background: 220 25% 6%;
+  --background: 170 25% 6%;
   --foreground: 0 0% 95%;
-  --card: 220 25% 8%;
+  --card: 170 25% 8%;
   --card-foreground: 0 0% 95%;
-  --popover: 220 25% 8%;
+  --popover: 170 25% 8%;
   --popover-foreground: 0 0% 95%;
-  --primary: 270 50% 60%;
-  --primary-foreground: 220 25% 6%;
-  --secondary: 220 20% 14%;
+  --primary: 168 76% 42%;
+  --primary-foreground: 170 25% 6%;
+  --secondary: 170 20% 14%;
   --secondary-foreground: 0 0% 90%;
-  --muted: 220 20% 14%;
-  --muted-foreground: 220 10% 55%;
-  --accent: 220 20% 14%;
+  --muted: 170 20% 14%;
+  --muted-foreground: 170 10% 55%;
+  --accent: 170 20% 14%;
   --accent-foreground: 0 0% 90%;
   --destructive: 0 62% 40%;
   --destructive-foreground: 0 0% 95%;
-  --border: 220 20% 16%;
-  --input: 220 20% 16%;
-  --ring: 270 50% 60%;
+  --border: 170 20% 16%;
+  --input: 170 20% 16%;
+  --ring: 168 76% 42%;
 
-  --sidebar: 220 25% 7%;
+  --sidebar: 170 25% 7%;
   --sidebar-foreground: 0 0% 95%;
-  --sidebar-border: 220 20% 14%;
-  --sidebar-accent: 220 20% 12%;
+  --sidebar-border: 170 20% 14%;
+  --sidebar-accent: 170 20% 12%;
 }
 
 @theme inline {
@@ -126,12 +126,12 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: var(--ivory-bg);
-    background-image: radial-gradient(500px 280px at 10% 6%, rgba(124,92,191,0.05), rgba(13,148,136,0.025) 40%, transparent 65%);
+    background-image: radial-gradient(500px 280px at 10% 6%, rgba(13,148,136,0.05), rgba(5,150,105,0.025) 40%, transparent 65%);
     background-attachment: fixed;
   }
 }
 
-/* Ivory Typography */
+/* Medical Typography */
 .ivory-heading {
   font-family: 'Poppins', sans-serif;
   font-weight: 700;
@@ -150,7 +150,7 @@
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* Ivory Card — Premium Base */
+/* Medical Card — Premium Base */
 .ivory-card {
   background: var(--ivory-surface);
   border: 1px solid rgba(0,0,0,0.06);
@@ -163,7 +163,7 @@
   border-color: rgba(0,0,0,0.09);
 }
 
-/* Ivory Card — Interactive (clickable cards) */
+/* Medical Card — Interactive (clickable cards) */
 .ivory-card-interactive {
   cursor: pointer;
 }
@@ -171,7 +171,7 @@
 .ivory-card-interactive:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0,0,0,0.07), 0 2px 6px rgba(0,0,0,0.04);
-  border-color: rgba(124,92,191,0.12);
+  border-color: rgba(13,148,136,0.12);
 }
 
 .ivory-card-interactive:active {
@@ -179,7 +179,7 @@
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
-/* Ivory Card — Stat KPI variant */
+/* Medical Card — Stat KPI variant */
 .ivory-card-stat {
   position: relative;
   overflow: hidden;
@@ -192,7 +192,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(124,92,191,0.15), transparent);
+  background: linear-gradient(90deg, transparent, rgba(13,148,136,0.15), transparent);
   opacity: 0;
   transition: opacity 280ms ease;
 }
@@ -201,31 +201,31 @@
   opacity: 1;
 }
 
-/* Ivory Card — Highlight/banner variant */
+/* Medical Card — Highlight/banner variant */
 .ivory-card-highlight {
-  background: linear-gradient(135deg, rgba(124,92,191,0.03) 0%, rgba(13,148,136,0.02) 100%);
-  border-color: rgba(124,92,191,0.12);
+  background: linear-gradient(135deg, rgba(13,148,136,0.03) 0%, rgba(5,150,105,0.02) 100%);
+  border-color: rgba(13,148,136,0.12);
 }
 
 .ivory-card-highlight:hover {
-  background: linear-gradient(135deg, rgba(124,92,191,0.05) 0%, rgba(13,148,136,0.03) 100%);
-  border-color: rgba(124,92,191,0.18);
+  background: linear-gradient(135deg, rgba(13,148,136,0.05) 0%, rgba(5,150,105,0.03) 100%);
+  border-color: rgba(13,148,136,0.18);
 }
 
-/* Ivory Card — Empty state variant */
+/* Medical Card — Empty state variant */
 .ivory-card-empty {
   border-style: dashed;
   border-color: rgba(0,0,0,0.08);
-  background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(248,247,244,0.6));
+  background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(245,249,248,0.6));
 }
 
-/* Ivory Card — Elevated (login, modals) */
+/* Medical Card — Elevated (login, modals) */
 .ivory-card-elevated {
   box-shadow: 0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
   border-color: rgba(0,0,0,0.04);
 }
 
-/* Ivory Card — Top client ring */
+/* Medical Card — Top client ring */
 .ivory-card-vip {
   box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 0 0 1px rgba(251,191,36,0.25), 0 0 12px rgba(251,191,36,0.06);
 }
@@ -247,12 +247,12 @@
 }
 
 .dark .ivory-card-interactive:hover {
-  border-color: rgba(139,92,246,0.25);
+  border-color: rgba(20,184,166,0.25);
 }
 
 .dark .ivory-card-highlight {
-  background: rgba(139,92,246,0.06);
-  border-color: rgba(139,92,246,0.15);
+  background: rgba(20,184,166,0.06);
+  border-color: rgba(20,184,166,0.15);
 }
 
 .dark .ivory-card-empty {
@@ -260,7 +260,7 @@
   border-color: hsl(var(--border));
 }
 
-/* Ivory Glass Card */
+/* Medical Glass Card */
 .ivory-glass {
   background: var(--ivory-glass);
   backdrop-filter: blur(20px) saturate(120%);
@@ -277,7 +277,7 @@
   border-color: rgba(0,0,0,0.10);
 }
 
-/* Ivory Table */
+/* Medical Table */
 .ivory-table-head {
   color: var(--ivory-text-muted);
   font-size: 11px;
@@ -293,10 +293,10 @@
 }
 
 .ivory-table-row:hover {
-  background: rgba(124,92,191,0.03);
+  background: rgba(13,148,136,0.03);
 }
 
-/* Ivory Chip / Filter Button */
+/* Medical Chip / Filter Button */
 .ivory-chip {
   display: inline-flex;
   align-items: center;
@@ -318,13 +318,13 @@
 }
 
 .ivory-chip.active {
-  background: rgba(124,92,191,0.10);
+  background: rgba(13,148,136,0.10);
   color: var(--ivory-accent);
-  border-color: rgba(124,92,191,0.18);
+  border-color: rgba(13,148,136,0.18);
   font-weight: 600;
 }
 
-/* Ivory Badge */
+/* Medical Badge */
 .ivory-badge {
   display: inline-flex;
   align-items: center;
@@ -336,7 +336,7 @@
   letter-spacing: 0.02em;
 }
 
-/* Ivory KPI Card */
+/* Medical KPI Card */
 .ivory-kpi {
   background: var(--ivory-glass);
   backdrop-filter: blur(16px);
@@ -369,7 +369,7 @@
   margin-top: 6px;
 }
 
-/* Ivory Stat Pill */
+/* Medical Stat Pill */
 .ivory-stat-pill {
   display: inline-flex;
   align-items: center;
@@ -452,7 +452,7 @@
 .stagger-7 { animation-delay: 0.28s; }
 .stagger-8 { animation-delay: 0.32s; }
 
-/* Ivory Scrollbar */
+/* Medical Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -468,9 +468,9 @@
   background: rgba(0,0,0,0.14);
 }
 
-/* Ivory Focus Ring */
+/* Medical Focus Ring */
 *:focus-visible {
-  outline: 2px solid rgba(124,92,191,0.35);
+  outline: 2px solid rgba(13,148,136,0.35);
   outline-offset: 2px;
   border-radius: var(--radius);
 }
@@ -486,7 +486,7 @@
   z-index: 9999;
 }
 
-/* Ivory page section with glow */
+/* Medical page section with glow */
 .ivory-page-glow {
   position: relative;
 }
@@ -498,7 +498,7 @@
   left: -40px;
   width: 500px;
   height: 280px;
-  background: radial-gradient(ellipse at center, rgba(124,92,191,0.06), rgba(13,148,136,0.03) 40%, transparent 65%);
+  background: radial-gradient(ellipse at center, rgba(13,148,136,0.06), rgba(5,150,105,0.03) 40%, transparent 65%);
   pointer-events: none;
   z-index: 0;
 }

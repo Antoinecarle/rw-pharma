@@ -63,7 +63,7 @@ function NavItem({ item, isActive, onNavigate }: { item: typeof navigation[0]; i
               : 'text-[var(--ivory-text-muted)] hover:text-[var(--ivory-text-heading)]'
           )}
           style={isActive ? {
-            background: 'rgba(124,92,191,0.08)',
+            background: 'rgba(13,148,136,0.08)',
           } : {}}
         >
           <item.icon
@@ -93,7 +93,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="px-5 py-5">
         <Link to="/" className="flex items-center gap-2.5 group" onClick={onNavigate}>
           <div className="h-9 w-9 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm"
-            style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.15), rgba(124,92,191,0.05))' }}>
+            style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.15), rgba(13,148,136,0.05))' }}>
             <Pill className="h-4.5 w-4.5" style={{ color: 'var(--ivory-accent)' }} />
           </div>
           <div>
@@ -134,7 +134,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               <Avatar className="h-8 w-8">
                 <AvatarFallback
                   className="text-[10px] font-bold"
-                  style={{ background: 'rgba(124,92,191,0.10)', color: 'var(--ivory-accent)' }}
+                  style={{ background: 'rgba(13,148,136,0.10)', color: 'var(--ivory-accent)' }}
                 >
                   {initials}
                 </AvatarFallback>

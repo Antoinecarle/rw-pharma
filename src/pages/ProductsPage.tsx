@@ -194,7 +194,7 @@ export default function ProductsPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm"
-              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(13,148,136,0.08))' }}>
+              style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.08))' }}>
               <Pill className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
             </div>
             <div>
@@ -385,7 +385,7 @@ export default function ProductsPage() {
                     transition={{ duration: 0.4 }}
                   >
                     <div className="h-16 w-16 rounded-2xl flex items-center justify-center"
-                      style={{ background: 'rgba(124,92,191,0.06)' }}>
+                      style={{ background: 'rgba(13,148,136,0.06)' }}>
                       <Package className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} />
                     </div>
                     <div>
@@ -430,7 +430,7 @@ export default function ProductsPage() {
                   >
                     <TableCell className="px-4">
                       <span className="ivory-mono text-[12px] font-medium px-2 py-0.5 rounded-md"
-                        style={{ color: 'var(--ivory-accent)', background: 'rgba(124,92,191,0.06)' }}>
+                        style={{ color: 'var(--ivory-accent)', background: 'rgba(13,148,136,0.06)' }}>
                         {p.cip13}
                       </span>
                     </TableCell>
@@ -475,7 +475,7 @@ export default function ProductsPage() {
                       <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(124,92,191,0.06)]" onClick={() => openEdit(p)}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-[rgba(13,148,136,0.06)]" onClick={() => openEdit(p)}>
                               <Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} />
                             </Button>
                           </TooltipTrigger>
@@ -567,7 +567,7 @@ export default function ProductsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base">
               <div className="h-8 w-8 rounded-xl flex items-center justify-center"
-                style={{ background: 'rgba(124,92,191,0.08)' }}>
+                style={{ background: 'rgba(13,148,136,0.08)' }}>
                 <Pill className="h-4 w-4" style={{ color: 'var(--ivory-accent)' }} />
               </div>
               {editing ? 'Modifier le produit' : 'Nouveau produit'}

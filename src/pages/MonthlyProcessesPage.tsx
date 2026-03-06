@@ -52,7 +52,7 @@ export default function MonthlyProcessesPage() {
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm"
-              style={{ background: 'linear-gradient(135deg, rgba(124,92,191,0.12), rgba(13,148,136,0.06))' }}>
+              style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.06))' }}>
               <CalendarRange className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
             </div>
             <div>
@@ -85,7 +85,7 @@ export default function MonthlyProcessesPage() {
         <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="relative z-10">
           <div className="ivory-glass p-0 overflow-hidden" style={{ borderStyle: 'dashed' }}>
             <div className="flex flex-col items-center py-20 gap-3">
-              <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(124,92,191,0.06)' }}>
+              <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(13,148,136,0.06)' }}>
                 <CalendarRange className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} />
               </div>
               <p className="ivory-heading text-[16px]">Aucun processus</p>
@@ -104,7 +104,7 @@ export default function MonthlyProcessesPage() {
         <DialogContent className="max-w-sm rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base">
-              <div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(124,92,191,0.08)' }}>
+              <div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(13,148,136,0.08)' }}>
                 <Calendar className="h-4 w-4" style={{ color: 'var(--ivory-accent)' }} />
               </div>
               Nouveau processus
