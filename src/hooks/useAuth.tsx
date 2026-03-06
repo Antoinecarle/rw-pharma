@@ -26,21 +26,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [customerName, setCustomerName] = useState<string | null>(null)
 
   const resolveRole = async (userId: string) => {
-    const { data } = await supabase
-      .from('customer_users')
-      .select('customer_id, customers(name)')
-      .eq('auth_user_id', userId)
-      .maybeSingle()
+    try {
+      const { data, error } = await supabase
+        .from('customer_users')
+        .select('customer_id, customers(name)')
+        .eq('auth_user_id', userId)
+        .maybeSingle()
 
-    if (data) {
-      setRole('customer')
-      setCustomerId(data.customer_id)
-      setCustomerName((data.customers as any)?.name ?? null)
-    } else {
-      setRole('admin')
-      setCustomerId(null)
-      setCustomerName(null)
+      if (!error && data) {
+        setRole('customer')
+        setCustomerId(data.customer_id)
+        setCustomerName((data.customers as any)?.name ?? null)
+        return
+      }
+    } catch {
+      // Fallback to admin on any error
     }
+    setRole('admin')
+    setCustomerId(null)
+    setCustomerName(null)
   }
 
   useEffect(() => {
@@ -48,8 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) await resolveRole(session.user.id)
-      setLoading(false)
-    })
+    }).finally(() => setLoading(false))
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
