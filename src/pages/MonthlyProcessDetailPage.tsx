@@ -14,6 +14,8 @@ import QuotaImportStep from '@/components/monthly-process/steps/QuotaImportStep'
 import OrderImportStep from '@/components/monthly-process/steps/OrderImportStep'
 import OrderReviewStep from '@/components/monthly-process/steps/OrderReviewStep'
 import AllocationExecutionStep from '@/components/monthly-process/steps/AllocationExecutionStep'
+import WholesalerExportStep from '@/components/monthly-process/steps/WholesalerExportStep'
+import StockImportStep from '@/components/monthly-process/steps/StockImportStep'
 import AllocationReviewStep from '@/components/monthly-process/steps/AllocationReviewStep'
 import FinalizationStep from '@/components/monthly-process/steps/FinalizationStep'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -240,20 +242,11 @@ export default function MonthlyProcessDetailPage() {
           {currentStep === 4 && (
             <AllocationExecutionStep process={process} onNext={() => advanceStep(5)} />
           )}
-          {/* Steps 5-6 (Export Grossistes, Reception Stocks) — coming soon */}
           {currentStep === 5 && (
-            <div className="ivory-glass p-8 text-center space-y-3">
-              <p className="text-lg font-semibold">Export vers Grossistes</p>
-              <p className="text-sm text-muted-foreground">Cette etape sera implementee dans la prochaine iteration.</p>
-              <Button onClick={() => advanceStep(6)}>Passer a l'etape suivante</Button>
-            </div>
+            <WholesalerExportStep process={process} onNext={() => advanceStep(6)} />
           )}
           {currentStep === 6 && (
-            <div className="ivory-glass p-8 text-center space-y-3">
-              <p className="text-lg font-semibold">Reception des Stocks</p>
-              <p className="text-sm text-muted-foreground">Cette etape sera implementee dans la prochaine iteration.</p>
-              <Button onClick={() => advanceStep(7)}>Passer a l'etape suivante</Button>
-            </div>
+            <StockImportStep process={process} onNext={() => advanceStep(7)} />
           )}
           {currentStep === 7 && (
             <AllocationReviewStep process={process} onNext={() => advanceStep(8)} onBack={() => setActiveStep(6)} />

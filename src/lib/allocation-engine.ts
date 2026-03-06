@@ -565,14 +565,64 @@ export async function runAllocation(
       }
     }
 
-    // Source 3: Fallback
+    // Source 3: Fallback — try remaining quotas from any wholesaler first, then even split
     if (remainingToAllocate > 0 && allocations.filter(a => a.order_id === order.id).length === 0) {
-      if (strategy === 'balanced' && availableWholesalers.length > 1) {
-        const perWs = Math.ceil(remainingToAllocate / availableWholesalers.length)
-        for (const ws of availableWholesalers) {
+      // 3a: Try to use any remaining global quota for this product
+      const remainingQuotas = quotaTracker.getAvailable(order.product_id)
+      if (remainingQuotas.length > 0) {
+        for (const ws of remainingQuotas) {
           if (remainingToAllocate <= 0) break
-          const qty = Math.min(perWs, remainingToAllocate)
+          const consumed = quotaTracker.consume(order.product_id, ws.wholesalerId, remainingToAllocate)
+          if (consumed > 0) {
+            allocations.push({
+              monthly_process_id: processId,
+              order_id: order.id,
+              customer_id: order.customer_id,
+              product_id: order.product_id,
+              wholesaler_id: ws.wholesalerId,
+              stock_id: null,
+              requested_quantity: order.quantity,
+              allocated_quantity: consumed,
+              status: 'proposed',
+              metadata: { strategy, priority_score: priorityScore, quota_used: true },
+            })
+            maxAllocTracker.record(order.customer_id, consumed)
+            remainingToAllocate -= consumed
+            pushLog(order, ws.wholesalerId, consumed, remainingToAllocate, 'quota',
+              `Quota fallback ${consumed} u. (reste ${ws.remaining - consumed})`)
+          }
+        }
+      }
 
+      // 3b: If still remaining and no quota covered it, distribute across wholesalers
+      if (remainingToAllocate > 0 && allocations.filter(a => a.order_id === order.id).length === 0) {
+        if (strategy === 'balanced' && availableWholesalers.length > 1) {
+          const perWs = Math.ceil(remainingToAllocate / availableWholesalers.length)
+          for (const ws of availableWholesalers) {
+            if (remainingToAllocate <= 0) break
+            const qty = Math.min(perWs, remainingToAllocate)
+
+            allocations.push({
+              monthly_process_id: processId,
+              order_id: order.id,
+              customer_id: order.customer_id,
+              product_id: order.product_id,
+              wholesaler_id: ws.id,
+              stock_id: null,
+              requested_quantity: order.quantity,
+              allocated_quantity: qty,
+              status: 'proposed',
+              metadata: { strategy, priority_score: priorityScore, quota_used: false },
+            })
+
+            maxAllocTracker.record(order.customer_id, qty)
+            remainingToAllocate -= qty
+
+            pushLog(order, ws.id, qty, remainingToAllocate, 'fallback',
+              `Aucun quota/stock — repartition egale ${qty} u.`)
+          }
+        } else {
+          const ws = availableWholesalers[0]
           allocations.push({
             monthly_process_id: processId,
             order_id: order.id,
@@ -581,38 +631,18 @@ export async function runAllocation(
             wholesaler_id: ws.id,
             stock_id: null,
             requested_quantity: order.quantity,
-            allocated_quantity: qty,
+            allocated_quantity: remainingToAllocate,
             status: 'proposed',
             metadata: { strategy, priority_score: priorityScore, quota_used: false },
           })
 
-          maxAllocTracker.record(order.customer_id, qty)
-          remainingToAllocate -= qty
+          maxAllocTracker.record(order.customer_id, remainingToAllocate)
 
-          pushLog(order, ws.id, qty, remainingToAllocate, 'fallback',
-            `Aucun quota/stock — repartition egale ${qty} u.`)
+          pushLog(order, ws.id, remainingToAllocate, 0, 'fallback_single',
+            `Aucun quota/stock — grossiste unique ${remainingToAllocate} u.`)
+
+          remainingToAllocate = 0
         }
-      } else {
-        const ws = availableWholesalers[0]
-        allocations.push({
-          monthly_process_id: processId,
-          order_id: order.id,
-          customer_id: order.customer_id,
-          product_id: order.product_id,
-          wholesaler_id: ws.id,
-          stock_id: null,
-          requested_quantity: order.quantity,
-          allocated_quantity: remainingToAllocate,
-          status: 'proposed',
-          metadata: { strategy, priority_score: priorityScore, quota_used: false },
-        })
-
-        maxAllocTracker.record(order.customer_id, remainingToAllocate)
-
-        pushLog(order, ws.id, remainingToAllocate, 0, 'fallback_single',
-          `Aucun quota/stock — grossiste unique ${remainingToAllocate} u.`)
-
-        remainingToAllocate = 0
       }
     }
   }

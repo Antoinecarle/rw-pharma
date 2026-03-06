@@ -122,11 +122,21 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         if (zeros > 0) details.push(`${zeros} produits a 0`)
         break
       }
-      case 5:
+      case 5: {
+        // Export wholesalers: score based on having allocations
+        if (!allocations || allocations.length === 0) {
+          score = 0
+          details.push('Aucune allocation a exporter')
+        } else {
+          score = 70
+          details.push(`${allocations.length} allocations a exporter`)
+        }
+        break
+      }
       case 6: {
-        // Export/Stock collection: placeholder
+        // Stock collection: placeholder (no easy query from here)
         score = 50
-        details.push('Etape en attente')
+        details.push('Import stocks en cours')
         break
       }
       case 7: {
