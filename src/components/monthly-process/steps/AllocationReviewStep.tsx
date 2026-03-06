@@ -18,7 +18,7 @@ import {
 import AnimatedCounter from '@/components/ui/animated-counter'
 import GaugeChart from '@/components/ui/gauge-chart'
 import HorizontalBarChart from '@/components/ui/horizontal-bar'
-import { CheckCircle, ArrowRight, BarChart3, Truck, AlertTriangle, Pencil, Check, X, Users } from 'lucide-react'
+import { CheckCircle, ArrowRight, BarChart3, Truck, AlertTriangle, Pencil, Check, X, Users, Boxes, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { useState, useMemo } from 'react'
 import FinalAllocationConfirmationModal from '@/components/allocations/FinalAllocationConfirmationModal'
@@ -194,6 +194,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
       .slice(0, 5)
   }, [productCoverage])
 
+  const lotAllocCount = allocations?.filter(a => (a.metadata as Record<string, unknown>)?.lot_number).length ?? 0
   const proposedCount = allocations?.filter((a) => a.status === 'proposed').length ?? 0
 
   const filteredAllocations = useMemo(() => {
@@ -245,7 +246,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
       </div>
 
       {/* KPI cards with gauge */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <motion.div custom={0} variants={cardVariants} initial="hidden" animate="visible">
           <Card>
             <CardContent className="p-4 text-center">
@@ -295,6 +296,21 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
             </CardContent>
           </Card>
         </motion.div>
+        {lotAllocCount > 0 && (
+          <motion.div custom={4} variants={cardVariants} initial="hidden" animate="visible">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <Boxes className="h-5 w-5 mx-auto text-violet-600 mb-1" />
+                <AnimatedCounter
+                  value={lotAllocCount}
+                  className="justify-center"
+                  valueClassName="text-2xl font-bold"
+                />
+                <p className="text-xs text-muted-foreground">Via lots (FEFO)</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
       </div>
 
       {/* Under-allocated products alert */}
@@ -400,6 +416,8 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
                 <TableHead>CIP13</TableHead>
                 <TableHead className="hidden md:table-cell">Produit</TableHead>
                 <TableHead>Grossiste</TableHead>
+                <TableHead className="hidden lg:table-cell">Lot</TableHead>
+                <TableHead className="hidden lg:table-cell">Expiry</TableHead>
                 <TableHead className="text-right">Demande</TableHead>
                 <TableHead className="text-right">Alloue</TableHead>
                 <TableHead>Statut</TableHead>
@@ -455,6 +473,35 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
                       )}
                     </TableCell>
 
+                    {(() => {
+                      const meta = (alloc.metadata ?? {}) as Record<string, unknown>
+                      const lotNumber = meta.lot_number as string | undefined
+                      const expiryDate = meta.expiry_date as string | undefined
+                      return (
+                        <>
+                          <TableCell className="hidden lg:table-cell">
+                            {lotNumber ? (
+                              <Badge variant="secondary" className="text-[10px] gap-0.5 font-mono">
+                                <Boxes className="h-2.5 w-2.5" />
+                                {lotNumber.length > 8 ? lotNumber.slice(0, 8) + '...' : lotNumber}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            {expiryDate ? (
+                              <span className="text-xs tabular-nums flex items-center gap-1">
+                                <Calendar className="h-3 w-3 text-muted-foreground" />
+                                {new Date(expiryDate).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' })}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">-</span>
+                            )}
+                          </TableCell>
+                        </>
+                      )
+                    })()}
                     <TableCell className="text-right tabular-nums">{alloc.requested_quantity.toLocaleString('fr-FR')}</TableCell>
 
                     <TableCell className="text-right min-w-[100px]">

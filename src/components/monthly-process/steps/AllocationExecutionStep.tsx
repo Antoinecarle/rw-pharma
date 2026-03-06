@@ -1,162 +1,29 @@
 import { useState, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { runAllocation, computeStats, type AllocationStrategy, type AllocationLog, type DryRunStats } from '@/lib/allocation-engine'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
-import { Cpu, ArrowRight, CheckCircle, AlertTriangle, Package, Truck, Zap, Users, BarChart3, Eye, Settings2 } from 'lucide-react'
+import {
+  Tooltip, TooltipContent, TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { Cpu, ArrowRight, CheckCircle, AlertTriangle, Package, Truck, Zap, Users, BarChart3, Eye, Settings2, Boxes, ShieldCheck, TrendingUp } from 'lucide-react'
 import { toast } from 'sonner'
 import type { MonthlyProcess } from '@/types/database'
 
-type AllocationStrategy = 'balanced' | 'top_clients' | 'max_coverage'
-
 const STRATEGIES: { value: AllocationStrategy; label: string; description: string; icon: typeof Zap }[] = [
-  { value: 'balanced', label: 'Equilibree', description: 'Repartir proportionnellement entre les grossistes', icon: BarChart3 },
+  { value: 'balanced', label: 'Equilibree', description: 'Repartir entre grossistes + round-robin clients', icon: BarChart3 },
   { value: 'top_clients', label: 'Priorite top clients', description: 'Servir les clients prioritaires en premier', icon: Users },
-  { value: 'max_coverage', label: 'Max couverture', description: 'Minimiser les produits a 0% de couverture', icon: Zap },
+  { value: 'max_coverage', label: 'Max couverture', description: 'Petites commandes en premier pour couvrir plus', icon: Zap },
 ]
-
-interface AllocationLog {
-  customer: string
-  product: string
-  wholesaler: string
-  requested: number
-  allocated: number
-  full: boolean
-}
-
-interface DryRunResult {
-  totalAllocations: number
-  totalRequested: number
-  totalAllocated: number
-  fulfillmentRate: string
-  zeroProducts: number
-  byWholesaler: { code: string; count: number; qty: number }[]
-  byCustomer: { code: string; count: number; qty: number }[]
-}
 
 interface AllocationExecutionStepProps {
   process: MonthlyProcess
   onNext: () => void
-}
-
-// Core allocation logic shared by dry-run and real execution
-async function runAllocationAlgorithm(
-  processId: string,
-  month: number,
-  year: number,
-  strategy: AllocationStrategy,
-  excludedWholesalers: Set<string>,
-) {
-  const { data: orders } = await supabase
-    .from('orders')
-    .select('id, customer_id, product_id, quantity, customer:customers(id, code, is_top_client)')
-    .eq('monthly_process_id', processId)
-    .in('status', ['validated', 'pending'])
-
-  const ordersList = orders ?? []
-  if (ordersList.length === 0) throw new Error('Aucune commande a allouer')
-
-  const { data: wholesalers } = await supabase.from('wholesalers').select('id, name, code')
-  const availableWholesalers = (wholesalers ?? []).filter(w => !excludedWholesalers.has(w.id))
-  if (availableWholesalers.length === 0) throw new Error('Aucun grossiste disponible')
-
-  const monthDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const { data: quotas } = await supabase
-    .from('wholesaler_quotas')
-    .select('*')
-    .eq('month', monthDate)
-
-  // Build quota map: productId -> [{wholesaler_id, remaining}]
-  const quotaMap = new Map<string, { wholesaler_id: string; remaining: number }[]>()
-  for (const q of quotas ?? []) {
-    if (excludedWholesalers.has(q.wholesaler_id)) continue
-    const list = quotaMap.get(q.product_id) ?? []
-    list.push({ wholesaler_id: q.wholesaler_id, remaining: q.quota_quantity + (q.extra_available ?? 0) })
-    quotaMap.set(q.product_id, list)
-  }
-
-  // Sort orders based on strategy
-  let sortedOrders = [...ordersList]
-  if (strategy === 'top_clients') {
-    sortedOrders.sort((a, b) => {
-      const aTop = (a.customer as unknown as { is_top_client?: boolean })?.is_top_client ? 0 : 1
-      const bTop = (b.customer as unknown as { is_top_client?: boolean })?.is_top_client ? 0 : 1
-      return aTop - bTop
-    })
-  } else if (strategy === 'max_coverage') {
-    // Process orders with smaller quantities first to maximize coverage
-    sortedOrders.sort((a, b) => a.quantity - b.quantity)
-  }
-
-  const wholesalerMap = new Map(availableWholesalers.map(w => [w.id, w]))
-  const customerCodeMap = new Map<string, string>()
-  for (const o of ordersList) {
-    const cust = o.customer as unknown as { id: string; code: string } | undefined
-    if (cust) customerCodeMap.set(o.customer_id, cust.code ?? '?')
-  }
-
-  const allocations: {
-    monthly_process_id: string
-    order_id: string
-    customer_id: string
-    product_id: string
-    wholesaler_id: string
-    requested_quantity: number
-    allocated_quantity: number
-    status: 'proposed'
-    metadata: Record<string, unknown>
-  }[] = []
-
-  const logs: AllocationLog[] = []
-
-  for (const order of sortedOrders) {
-    const available = quotaMap.get(order.product_id)
-    let allocatedQty = 0
-    let selectedWholesaler = availableWholesalers[0].id
-
-    if (available && available.length > 0) {
-      if (strategy === 'balanced') {
-        // Spread across wholesalers proportionally
-        available.sort((a, b) => b.remaining - a.remaining)
-      } else {
-        available.sort((a, b) => b.remaining - a.remaining)
-      }
-      const best = available[0]
-      selectedWholesaler = best.wholesaler_id
-      allocatedQty = Math.min(order.quantity, best.remaining)
-      best.remaining -= allocatedQty
-    } else {
-      allocatedQty = order.quantity
-    }
-
-    allocations.push({
-      monthly_process_id: processId,
-      order_id: order.id,
-      customer_id: order.customer_id,
-      product_id: order.product_id,
-      wholesaler_id: selectedWholesaler,
-      requested_quantity: order.quantity,
-      allocated_quantity: allocatedQty,
-      status: 'proposed',
-      metadata: {},
-    })
-
-    const ws = wholesalerMap.get(selectedWholesaler)
-    logs.push({
-      customer: customerCodeMap.get(order.customer_id) ?? '?',
-      product: order.product_id.slice(0, 8),
-      wholesaler: ws?.code ?? '?',
-      requested: order.quantity,
-      allocated: allocatedQty,
-      full: allocatedQty >= order.quantity,
-    })
-  }
-
-  return { allocations, logs }
 }
 
 export default function AllocationExecutionStep({ process, onNext }: AllocationExecutionStepProps) {
@@ -164,7 +31,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
   const [phase, setPhase] = useState<'config' | 'running' | 'done'>('config')
   const [strategy, setStrategy] = useState<AllocationStrategy>('balanced')
   const [excludedWholesalers, setExcludedWholesalers] = useState<Set<string>>(new Set())
-  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null)
+  const [dryRunResult, setDryRunResult] = useState<DryRunStats | null>(null)
   const [allocationLogs, setAllocationLogs] = useState<AllocationLog[]>([])
   const [showLogs, setShowLogs] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
@@ -201,6 +68,17 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     },
   })
 
+  const { data: stockCount } = useQuery({
+    queryKey: ['collected_stock', 'count'],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('collected_stock')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['received', 'partially_allocated'])
+      return count ?? 0
+    },
+  })
+
   const toggleWholesaler = (id: string) => {
     setExcludedWholesalers(prev => {
       const next = new Set(prev)
@@ -208,56 +86,16 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       else next.add(id)
       return next
     })
-    setDryRunResult(null) // Reset dry run when config changes
+    setDryRunResult(null)
   }
 
   const dryRunMut = useMutation({
     mutationFn: async () => {
-      const { allocations, logs } = await runAllocationAlgorithm(
+      const { allocations, logs } = await runAllocation(
         process.id, process.month, process.year, strategy, excludedWholesalers,
       )
       setAllocationLogs(logs)
-
-      const totalRequested = allocations.reduce((s, a) => s + a.requested_quantity, 0)
-      const totalAllocated = allocations.reduce((s, a) => s + a.allocated_quantity, 0)
-
-      // Count zero-coverage products
-      const productCoverage = new Map<string, { req: number; alloc: number }>()
-      for (const a of allocations) {
-        const existing = productCoverage.get(a.product_id) ?? { req: 0, alloc: 0 }
-        existing.req += a.requested_quantity
-        existing.alloc += a.allocated_quantity
-        productCoverage.set(a.product_id, existing)
-      }
-      const zeroProducts = [...productCoverage.values()].filter(p => p.alloc === 0).length
-
-      // Group by wholesaler
-      const byWholesaler = new Map<string, { code: string; count: number; qty: number }>()
-      for (const a of allocations) {
-        const ws = (wholesalers ?? []).find(w => w.id === a.wholesaler_id)
-        const key = a.wholesaler_id
-        const existing = byWholesaler.get(key)
-        if (existing) { existing.count++; existing.qty += a.allocated_quantity }
-        else byWholesaler.set(key, { code: ws?.code ?? '?', count: 1, qty: a.allocated_quantity })
-      }
-
-      // Group by customer
-      const byCustomer = new Map<string, { code: string; count: number; qty: number }>()
-      for (const log of logs) {
-        const existing = byCustomer.get(log.customer)
-        if (existing) { existing.count++; existing.qty += log.allocated }
-        else byCustomer.set(log.customer, { code: log.customer, count: 1, qty: log.allocated })
-      }
-
-      return {
-        totalAllocations: allocations.length,
-        totalRequested,
-        totalAllocated,
-        fulfillmentRate: totalRequested > 0 ? ((totalAllocated / totalRequested) * 100).toFixed(1) : '0',
-        zeroProducts,
-        byWholesaler: [...byWholesaler.values()],
-        byCustomer: [...byCustomer.values()],
-      }
+      return computeStats(allocations, logs, wholesalers ?? [])
     },
     onSuccess: (result) => {
       setDryRunResult(result)
@@ -271,7 +109,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       setPhase('running')
       setShowLogs(true)
 
-      const { allocations, logs } = await runAllocationAlgorithm(
+      const { allocations, logs } = await runAllocation(
         process.id, process.month, process.year, strategy, excludedWholesalers,
       )
       setAllocationLogs(logs)
@@ -313,6 +151,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
   })
 
   const orderCount = orderStats?.length ?? 0
+  const uniqueProducts = new Set(orderStats?.map(o => o.product_id)).size
   const fulfillmentNum = dryRunResult ? parseFloat(dryRunResult.fulfillmentRate) : 0
   const fulfillmentColor = fulfillmentNum >= 90 ? 'text-green-600' : fulfillmentNum >= 70 ? 'text-amber-600' : 'text-red-600'
 
@@ -339,26 +178,48 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       {phase === 'config' && (
         <div className="space-y-5">
           {/* Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card>
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="h-11 w-11 rounded-xl bg-blue-50 dark:bg-blue-950 flex items-center justify-center shrink-0">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-blue-50 dark:bg-blue-950 flex items-center justify-center shrink-0">
                   <Package className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{orderCount}</p>
-                  <p className="text-xs text-muted-foreground">Commandes a traiter</p>
+                  <p className="text-xl font-bold">{orderCount}</p>
+                  <p className="text-[11px] text-muted-foreground">Commandes</p>
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="h-11 w-11 rounded-xl bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center shrink-0">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center shrink-0">
                   <Truck className="h-5 w-5 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{(wholesalers?.length ?? 0) - excludedWholesalers.size}</p>
-                  <p className="text-xs text-muted-foreground">Grossistes actifs</p>
+                  <p className="text-xl font-bold">{(wholesalers?.length ?? 0) - excludedWholesalers.size}</p>
+                  <p className="text-[11px] text-muted-foreground">Grossistes actifs</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-violet-50 dark:bg-violet-950 flex items-center justify-center shrink-0">
+                  <TrendingUp className="h-5 w-5 text-violet-600" />
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{uniqueProducts}</p>
+                  <p className="text-[11px] text-muted-foreground">Produits</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-amber-50 dark:bg-amber-950 flex items-center justify-center shrink-0">
+                  <Boxes className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{stockCount ?? 0}</p>
+                  <p className="text-[11px] text-muted-foreground">Lots en stock</p>
                 </div>
               </CardContent>
             </Card>
@@ -421,6 +282,34 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
             </div>
           )}
 
+          {/* Engine features indicator */}
+          <div className="flex flex-wrap gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <ShieldCheck className="h-3 w-3" /> Quotas stricts
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>L'algorithme respecte les quotas grossistes et ne depasse jamais les limites</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className={`gap-1 text-xs ${(stockCount ?? 0) > 0 ? 'border-green-200 text-green-700' : ''}`}>
+                  <Boxes className="h-3 w-3" /> FEFO {(stockCount ?? 0) > 0 ? 'actif' : 'aucun lot'}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>First Expiry First Out — les lots proches de l'expiration sont alloues en priorite</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <Users className="h-3 w-3" /> Priorite multi-niveaux
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Scoring base sur is_top_client + priority_level (1-5) + max_allocation_pct</TooltipContent>
+            </Tooltip>
+          </div>
+
           <Separator />
 
           {/* Dry run */}
@@ -444,9 +333,14 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 <div className="flex items-center gap-2">
                   <Eye className="h-4 w-4 text-primary" />
                   <h4 className="text-sm font-semibold">Resultat de la simulation</h4>
+                  {dryRunResult.lotAllocations > 0 && (
+                    <Badge variant="secondary" className="text-[10px] ml-auto gap-1">
+                      <Boxes className="h-3 w-3" /> {dryRunResult.lotAllocations} lots alloues
+                    </Badge>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <div className="text-center">
                     <p className="text-xl font-bold">{dryRunResult.totalAllocations}</p>
                     <p className="text-xs text-muted-foreground">Allocations</p>
@@ -465,6 +359,10 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                     </p>
                     <p className="text-xs text-muted-foreground">Produits a 0%</p>
                   </div>
+                  <div className="text-center">
+                    <p className="text-xl font-bold text-violet-600">{dryRunResult.lotAllocations}</p>
+                    <p className="text-xs text-muted-foreground">Via lots</p>
+                  </div>
                 </div>
 
                 {/* Coverage bar */}
@@ -475,6 +373,24 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                     <span>{dryRunResult.totalRequested.toLocaleString('fr-FR')} demandees</span>
                   </div>
                 </div>
+
+                {/* Quota utilization */}
+                {dryRunResult.quotaUtilization.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Utilisation des quotas</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {dryRunResult.quotaUtilization.map(q => {
+                        const pct = q.total > 0 ? Math.round((q.used / q.total) * 100) : 0
+                        return (
+                          <Badge key={q.wholesalerCode} variant="outline" className={`text-xs gap-1 ${pct > 90 ? 'border-red-200 text-red-700' : pct > 70 ? 'border-amber-200 text-amber-700' : ''}`}>
+                            <span className="font-bold">{q.wholesalerCode}</span>
+                            {pct}% ({q.used}/{q.total})
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Breakdowns */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -490,13 +406,18 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                     </div>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Par client</p>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Par client (priorite)</p>
                     <div className="flex flex-wrap gap-1.5">
                       {dryRunResult.byCustomer.map(c => (
-                        <Badge key={c.code} variant="outline" className="text-xs gap-1">
-                          <span className="font-bold">{c.code}</span>
-                          {c.qty.toLocaleString('fr-FR')} u.
-                        </Badge>
+                        <Tooltip key={c.code}>
+                          <TooltipTrigger asChild>
+                            <Badge variant="outline" className="text-xs gap-1 cursor-help">
+                              <span className="font-bold">{c.code}</span>
+                              {c.qty.toLocaleString('fr-FR')} u.
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>Score priorite: {c.priority}</TooltipContent>
+                        </Tooltip>
                       ))}
                     </div>
                   </div>
@@ -516,6 +437,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 <p className="text-sm text-muted-foreground mt-1">
                   Strategie : <strong>{STRATEGIES.find(s => s.value === strategy)?.label}</strong>
                   {' '}&middot; {orderCount} commandes &middot; {(wholesalers?.length ?? 0) - excludedWholesalers.size} grossistes
+                  {(stockCount ?? 0) > 0 && <> &middot; {stockCount} lots</>}
                 </p>
               </div>
               <Button
@@ -562,6 +484,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                       <span>[{log.customer}]</span>
                       <span className="truncate flex-1">{log.product}...</span>
                       <span>→ {log.wholesaler}</span>
+                      {log.lot && <span className="text-violet-500">L:{log.lot.slice(0, 6)}</span>}
                       <span className="tabular-nums">{log.allocated}/{log.requested}</span>
                       <span>{log.full ? '✓' : '⚠'}</span>
                     </div>

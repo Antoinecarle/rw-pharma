@@ -12,6 +12,7 @@ import CustomersPage from '@/pages/CustomersPage'
 import QuotasPage from '@/pages/QuotasPage'
 import MonthlyProcessesPage from '@/pages/MonthlyProcessesPage'
 import MonthlyProcessDetailPage from '@/pages/MonthlyProcessDetailPage'
+import AllocationDashboardPage from '@/pages/AllocationDashboardPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -84,6 +85,7 @@ function AppRoutes() {
         <Route path="customers" element={<CustomersPage />} />
         <Route path="monthly-processes" element={<MonthlyProcessesPage />} />
         <Route path="monthly-processes/:id" element={<MonthlyProcessDetailPage />} />
+        <Route path="allocation-dashboard" element={<AllocationDashboardPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

@@ -22,6 +22,7 @@ import {
   CalendarRange,
   ChevronRight,
   Command,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import CommandPalette from '@/components/CommandPalette'
@@ -29,6 +30,7 @@ import CommandPalette from '@/components/CommandPalette'
 const mainNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, description: 'Vue d\'ensemble' },
   { name: 'Allocations', href: '/monthly-processes', icon: CalendarRange, description: 'Processus mensuels' },
+  { name: 'Metriques', href: '/allocation-dashboard', icon: BarChart3, description: 'Dashboard allocation' },
 ]
 
 const referenceNavigation = [
