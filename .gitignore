@@ -31,3 +31,6 @@ bun.lock
 .playwright-mcp/
 supabase/.temp/
 *.png
+
+# AI chat uploads
+.uploads/
