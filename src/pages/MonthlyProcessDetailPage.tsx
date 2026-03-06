@@ -18,6 +18,7 @@ import WholesalerExportStep from '@/components/monthly-process/steps/WholesalerE
 import StockImportStep from '@/components/monthly-process/steps/StockImportStep'
 import AllocationReviewStep from '@/components/monthly-process/steps/AllocationReviewStep'
 import FinalizationStep from '@/components/monthly-process/steps/FinalizationStep'
+import DemoDataLoader from '@/components/monthly-process/DemoDataLoader'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useState, useCallback, useRef } from 'react'
 import type { MonthlyProcess } from '@/types/database'
@@ -198,6 +199,9 @@ export default function MonthlyProcessDetailPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* Demo data loader — dev only */}
+      <DemoDataLoader />
 
       {/* Stepper */}
       <motion.div

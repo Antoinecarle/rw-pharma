@@ -1,0 +1,95 @@
+{
+  "name": "Scenario Complet - Multi-clients",
+  "description": "Scenario de demonstration simulant un mois complet avec 6 clients, 10 produits, 4 grossistes, quotas, commandes, stock collecte, lots et allocations.",
+  "month": 12,
+  "year": 2025,
+
+  "products_cip13": [
+    "3400000000531", "3400000000951", "3400000000293",
+    "3400000000328", "3400000006075", "3400000003464",
+    "3400000003485", "3400000000286", "3400000000300",
+    "3400000000335"
+  ],
+
+  "customers_codes": ["ORI", "MPA", "CC", "AXI", "BROCACEF", "2CARE4"],
+  "wholesalers_codes": ["ALLIANCE", "CERP", "OCP", "PHOENIX"],
+
+  "quotas": [
+    { "wholesaler": "ALLIANCE", "product_cip13": "3400000000531", "quota_quantity": 500, "extra_available": 50 },
+    { "wholesaler": "ALLIANCE", "product_cip13": "3400000000951", "quota_quantity": 300, "extra_available": 30 },
+    { "wholesaler": "ALLIANCE", "product_cip13": "3400000000293", "quota_quantity": 200, "extra_available": 20 },
+    { "wholesaler": "ALLIANCE", "product_cip13": "3400000006075", "quota_quantity": 150, "extra_available": 10 },
+    { "wholesaler": "CERP", "product_cip13": "3400000000531", "quota_quantity": 400, "extra_available": 40 },
+    { "wholesaler": "CERP", "product_cip13": "3400000000951", "quota_quantity": 250, "extra_available": 25 },
+    { "wholesaler": "CERP", "product_cip13": "3400000000328", "quota_quantity": 180, "extra_available": 15 },
+    { "wholesaler": "CERP", "product_cip13": "3400000003464", "quota_quantity": 120, "extra_available": 10 },
+    { "wholesaler": "OCP", "product_cip13": "3400000000531", "quota_quantity": 350, "extra_available": 30 },
+    { "wholesaler": "OCP", "product_cip13": "3400000000293", "quota_quantity": 280, "extra_available": 20 },
+    { "wholesaler": "OCP", "product_cip13": "3400000003485", "quota_quantity": 100, "extra_available": 10 },
+    { "wholesaler": "OCP", "product_cip13": "3400000000286", "quota_quantity": 220, "extra_available": 15 },
+    { "wholesaler": "PHOENIX", "product_cip13": "3400000000951", "quota_quantity": 200, "extra_available": 20 },
+    { "wholesaler": "PHOENIX", "product_cip13": "3400000000328", "quota_quantity": 150, "extra_available": 10 },
+    { "wholesaler": "PHOENIX", "product_cip13": "3400000000300", "quota_quantity": 180, "extra_available": 15 },
+    { "wholesaler": "PHOENIX", "product_cip13": "3400000000335", "quota_quantity": 160, "extra_available": 10 }
+  ],
+
+  "orders": [
+    { "customer": "ORI", "product_cip13": "3400000000531", "quantity": 350, "unit_price": 12.50 },
+    { "customer": "ORI", "product_cip13": "3400000000951", "quantity": 200, "unit_price": 8.75 },
+    { "customer": "ORI", "product_cip13": "3400000000293", "quantity": 150, "unit_price": 5.20 },
+    { "customer": "ORI", "product_cip13": "3400000006075", "quantity": 80, "unit_price": 15.30 },
+    { "customer": "MPA", "product_cip13": "3400000000531", "quantity": 280, "unit_price": 12.80 },
+    { "customer": "MPA", "product_cip13": "3400000000951", "quantity": 180, "unit_price": 8.90 },
+    { "customer": "MPA", "product_cip13": "3400000000328", "quantity": 120, "unit_price": 6.40 },
+    { "customer": "MPA", "product_cip13": "3400000003464", "quantity": 60, "unit_price": 22.50 },
+    { "customer": "CC", "product_cip13": "3400000000531", "quantity": 220, "unit_price": 12.30 },
+    { "customer": "CC", "product_cip13": "3400000000293", "quantity": 160, "unit_price": 5.10 },
+    { "customer": "CC", "product_cip13": "3400000003485", "quantity": 50, "unit_price": 28.00 },
+    { "customer": "CC", "product_cip13": "3400000000286", "quantity": 100, "unit_price": 4.60 },
+    { "customer": "AXI", "product_cip13": "3400000000951", "quantity": 150, "unit_price": 8.60 },
+    { "customer": "AXI", "product_cip13": "3400000000328", "quantity": 90, "unit_price": 6.20 },
+    { "customer": "AXI", "product_cip13": "3400000000300", "quantity": 100, "unit_price": 5.50 },
+    { "customer": "AXI", "product_cip13": "3400000000335", "quantity": 80, "unit_price": 7.10 },
+    { "customer": "BROCACEF", "product_cip13": "3400000000531", "quantity": 180, "unit_price": 12.60 },
+    { "customer": "BROCACEF", "product_cip13": "3400000000951", "quantity": 120, "unit_price": 8.80 },
+    { "customer": "BROCACEF", "product_cip13": "3400000006075", "quantity": 70, "unit_price": 15.00 },
+    { "customer": "2CARE4", "product_cip13": "3400000000531", "quantity": 150, "unit_price": 12.40 },
+    { "customer": "2CARE4", "product_cip13": "3400000000293", "quantity": 100, "unit_price": 5.00 },
+    { "customer": "2CARE4", "product_cip13": "3400000003464", "quantity": 40, "unit_price": 22.00 }
+  ],
+
+  "lots": [
+    { "product_cip13": "3400000000531", "lot_number": "L2025-K531-A", "expiry_date": "2026-09-30" },
+    { "product_cip13": "3400000000531", "lot_number": "L2025-K531-B", "expiry_date": "2026-06-15" },
+    { "product_cip13": "3400000000951", "lot_number": "L2025-A951-A", "expiry_date": "2026-11-30" },
+    { "product_cip13": "3400000000951", "lot_number": "L2025-A951-B", "expiry_date": "2026-08-20" },
+    { "product_cip13": "3400000000293", "lot_number": "L2025-ADV2-A", "expiry_date": "2027-01-31" },
+    { "product_cip13": "3400000000293", "lot_number": "L2025-ADV2-B", "expiry_date": "2026-07-15" },
+    { "product_cip13": "3400000000328", "lot_number": "L2025-ADV4-A", "expiry_date": "2026-12-31" },
+    { "product_cip13": "3400000006075", "lot_number": "L2025-AER5-A", "expiry_date": "2026-10-15" },
+    { "product_cip13": "3400000003464", "lot_number": "L2025-ABI1-A", "expiry_date": "2027-03-31" },
+    { "product_cip13": "3400000003485", "lot_number": "L2025-ABI5-A", "expiry_date": "2026-08-31" },
+    { "product_cip13": "3400000000286", "lot_number": "L2025-ADV1-A", "expiry_date": "2027-02-28" },
+    { "product_cip13": "3400000000300", "lot_number": "L2025-ADVC-A", "expiry_date": "2026-09-15" },
+    { "product_cip13": "3400000000335", "lot_number": "L2025-AV4C-A", "expiry_date": "2026-11-30" }
+  ],
+
+  "collected_stock": [
+    { "wholesaler": "ALLIANCE", "product_cip13": "3400000000531", "lot_number": "L2025-K531-A", "quantity": 450, "unit_cost": 10.20 },
+    { "wholesaler": "ALLIANCE", "product_cip13": "3400000000951", "lot_number": "L2025-A951-A", "quantity": 280, "unit_cost": 7.10 },
+    { "wholesaler": "ALLIANCE", "product_cip13": "3400000000293", "lot_number": "L2025-ADV2-A", "quantity": 180, "unit_cost": 4.30 },
+    { "wholesaler": "ALLIANCE", "product_cip13": "3400000006075", "lot_number": "L2025-AER5-A", "quantity": 140, "unit_cost": 12.50 },
+    { "wholesaler": "CERP", "product_cip13": "3400000000531", "lot_number": "L2025-K531-B", "quantity": 380, "unit_cost": 10.10 },
+    { "wholesaler": "CERP", "product_cip13": "3400000000951", "lot_number": "L2025-A951-B", "quantity": 230, "unit_cost": 7.00 },
+    { "wholesaler": "CERP", "product_cip13": "3400000000328", "lot_number": "L2025-ADV4-A", "quantity": 170, "unit_cost": 5.20 },
+    { "wholesaler": "CERP", "product_cip13": "3400000003464", "lot_number": "L2025-ABI1-A", "quantity": 110, "unit_cost": 18.00 },
+    { "wholesaler": "OCP", "product_cip13": "3400000000531", "lot_number": "L2025-K531-A", "quantity": 320, "unit_cost": 10.30 },
+    { "wholesaler": "OCP", "product_cip13": "3400000000293", "lot_number": "L2025-ADV2-B", "quantity": 260, "unit_cost": 4.20 },
+    { "wholesaler": "OCP", "product_cip13": "3400000003485", "lot_number": "L2025-ABI5-A", "quantity": 90, "unit_cost": 24.00 },
+    { "wholesaler": "OCP", "product_cip13": "3400000000286", "lot_number": "L2025-ADV1-A", "quantity": 200, "unit_cost": 3.80 },
+    { "wholesaler": "PHOENIX", "product_cip13": "3400000000951", "lot_number": "L2025-A951-A", "quantity": 190, "unit_cost": 7.20 },
+    { "wholesaler": "PHOENIX", "product_cip13": "3400000000328", "lot_number": "L2025-ADV4-A", "quantity": 140, "unit_cost": 5.30 },
+    { "wholesaler": "PHOENIX", "product_cip13": "3400000000300", "lot_number": "L2025-ADVC-A", "quantity": 170, "unit_cost": 4.50 },
+    { "wholesaler": "PHOENIX", "product_cip13": "3400000000335", "lot_number": "L2025-AV4C-A", "quantity": 150, "unit_cost": 5.80 }
+  ]
+}
