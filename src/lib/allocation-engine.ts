@@ -74,8 +74,18 @@ export interface AllocationResult {
   }
 }
 
+export type AllocationReason =
+  | 'fefo_lot'        // Allocated from collected_stock (FEFO)
+  | 'quota'           // Allocated from wholesaler quota
+  | 'quota_balanced'  // Quota split across multiple wholesalers
+  | 'fallback'        // No quota/stock — even distribution
+  | 'fallback_single' // No quota/stock — single wholesaler
+  | 'max_pct_cap'     // Quantity reduced by max_allocation_pct
+
 export interface AllocationLog {
+  step: number
   customer: string
+  customerName: string
   product: string
   wholesaler: string
   requested: number
@@ -84,6 +94,8 @@ export interface AllocationLog {
   lot?: string
   expiry?: string
   priority: number
+  reason: AllocationReason
+  detail: string
 }
 
 export interface DryRunStats {
@@ -363,6 +375,34 @@ export async function runAllocation(
   // 4. Allocate
   const allocations: AllocationResult[] = []
   const logs: AllocationLog[] = []
+  let stepCounter = 0
+
+  const pushLog = (
+    order: OrderRow,
+    wsCode: string,
+    allocated: number,
+    remaining: number,
+    reason: AllocationReason,
+    detail: string,
+    lot?: string,
+    expiry?: string,
+  ) => {
+    logs.push({
+      step: ++stepCounter,
+      customer: order.customer?.code ?? '?',
+      customerName: order.customer?.name ?? '?',
+      product: order.product_id.slice(0, 8),
+      wholesaler: wsCode,
+      requested: order.quantity,
+      allocated,
+      full: remaining <= 0,
+      lot,
+      expiry,
+      priority: getCustomerPriority(order),
+      reason,
+      detail,
+    })
+  }
 
   for (const order of sortedOrders) {
     const prefs = (order.customer?.allocation_preferences ?? {}) as AllocationPrefs
@@ -371,9 +411,12 @@ export async function runAllocation(
 
     // Apply max allocation % limit
     const maxPct = prefs.max_allocation_pct
-    remainingToAllocate = maxAllocTracker.canAllocate(order.customer_id, maxPct, remainingToAllocate)
-
-    // Try allocation from different sources
+    const cappedQty = maxAllocTracker.canAllocate(order.customer_id, maxPct, remainingToAllocate)
+    if (cappedQty < remainingToAllocate) {
+      pushLog(order, '-', 0, remainingToAllocate, 'max_pct_cap',
+        `Limite ${maxPct}% : ${remainingToAllocate} → ${cappedQty} u.`)
+      remainingToAllocate = cappedQty
+    }
 
     // Source 1: Collected stock (lot-level, FEFO)
     if (remainingToAllocate > 0 && stockTracker.hasStockFor(order.product_id)) {
@@ -408,17 +451,9 @@ export async function runAllocation(
           remainingToAllocate -= consumed
 
           const ws = wsMap.get(lot.wholesalerId)
-          logs.push({
-            customer: order.customer?.code ?? '?',
-            product: order.product_id.slice(0, 8),
-            wholesaler: ws?.code ?? '?',
-            requested: order.quantity,
-            allocated: consumed,
-            full: remainingToAllocate <= 0,
-            lot: lot.lotNumber,
-            expiry: lot.expiryDate,
-            priority: priorityScore,
-          })
+          pushLog(order, ws?.code ?? '?', consumed, remainingToAllocate, 'fefo_lot',
+            `Lot ${lot.lotNumber} (exp. ${lot.expiryDate}) via ${ws?.code ?? '?'}`,
+            lot.lotNumber, lot.expiryDate)
         }
       }
     }
@@ -428,7 +463,6 @@ export async function runAllocation(
       const available = quotaTracker.getAvailable(order.product_id)
 
       if (strategy === 'balanced' && available.length > 1) {
-        // Balanced: split across wholesalers proportionally
         const totalRemaining = available.reduce((s, a) => s + a.remaining, 0)
 
         for (const ws of available) {
@@ -449,30 +483,18 @@ export async function runAllocation(
               requested_quantity: order.quantity,
               allocated_quantity: consumed,
               status: 'proposed',
-              metadata: {
-                strategy,
-                priority_score: priorityScore,
-                quota_used: true,
-              },
+              metadata: { strategy, priority_score: priorityScore, quota_used: true },
             })
 
             maxAllocTracker.record(order.customer_id, consumed)
             remainingToAllocate -= consumed
 
             const wsInfo = wsMap.get(ws.wholesalerId)
-            logs.push({
-              customer: order.customer?.code ?? '?',
-              product: order.product_id.slice(0, 8),
-              wholesaler: wsInfo?.code ?? '?',
-              requested: order.quantity,
-              allocated: consumed,
-              full: remainingToAllocate <= 0,
-              priority: priorityScore,
-            })
+            pushLog(order, wsInfo?.code ?? '?', consumed, remainingToAllocate, 'quota_balanced',
+              `Quota reparti ${consumed}/${toAllocate} u. (${Math.round((ws.remaining / totalRemaining) * 100)}% share)`)
           }
         }
       } else {
-        // Top clients / Max coverage: pick best wholesaler (most remaining)
         for (const ws of available) {
           if (remainingToAllocate <= 0) break
 
@@ -488,36 +510,23 @@ export async function runAllocation(
               requested_quantity: order.quantity,
               allocated_quantity: consumed,
               status: 'proposed',
-              metadata: {
-                strategy,
-                priority_score: priorityScore,
-                quota_used: true,
-              },
+              metadata: { strategy, priority_score: priorityScore, quota_used: true },
             })
 
             maxAllocTracker.record(order.customer_id, consumed)
             remainingToAllocate -= consumed
 
             const wsInfo = wsMap.get(ws.wholesalerId)
-            logs.push({
-              customer: order.customer?.code ?? '?',
-              product: order.product_id.slice(0, 8),
-              wholesaler: wsInfo?.code ?? '?',
-              requested: order.quantity,
-              allocated: consumed,
-              full: remainingToAllocate <= 0,
-              priority: priorityScore,
-            })
+            pushLog(order, wsInfo?.code ?? '?', consumed, remainingToAllocate, 'quota',
+              `Quota direct ${consumed} u. (reste ${ws.remaining - consumed})`)
           }
         }
       }
     }
 
-    // Source 3: Fallback — no quota/stock, distribute evenly across wholesalers
+    // Source 3: Fallback
     if (remainingToAllocate > 0 && allocations.filter(a => a.order_id === order.id).length === 0) {
-      // No quota and no stock for this product — fallback allocation
       if (strategy === 'balanced' && availableWholesalers.length > 1) {
-        // Split evenly
         const perWs = Math.ceil(remainingToAllocate / availableWholesalers.length)
         for (const ws of availableWholesalers) {
           if (remainingToAllocate <= 0) break
@@ -533,28 +542,16 @@ export async function runAllocation(
             requested_quantity: order.quantity,
             allocated_quantity: qty,
             status: 'proposed',
-            metadata: {
-              strategy,
-              priority_score: priorityScore,
-              quota_used: false,
-            },
+            metadata: { strategy, priority_score: priorityScore, quota_used: false },
           })
 
           maxAllocTracker.record(order.customer_id, qty)
           remainingToAllocate -= qty
 
-          logs.push({
-            customer: order.customer?.code ?? '?',
-            product: order.product_id.slice(0, 8),
-            wholesaler: ws.code ?? '?',
-            requested: order.quantity,
-            allocated: qty,
-            full: remainingToAllocate <= 0,
-            priority: priorityScore,
-          })
+          pushLog(order, ws.code ?? '?', qty, remainingToAllocate, 'fallback',
+            `Aucun quota/stock — repartition egale ${qty} u.`)
         }
       } else {
-        // Single wholesaler fallback
         const ws = availableWholesalers[0]
         allocations.push({
           monthly_process_id: processId,
@@ -566,24 +563,13 @@ export async function runAllocation(
           requested_quantity: order.quantity,
           allocated_quantity: remainingToAllocate,
           status: 'proposed',
-          metadata: {
-            strategy,
-            priority_score: priorityScore,
-            quota_used: false,
-          },
+          metadata: { strategy, priority_score: priorityScore, quota_used: false },
         })
 
         maxAllocTracker.record(order.customer_id, remainingToAllocate)
 
-        logs.push({
-          customer: order.customer?.code ?? '?',
-          product: order.product_id.slice(0, 8),
-          wholesaler: ws.code ?? '?',
-          requested: order.quantity,
-          allocated: remainingToAllocate,
-          full: true,
-          priority: priorityScore,
-        })
+        pushLog(order, ws.code ?? '?', remainingToAllocate, 0, 'fallback_single',
+          `Aucun quota/stock — grossiste unique ${remainingToAllocate} u.`)
 
         remainingToAllocate = 0
       }

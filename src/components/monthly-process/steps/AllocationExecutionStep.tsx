@@ -11,7 +11,8 @@ import { Separator } from '@/components/ui/separator'
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Cpu, ArrowRight, CheckCircle, AlertTriangle, Package, Truck, Zap, Users, BarChart3, Eye, Settings2, Boxes, ShieldCheck, TrendingUp } from 'lucide-react'
+import { Cpu, ArrowRight, CheckCircle, AlertTriangle, Package, Truck, Zap, Users, BarChart3, Eye, Settings2, Boxes, ShieldCheck, TrendingUp, Play } from 'lucide-react'
+import AllocationVisualizer from '@/components/allocations/AllocationVisualizer'
 import { toast } from 'sonner'
 import type { MonthlyProcess } from '@/types/database'
 
@@ -34,6 +35,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
   const [dryRunResult, setDryRunResult] = useState<DryRunStats | null>(null)
   const [allocationLogs, setAllocationLogs] = useState<AllocationLog[]>([])
   const [showLogs, setShowLogs] = useState(false)
+  const [showVisualizer, setShowVisualizer] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
 
   const { data: existingAllocations } = useQuery({
@@ -426,6 +428,18 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
             </Card>
           )}
 
+          {/* Visualizer toggle after dry-run */}
+          {dryRunResult && allocationLogs.length > 0 && !showVisualizer && (
+            <Button variant="outline" onClick={() => setShowVisualizer(true)} className="gap-2">
+              <Play className="h-4 w-4" />
+              Visualiser l'execution ({allocationLogs.length} etapes)
+            </Button>
+          )}
+
+          {showVisualizer && allocationLogs.length > 0 && (
+            <AllocationVisualizer logs={allocationLogs} onClose={() => setShowVisualizer(false)} />
+          )}
+
           {/* Launch button */}
           <Card className="ivory-card-highlight">
             <CardContent className="p-6 text-center space-y-4">
@@ -507,9 +521,21 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
               {allocateMut.data} allocations generees avec la strategie "{STRATEGIES.find(s => s.value === strategy)?.label}".
             </p>
           </div>
-          <Button onClick={onNext} size="lg" className="gap-2">
-            Voir les resultats <ArrowRight className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center justify-center gap-3">
+            {allocationLogs.length > 0 && (
+              <Button variant="outline" onClick={() => setShowVisualizer(v => !v)} className="gap-2">
+                <Play className="h-4 w-4" />
+                {showVisualizer ? 'Masquer' : 'Visualiser'}
+              </Button>
+            )}
+            <Button onClick={onNext} size="lg" className="gap-2">
+              Voir les resultats <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {showVisualizer && allocationLogs.length > 0 && (
+            <AllocationVisualizer logs={allocationLogs} onClose={() => setShowVisualizer(false)} />
+          )}
         </div>
       )}
     </div>
