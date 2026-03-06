@@ -1,15 +1,15 @@
 /**
- * ANSM Sync — Client-side synchronization logic
+ * ANSM Sync — Client-side synchronization from uploaded CSV file
  *
- * Downloads the ANSM "ruptures de stock" list, parses CIP13 codes,
- * and updates both ansm_blocked_products and products.is_ansm_blocked.
- *
- * Can be triggered manually from the UI or scheduled via cron/edge function.
+ * User downloads the CSV manually from ANSM, then uploads it here.
+ * We parse CIP13 codes and update ansm_blocked_products + products.is_ansm_blocked.
  */
 
 import { supabase } from '@/lib/supabase'
 
-const ANSM_CSV_URL = 'https://data.ansm.sante.fr/explore/dataset/ruptures-dapprovisionnement-et-ruptures-de-stock-fichier-global/download/?format=csv&timezone=Europe/Berlin&lang=fr&use_labels=true&csv_separator=%3B'
+export const ANSM_DOWNLOAD_URL = 'https://data.ansm.sante.fr/explore/dataset/ruptures-dapprovisionnement-et-ruptures-de-stock-fichier-global/download/?format=csv&timezone=Europe/Berlin&lang=fr&use_labels=true&csv_separator=%3B'
+
+export const ANSM_PAGE_URL = 'https://data.ansm.sante.fr/explore/dataset/ruptures-dapprovisionnement-et-ruptures-de-stock-fichier-global/information/'
 
 interface AnsmRow {
   cip13: string
@@ -43,7 +43,7 @@ function parseAnsmCsv(csvText: string): AnsmRow[] {
         return parseWithIndices(lines, col, nameIdx !== -1 ? nameIdx : -1)
       }
     }
-    throw new Error('Impossible de trouver la colonne CIP13 dans le fichier ANSM')
+    throw new Error('Impossible de trouver la colonne CIP13 dans le fichier. Verifiez que c\'est bien un export CSV ANSM (separateur point-virgule).')
   }
 
   return parseWithIndices(lines, cip13Idx, nameIdx)
@@ -89,18 +89,18 @@ export interface SyncResult {
 }
 
 /**
- * Run the full ANSM sync process:
+ * Run the full ANSM sync process from an uploaded CSV file:
  * 1. Create a sync log entry (status=running)
- * 2. Download & parse ANSM CSV
+ * 2. Parse the CSV content
  * 3. Replace ansm_blocked_products table content
  * 4. Update products.is_ansm_blocked flags
  * 5. Update sync log with results
  */
-export async function runAnsmSync(): Promise<SyncResult> {
+export async function runAnsmSyncFromFile(file: File): Promise<SyncResult> {
   // 1. Create sync log
   const { data: log, error: logErr } = await supabase
     .from('ansm_sync_logs')
-    .insert({ status: 'running', message: 'Synchronisation en cours...' })
+    .insert({ status: 'running', message: `Import manuel: ${file.name}` })
     .select('id')
     .single()
 
@@ -108,16 +108,12 @@ export async function runAnsmSync(): Promise<SyncResult> {
   const logId = log.id
 
   try {
-    // 2. Download ANSM file
-    const response = await fetch(ANSM_CSV_URL)
-    if (!response.ok) {
-      throw new Error(`Erreur telechargement ANSM: HTTP ${response.status}`)
-    }
-    const csvText = await response.text()
+    // 2. Read and parse file
+    const csvText = await file.text()
     const ansmProducts = parseAnsmCsv(csvText)
 
     if (ansmProducts.length === 0) {
-      throw new Error('Aucun produit trouve dans le fichier ANSM. Verifier le format.')
+      throw new Error('Aucun produit CIP13 trouve dans le fichier. Verifiez le format (CSV avec separateur point-virgule).')
     }
 
     // 3. Get current blocked products to compute diff
@@ -139,14 +135,13 @@ export async function runAnsmSync(): Promise<SyncResult> {
       const batch = ansmProducts.slice(i, i + BATCH).map(p => ({
         cip13: p.cip13,
         product_name: p.productName || null,
-        source_url: ANSM_CSV_URL,
+        source_url: ANSM_DOWNLOAD_URL,
       }))
       const { error: insertErr } = await supabase.from('ansm_blocked_products').insert(batch)
       if (insertErr) throw new Error(`Erreur insertion batch ${i}: ${insertErr.message}`)
     }
 
     // 5. Update products.is_ansm_blocked
-    // Set blocked = true for all CIP13 in ANSM list
     const ansmCips = ansmProducts.map(p => p.cip13)
 
     // First, unblock all
@@ -165,7 +160,7 @@ export async function runAnsmSync(): Promise<SyncResult> {
     }
 
     // 6. Update sync log — success
-    const message = `Synchronisation terminee. ${ansmProducts.length} produits ANSM. ${newlyBlocked.length} nouveaux blocages, ${unblockedCips.length} deblocages.`
+    const message = `Import "${file.name}" termine. ${ansmProducts.length} produits ANSM. ${newlyBlocked.length} nouveaux blocages, ${unblockedCips.length} deblocages.`
     await supabase
       .from('ansm_sync_logs')
       .update({

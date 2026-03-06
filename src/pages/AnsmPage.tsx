@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { runAnsmSync, type SyncResult } from '@/lib/ansm-sync'
+import { runAnsmSyncFromFile, ANSM_DOWNLOAD_URL, ANSM_PAGE_URL, type SyncResult } from '@/lib/ansm-sync'
 import type { AnsmSyncLog, AnsmBlockedProduct } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -24,7 +24,7 @@ import {
 import { motion } from 'framer-motion'
 import {
   Shield,
-  RefreshCw,
+  Upload,
   CheckCircle2,
   XCircle,
   Loader2,
@@ -33,6 +33,9 @@ import {
   AlertTriangle,
   ArrowUpDown,
   Ban,
+  ExternalLink,
+  Download,
+  FileUp,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -80,6 +83,8 @@ export default function AnsmPage() {
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const PAGE_SIZE = 50
 
   // Fetch sync logs
@@ -134,11 +139,12 @@ export default function AnsmPage() {
     },
   })
 
-  // Sync mutation
+  // Sync mutation — from file
   const syncMutation = useMutation({
-    mutationFn: runAnsmSync,
+    mutationFn: (file: File) => runAnsmSyncFromFile(file),
     onSuccess: (result) => {
       setSyncResult(result)
+      setSelectedFile(null)
       queryClient.invalidateQueries({ queryKey: ['ansm-sync-logs'] })
       queryClient.invalidateQueries({ queryKey: ['ansm-blocked-products'] })
       queryClient.invalidateQueries({ queryKey: ['ansm-blocked-stats'] })
@@ -160,10 +166,17 @@ export default function AnsmPage() {
     },
   })
 
-  const handleSync = () => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSelectedFile(file)
     setSyncResult(null)
     setSyncModalOpen(true)
-    syncMutation.mutate()
+  }
+
+  const handleStartSync = () => {
+    if (!selectedFile) return
+    syncMutation.mutate(selectedFile)
   }
 
   const lastSync = syncLogs?.[0]
@@ -171,6 +184,15 @@ export default function AnsmPage() {
 
   return (
     <div className="p-5 md:p-7 lg:p-8 space-y-7 max-w-[1200px] mx-auto ivory-page-glow">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.CSV"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <div className="flex items-start justify-between gap-4">
@@ -181,7 +203,7 @@ export default function AnsmPage() {
             </p>
           </div>
           <Button
-            onClick={handleSync}
+            onClick={() => fileInputRef.current?.click()}
             disabled={syncMutation.isPending}
             className="gap-2 text-[13px] h-9 rounded-xl"
             style={{ background: 'var(--ivory-accent)' }}
@@ -189,16 +211,53 @@ export default function AnsmPage() {
             {syncMutation.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
+              <Upload className="h-3.5 w-3.5" />
             )}
-            Synchroniser ANSM
+            Importer fichier ANSM
           </Button>
+        </div>
+      </motion.div>
+
+      {/* ANSM download banner */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <div className="ivory-glass overflow-hidden"
+          style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.04), rgba(59,130,246,0.01))', borderColor: 'rgba(59,130,246,0.12)' }}>
+          <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.04))' }}>
+              <Download className="h-4.5 w-4.5" style={{ color: '#3B82F6' }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>
+                Telecharger la liste ANSM
+              </p>
+              <p className="text-[11px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>
+                Telechargez le fichier CSV depuis le site officiel ANSM, puis importez-le avec le bouton ci-dessus.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <a href={ANSM_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="gap-1.5 text-[12px] h-8 rounded-lg"
+                  style={{ borderColor: 'rgba(59,130,246,0.2)', color: '#3B82F6' }}>
+                  <Download className="h-3 w-3" />
+                  Telecharger CSV
+                </Button>
+              </a>
+              <a href={ANSM_PAGE_URL} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="gap-1.5 text-[12px] h-8 rounded-lg"
+                  style={{ borderColor: 'rgba(0,0,0,0.08)' }}>
+                  <ExternalLink className="h-3 w-3" />
+                  Page ANSM
+                </Button>
+              </a>
+            </div>
+          </div>
         </div>
       </motion.div>
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
           <div className="ivory-glass p-5">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
@@ -214,7 +273,7 @@ export default function AnsmPage() {
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }}>
           <div className="ivory-glass p-5">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
@@ -230,7 +289,7 @@ export default function AnsmPage() {
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
           <div className="ivory-glass p-5">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
@@ -258,7 +317,7 @@ export default function AnsmPage() {
       </div>
 
       {/* Blocked products table */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
         <div className="ivory-glass overflow-hidden">
           <div className="p-4 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
             <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: '#DC4A4A' }} />
@@ -331,7 +390,7 @@ export default function AnsmPage() {
                 <Shield className="h-5 w-5" style={{ color: 'var(--ivory-text-muted)' }} />
               </div>
               <p className="text-[13px]" style={{ color: 'var(--ivory-text-muted)' }}>
-                {search ? 'Aucun resultat pour cette recherche' : 'Aucun produit bloque. Lancez une synchronisation ANSM.'}
+                {search ? 'Aucun resultat pour cette recherche' : 'Aucun produit bloque. Importez un fichier ANSM.'}
               </p>
             </div>
           )}
@@ -339,7 +398,7 @@ export default function AnsmPage() {
       </motion.div>
 
       {/* Sync history */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.27 }}>
         <div className="ivory-glass overflow-hidden">
           <div className="p-4" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
             <h3 className="ivory-heading text-[14px]">Historique des synchronisations</h3>
@@ -394,33 +453,75 @@ export default function AnsmPage() {
       </motion.div>
 
       {/* Sync Modal */}
-      <Dialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>
+      <Dialog open={syncModalOpen} onOpenChange={(open) => {
+        if (!syncMutation.isPending) {
+          setSyncModalOpen(open)
+          if (!open) { setSelectedFile(null); setSyncResult(null) }
+        }
+      }}>
         <DialogContent className="rounded-2xl max-w-md">
           <DialogHeader>
-            <DialogTitle className="ivory-heading text-[16px]">Synchronisation ANSM</DialogTitle>
+            <DialogTitle className="ivory-heading text-[16px]">Import ANSM</DialogTitle>
             <DialogDescription className="text-[12px]">
-              Telechargement et mise a jour de la liste des produits interdits a l'export.
+              Mise a jour de la liste des produits interdits a l'export.
             </DialogDescription>
           </DialogHeader>
 
           <div className="py-4">
-            {syncMutation.isPending && !syncResult && (
-              <div className="flex flex-col items-center gap-4 py-6">
-                <div className="relative">
-                  <div className="h-16 w-16 rounded-2xl flex items-center justify-center"
-                    style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.10), rgba(13,148,136,0.03))' }}>
-                    <Loader2 className="h-7 w-7 animate-spin" style={{ color: 'var(--ivory-accent)' }} />
-                  </div>
+            {/* File selected, not started yet */}
+            {selectedFile && !syncMutation.isPending && !syncResult && (
+              <div className="flex flex-col items-center gap-4 py-4">
+                <div className="h-16 w-16 rounded-2xl flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.10), rgba(59,130,246,0.03))' }}>
+                  <FileUp className="h-7 w-7" style={{ color: '#3B82F6' }} />
                 </div>
                 <div className="text-center">
-                  <p className="ivory-heading text-[14px]">Synchronisation en cours...</p>
+                  <p className="ivory-heading text-[14px]">Fichier selectionne</p>
+                  <p className="text-[12px] mt-1 font-mono px-3 py-1 rounded-lg inline-block"
+                    style={{ background: 'rgba(0,0,0,0.03)', color: 'var(--ivory-text-muted)' }}>
+                    {selectedFile.name}
+                  </p>
+                  <p className="text-[11px] mt-2" style={{ color: 'var(--ivory-text-muted)' }}>
+                    {(selectedFile.size / 1024).toFixed(0)} Ko
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => { setSyncModalOpen(false); setSelectedFile(null) }}
+                    className="rounded-xl text-[13px]"
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    onClick={handleStartSync}
+                    className="gap-2 rounded-xl text-[13px]"
+                    style={{ background: 'var(--ivory-accent)' }}
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    Lancer l'import
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Running */}
+            {syncMutation.isPending && !syncResult && (
+              <div className="flex flex-col items-center gap-4 py-6">
+                <div className="h-16 w-16 rounded-2xl flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.10), rgba(13,148,136,0.03))' }}>
+                  <Loader2 className="h-7 w-7 animate-spin" style={{ color: 'var(--ivory-accent)' }} />
+                </div>
+                <div className="text-center">
+                  <p className="ivory-heading text-[14px]">Import en cours...</p>
                   <p className="text-[12px] mt-1" style={{ color: 'var(--ivory-text-muted)' }}>
-                    Telechargement du fichier ANSM et mise a jour des produits
+                    Analyse du fichier et mise a jour des produits
                   </p>
                 </div>
               </div>
             )}
 
+            {/* Result */}
             {syncResult && (
               <div className="flex flex-col items-center gap-4 py-4">
                 <div className="h-16 w-16 rounded-2xl flex items-center justify-center"
@@ -438,7 +539,7 @@ export default function AnsmPage() {
 
                 <div className="text-center">
                   <p className="ivory-heading text-[14px]">
-                    {syncResult.success ? 'Synchronisation reussie' : 'Echec de la synchronisation'}
+                    {syncResult.success ? 'Import reussi' : 'Echec de l\'import'}
                   </p>
                   <p className="text-[12px] mt-1 max-w-sm" style={{ color: 'var(--ivory-text-muted)' }}>
                     {syncResult.message}
@@ -475,7 +576,7 @@ export default function AnsmPage() {
                 )}
 
                 <Button
-                  onClick={() => setSyncModalOpen(false)}
+                  onClick={() => { setSyncModalOpen(false); setSelectedFile(null); setSyncResult(null) }}
                   className="mt-2 rounded-xl text-[13px]"
                   variant={syncResult.success ? 'default' : 'outline'}
                   style={syncResult.success ? { background: 'var(--ivory-accent)' } : {}}
