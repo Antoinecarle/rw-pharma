@@ -49,6 +49,12 @@ interface StockRow {
   status: string
 }
 
+interface ProductRow {
+  id: string
+  name: string
+  cip13: string
+}
+
 interface WholesalerRow {
   id: string
   name: string
@@ -87,7 +93,10 @@ export interface AllocationLog {
   customer: string
   customerName: string
   product: string
+  productName: string
+  productCip13: string
   wholesaler: string
+  wholesalerName: string
   requested: number
   allocated: number
   full: boolean
@@ -157,6 +166,24 @@ async function fetchWholesalers(): Promise<WholesalerRow[]> {
   const { data, error } = await supabase.from('wholesalers').select('id, name, code')
   if (error) throw error
   return data ?? []
+}
+
+async function fetchProducts(): Promise<ProductRow[]> {
+  const all: ProductRow[] = []
+  let from = 0
+  const pageSize = 500
+  while (true) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, cip13')
+      .range(from, from + pageSize - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...data)
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  return all
 }
 
 // ── Priority Scoring ─────────────────────────────────────────────────
@@ -336,11 +363,12 @@ export async function runAllocation(
   excludedWholesalers: Set<string>,
 ): Promise<{ allocations: AllocationResult[]; logs: AllocationLog[] }> {
   // 1. Fetch all data in parallel
-  const [orders, quotaRows, stockRows, wholesalers] = await Promise.all([
+  const [orders, quotaRows, stockRows, wholesalers, products] = await Promise.all([
     fetchOrders(processId),
     fetchQuotas(month, year),
     fetchStock(processId),
     fetchWholesalers(),
+    fetchProducts(),
   ])
 
   if (orders.length === 0) throw new Error('Aucune commande a allouer')
@@ -362,6 +390,7 @@ export async function runAllocation(
   const maxAllocTracker = new MaxAllocationTracker(Math.max(totalStock, totalQuota, 1))
 
   const wsMap = new Map(availableWholesalers.map(w => [w.id, w]))
+  const productMap = new Map(products.map(p => [p.id, p]))
   const customerCodeMap = new Map<string, { code: string; name: string }>()
   for (const o of orders) {
     if (o.customer) {
@@ -379,7 +408,7 @@ export async function runAllocation(
 
   const pushLog = (
     order: OrderRow,
-    wsCode: string,
+    wsId: string | null,
     allocated: number,
     remaining: number,
     reason: AllocationReason,
@@ -387,12 +416,17 @@ export async function runAllocation(
     lot?: string,
     expiry?: string,
   ) => {
+    const ws = wsId ? wsMap.get(wsId) : null
+    const prod = productMap.get(order.product_id)
     logs.push({
       step: ++stepCounter,
       customer: order.customer?.code ?? '?',
       customerName: order.customer?.name ?? '?',
       product: order.product_id.slice(0, 8),
-      wholesaler: wsCode,
+      productName: prod?.name ?? '?',
+      productCip13: prod?.cip13 ?? '?',
+      wholesaler: ws?.code ?? (wsId === null ? '-' : '?'),
+      wholesalerName: ws?.name ?? (wsId === null ? '-' : '?'),
       requested: order.quantity,
       allocated,
       full: remaining <= 0,
@@ -413,7 +447,7 @@ export async function runAllocation(
     const maxPct = prefs.max_allocation_pct
     const cappedQty = maxAllocTracker.canAllocate(order.customer_id, maxPct, remainingToAllocate)
     if (cappedQty < remainingToAllocate) {
-      pushLog(order, '-', 0, remainingToAllocate, 'max_pct_cap',
+      pushLog(order, null, 0, remainingToAllocate, 'max_pct_cap',
         `Limite ${maxPct}% : ${remainingToAllocate} → ${cappedQty} u.`)
       remainingToAllocate = cappedQty
     }
@@ -450,9 +484,8 @@ export async function runAllocation(
           maxAllocTracker.record(order.customer_id, consumed)
           remainingToAllocate -= consumed
 
-          const ws = wsMap.get(lot.wholesalerId)
-          pushLog(order, ws?.code ?? '?', consumed, remainingToAllocate, 'fefo_lot',
-            `Lot ${lot.lotNumber} (exp. ${lot.expiryDate}) via ${ws?.code ?? '?'}`,
+          pushLog(order, lot.wholesalerId, consumed, remainingToAllocate, 'fefo_lot',
+            `Lot ${lot.lotNumber} (exp. ${lot.expiryDate})`,
             lot.lotNumber, lot.expiryDate)
         }
       }
@@ -489,8 +522,7 @@ export async function runAllocation(
             maxAllocTracker.record(order.customer_id, consumed)
             remainingToAllocate -= consumed
 
-            const wsInfo = wsMap.get(ws.wholesalerId)
-            pushLog(order, wsInfo?.code ?? '?', consumed, remainingToAllocate, 'quota_balanced',
+            pushLog(order, ws.wholesalerId, consumed, remainingToAllocate, 'quota_balanced',
               `Quota reparti ${consumed}/${toAllocate} u. (${Math.round((ws.remaining / totalRemaining) * 100)}% share)`)
           }
         }
@@ -516,8 +548,7 @@ export async function runAllocation(
             maxAllocTracker.record(order.customer_id, consumed)
             remainingToAllocate -= consumed
 
-            const wsInfo = wsMap.get(ws.wholesalerId)
-            pushLog(order, wsInfo?.code ?? '?', consumed, remainingToAllocate, 'quota',
+            pushLog(order, ws.wholesalerId, consumed, remainingToAllocate, 'quota',
               `Quota direct ${consumed} u. (reste ${ws.remaining - consumed})`)
           }
         }
@@ -548,7 +579,7 @@ export async function runAllocation(
           maxAllocTracker.record(order.customer_id, qty)
           remainingToAllocate -= qty
 
-          pushLog(order, ws.code ?? '?', qty, remainingToAllocate, 'fallback',
+          pushLog(order, ws.id, qty, remainingToAllocate, 'fallback',
             `Aucun quota/stock — repartition egale ${qty} u.`)
         }
       } else {
@@ -568,7 +599,7 @@ export async function runAllocation(
 
         maxAllocTracker.record(order.customer_id, remainingToAllocate)
 
-        pushLog(order, ws.code ?? '?', remainingToAllocate, 0, 'fallback_single',
+        pushLog(order, ws.id, remainingToAllocate, 0, 'fallback_single',
           `Aucun quota/stock — grossiste unique ${remainingToAllocate} u.`)
 
         remainingToAllocate = 0

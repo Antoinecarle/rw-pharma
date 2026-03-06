@@ -238,11 +238,11 @@ export default function AllocationVisualizer({ logs, onClose }: AllocationVisual
                         <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
 
                         {/* Product */}
-                        <div className="flex items-center gap-2 bg-background rounded-lg border px-3 py-2">
-                          <Package className="h-4 w-4 text-blue-600" />
-                          <div>
-                            <p className="text-xs font-mono">{current.product}...</p>
-                            <p className="text-[10px] text-muted-foreground">{current.requested} u. demandees</p>
+                        <div className="flex items-center gap-2 bg-background rounded-lg border px-3 py-2 max-w-[260px]">
+                          <Package className="h-4 w-4 text-blue-600 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate">{current.productName}</p>
+                            <p className="text-[10px] text-muted-foreground">CIP: {current.productCip13} · {current.requested} u.</p>
                           </div>
                         </div>
 
@@ -250,13 +250,14 @@ export default function AllocationVisualizer({ logs, onClose }: AllocationVisual
 
                         {/* Wholesaler / Lot */}
                         <div className="flex items-center gap-2 bg-background rounded-lg border px-3 py-2">
-                          <Truck className="h-4 w-4 text-amber-600" />
-                          <div>
+                          <Truck className="h-4 w-4 text-amber-600 shrink-0" />
+                          <div className="min-w-0">
                             <p className="text-sm font-bold">{current.wholesaler}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{current.wholesalerName}</p>
                             {current.lot && (
-                              <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                <Boxes className="h-2.5 w-2.5" />
-                                {current.lot} (exp. {current.expiry})
+                              <p className="text-[10px] text-violet-600 flex items-center gap-1 mt-0.5">
+                                <Boxes className="h-2.5 w-2.5 shrink-0" />
+                                Lot {current.lot} · exp. {current.expiry}
                               </p>
                             )}
                           </div>
@@ -317,8 +318,8 @@ export default function AllocationVisualizer({ logs, onClose }: AllocationVisual
                         {cfg.label.slice(0, 5)}
                       </Badge>
                       <span className="font-semibold w-12 shrink-0">[{log.customer}]</span>
-                      <span className="truncate flex-1">{log.product}...</span>
-                      <span className="shrink-0">{log.wholesaler}</span>
+                      <span className="truncate flex-1" title={`${log.productName} (${log.productCip13})`}>{log.productName}</span>
+                      <span className="shrink-0" title={log.wholesalerName}>{log.wholesaler}</span>
                       <span className={`tabular-nums shrink-0 font-semibold ${log.full ? 'text-green-600' : 'text-amber-600'}`}>
                         {log.allocated}/{log.requested}
                       </span>
