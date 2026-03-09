@@ -113,7 +113,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       setShowLogs(true)
 
       const { allocations, logs } = await runAllocation(
-        process.id, process.month, process.year, strategy, excludedWholesalers,
+        process.id, process.month, process.year, strategy, excludedWholesalers, false,
       )
       setAllocationLogs(logs)
 

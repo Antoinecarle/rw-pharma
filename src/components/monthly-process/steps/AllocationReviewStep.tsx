@@ -286,8 +286,11 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
   const filteredAllocations = useMemo(() => {
     if (!allocations) return []
     switch (viewMode) {
+      case 'by_lot':
+        return [] // Handled separately by lotGroups
       case 'partial':
         return allocations.filter(a => a.allocated_quantity < a.requested_quantity)
+      case 'all':
       default:
         return allocations
     }
