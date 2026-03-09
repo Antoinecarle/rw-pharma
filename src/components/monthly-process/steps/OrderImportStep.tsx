@@ -13,33 +13,48 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, User, X, Keyboard } from 'lucide-react'
+import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, User, X, Keyboard, RotateCcw, Hand } from 'lucide-react'
 import { toast } from 'sonner'
 import SkippedItemsReviewModal, {
   type SkippedItem, type ResolvedItem,
 } from '@/components/allocations/SkippedItemsReviewModal'
 import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
 import type { MonthlyProcess, Customer, Product } from '@/types/database'
+import {
+  type MappingConfidence,
+  type OrderField,
+  ORDER_PATTERNS,
+  autoDetectMapping,
+  detectClientFromFilename,
+  detectEntityFromData,
+  getSampleValues as getSharedSampleValues,
+  getUnmappedHeaders,
+} from '@/lib/column-detection'
 
 // --------------- Types ---------------
 
-interface OrderColumnMapping {
-  cip13: string
-  quantity: string
-  unit_price: string
-  productName: string
-}
+type OrderColumnMapping = Record<OrderField, string>
 
-const FIELD_LABELS: Record<keyof OrderColumnMapping, string> = {
+const FIELD_LABELS: Record<OrderField, string> = {
   cip13: 'CIP13 Produit *',
   quantity: 'Quantite *',
   unit_price: 'Prix unitaire',
   productName: 'Nom produit',
+  clientColumn: 'Client (multi)',
+  comment: 'Commentaire',
+  preferredWholesaler: 'Grossiste prefere',
+  minExpiryDate: 'Date exp. min',
 }
 
-const REQUIRED_FIELDS: (keyof OrderColumnMapping)[] = ['cip13', 'quantity']
+const ALL_FIELDS: OrderField[] = Object.keys(FIELD_LABELS) as OrderField[]
+const REQUIRED_FIELDS: OrderField[] = ['cip13', 'quantity']
 
 const CLIENT_CODES = ['ORI', 'MPA', 'MEDCOR', 'CC', 'ABA', 'BMODESTO', 'AXI', 'BROCACEF', '2CARE4', 'MELY']
+
+const CLIENT_COLUMN_PATTERNS = [
+  /^client$/i, /client.*code/i, /^customer$/i, /^kunde$/i,
+  /importat/i, /destinataire/i, /acheteur/i,
+]
 
 const STORAGE_KEY = 'rw-pharma-import-history'
 
@@ -62,12 +77,8 @@ function addImportHistory(entry: ImportHistoryEntry) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 5)))
 }
 
-function detectClientFromFilename(filename: string): string | null {
-  const upper = filename.toUpperCase()
-  for (const code of CLIENT_CODES) {
-    if (upper.includes(code)) return code
-  }
-  return null
+function detectClientFromFile(filename: string): string | null {
+  return detectClientFromFilename(filename, CLIENT_CODES)
 }
 
 function getMappingStorageKey(customerCode: string) {
@@ -85,10 +96,7 @@ function saveMappingForCustomer(customerCode: string, mapping: OrderColumnMappin
   localStorage.setItem(getMappingStorageKey(customerCode), JSON.stringify(mapping))
 }
 
-interface MappingConfidence {
-  field: keyof OrderColumnMapping
-  source: 'auto' | 'saved' | 'manual' | 'none'
-}
+type OrderMappingConfidence = MappingConfidence<OrderField>
 
 type FileStatus = 'pending' | 'mapping' | 'preview' | 'importing' | 'done' | 'error'
 
@@ -105,15 +113,21 @@ interface QueuedFile {
   selectedSheet: string
   workbook: XLSX.WorkBook | null
   mapping: OrderColumnMapping
-  confidence: MappingConfidence[]
+  confidence: OrderMappingConfidence[]
   importResult: { inserted: number; errors: number; skipped: number }
   importProgress: { current: number; total: number; phase: string }
   skippedItems: SkippedItem[]
 }
 
+function emptyMapping(): OrderColumnMapping {
+  const m = {} as OrderColumnMapping
+  for (const f of ALL_FIELDS) m[f] = ''
+  return m
+}
+
 function createQueuedFile(file: File): QueuedFile {
   const fileName = file.name
-  const detectedClient = detectClientFromFilename(fileName)
+  const detectedClient = detectClientFromFile(fileName)
   return {
     id: crypto.randomUUID(),
     file,
@@ -126,7 +140,7 @@ function createQueuedFile(file: File): QueuedFile {
     sheetNames: [],
     selectedSheet: '',
     workbook: null,
-    mapping: { cip13: '', quantity: '', unit_price: '', productName: '' },
+    mapping: emptyMapping(),
     confidence: [],
     importResult: { inserted: 0, errors: 0, skipped: 0 },
     importProgress: { current: 0, total: 0, phase: '' },
@@ -134,66 +148,16 @@ function createQueuedFile(file: File): QueuedFile {
   }
 }
 
-// --------------- Auto-detect column mapping ---------------
+// --------------- Auto-detect (delegates to shared module) ---------------
 
-function autoDetectMapping(headers: string[], clientCode: string | null): { mapping: OrderColumnMapping; confidence: MappingConfidence[] } {
+function runAutoDetect(headers: string[], clientCode: string | null) {
   const saved = clientCode ? getSavedMapping(clientCode) : null
-  const confidenceMap: MappingConfidence[] = []
-
-  if (saved && headers.includes(saved.cip13) && headers.includes(saved.quantity)) {
-    const resultMapping = { ...saved }
-    for (const field of Object.keys(saved) as (keyof OrderColumnMapping)[]) {
-      if (saved[field] && headers.includes(saved[field])) {
-        confidenceMap.push({ field, source: 'saved' })
-      } else {
-        resultMapping[field] = ''
-        confidenceMap.push({ field, source: 'none' })
-      }
-    }
-    return { mapping: resultMapping, confidence: confidenceMap }
-  }
-
-  const autoMap: OrderColumnMapping = { cip13: '', quantity: '', unit_price: '', productName: '' }
-  const usedHeaders = new Set<string>()
-
-  const fieldPatterns: { field: keyof OrderColumnMapping; patterns: RegExp[] }[] = [
-    {
-      field: 'cip13',
-      patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i, /^cipcode$/i, /artikelnummer/i, /code.*cip/i, /product.*code/i, /^external$/i, /product.*number/i, /^local\s*code/i],
-    },
-    {
-      field: 'quantity',
-      patterns: [/qte.*command/i, /quantit/i, /^qty/i, /quantity/i, /^qte/i, /commandee?/i, /menge/i, /bestell/i, /ordered/i, /^poqnt$/i],
-    },
-    {
-      field: 'unit_price',
-      patterns: [/prix.*unit/i, /unit.*pri/i, /price/i, /^prix/i, /^pfht$/i, /einkaufspreis/i, /preis/i, /^unitprice$/i],
-    },
-    {
-      field: 'productName',
-      patterns: [/nom.*produit/i, /product.*name/i, /designation/i, /bezeichnung/i, /libelle/i, /^nom$/i, /^name$/i, /^produit$/i],
-    },
-  ]
-
-  for (const { field, patterns } of fieldPatterns) {
-    for (const pattern of patterns) {
-      if (autoMap[field]) break
-      const match = headers.find(h => !usedHeaders.has(h) && pattern.test(h))
-      if (match) {
-        autoMap[field] = match
-        usedHeaders.add(match)
-        confidenceMap.push({ field, source: 'auto' })
-      }
-    }
-  }
-
-  for (const field of Object.keys(FIELD_LABELS) as (keyof OrderColumnMapping)[]) {
-    if (!confidenceMap.find(c => c.field === field)) {
-      confidenceMap.push({ field, source: autoMap[field] ? 'auto' : 'none' })
-    }
-  }
-
-  return { mapping: autoMap, confidence: confidenceMap }
+  // Saved mappings from before the new fields may lack some keys — fill them
+  const fullSaved = saved ? { ...emptyMapping(), ...saved } : null
+  return autoDetectMapping<OrderField>(
+    headers, ORDER_PATTERNS, ALL_FIELDS,
+    fullSaved, ['cip13', 'quantity'],
+  )
 }
 
 // --------------- Props ---------------
@@ -272,11 +236,20 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
 
       const hdrs = Object.keys(json[0])
       const clientCode = qf.detectedClient
-      const { mapping, confidence } = autoDetectMapping(hdrs, clientCode)
+      const { mapping, confidence } = runAutoDetect(hdrs, clientCode)
+
+      // Also try to detect client from data columns if filename didn't match
+      let finalClient = qf.detectedClient
+      if (!finalClient && customers) {
+        const customerEntities = customers.map(c => ({ code: c.code, name: c.name }))
+        const fromData = detectEntityFromData(hdrs, json, customerEntities, CLIENT_COLUMN_PATTERNS)
+        if (fromData) finalClient = fromData
+      }
 
       const updatedFile: QueuedFile = {
         ...qf,
         status: 'mapping',
+        detectedClient: finalClient,
         headers: hdrs,
         rows: json,
         sheetNames: wb.SheetNames,
@@ -322,11 +295,11 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
     if (json.length === 0) { toast.error('Feuille vide'); return }
     const hdrs = Object.keys(json[0])
     const clientCode = getClientCode(f)
-    const { mapping, confidence } = autoDetectMapping(hdrs, clientCode)
+    const { mapping, confidence } = runAutoDetect(hdrs, clientCode)
     updateFile(fileId, { selectedSheet: sheetName, headers: hdrs, rows: json, mapping, confidence })
   }
 
-  const updateMapping = (fileId: string, field: keyof OrderColumnMapping, value: string) => {
+  const updateMapping = (fileId: string, field: OrderField, value: string) => {
     const f = queue.find(x => x.id === fileId)
     if (!f) return
     const newMapping = { ...f.mapping, [field]: value === 'none' ? '' : value }
@@ -334,6 +307,14 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       c.field === field ? { ...c, source: value === 'none' ? 'none' as const : 'manual' as const } : c
     )
     updateFile(fileId, { mapping: newMapping, confidence: newConfidence })
+  }
+
+  const resetMapping = (fileId: string) => {
+    const f = queue.find(x => x.id === fileId)
+    if (!f) return
+    const clientCode = getClientCode(f)
+    const { mapping, confidence } = runAutoDetect(f.headers, clientCode)
+    updateFile(fileId, { mapping, confidence })
   }
 
   const removeFile = (fileId: string) => {
@@ -409,9 +390,15 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         }
       }
 
-      const fileCustomerId = clientCode ? customerMap.get(clientCode.toUpperCase()) : undefined
-      if (!fileCustomerId) {
-        throw new Error(`Client "${clientCode ?? '?'}" introuvable en base. Verifiez le code client.`)
+      const isMultiClient = !!f.mapping.clientColumn
+
+      // For single-client mode, resolve now
+      let singleCustomerId: string | undefined
+      if (!isMultiClient) {
+        singleCustomerId = clientCode ? customerMap.get(clientCode.toUpperCase()) : undefined
+        if (!singleCustomerId) {
+          throw new Error(`Client "${clientCode ?? '?'}" introuvable en base. Verifiez le code client.`)
+        }
       }
 
       let inserted = 0
@@ -444,14 +431,38 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
             return null
           }
 
+          // Resolve customer: per-row for multi-client, or single for all
+          let rowCustomerId = singleCustomerId
+          if (isMultiClient) {
+            const rowClientCode = String(row[f.mapping.clientColumn] || '').trim().toUpperCase()
+            rowCustomerId = customerMap.get(rowClientCode)
+          }
+          if (!rowCustomerId) {
+            skippedDetails.push({
+              rowIndex,
+              customerCode: isMultiClient ? String(row[f.mapping.clientColumn] || '').trim() : (clientCode ?? ''),
+              cip13,
+              quantity: qty,
+              unitPrice: price,
+              reason: 'unknown_product' as SkippedItem['reason'],
+            })
+            return null
+          }
+
+          // Build metadata from enriched fields
+          const metadata: Record<string, string | null> = {}
+          if (f.mapping.comment) metadata.comment = String(row[f.mapping.comment] || '').trim() || null
+          if (f.mapping.preferredWholesaler) metadata.preferred_wholesaler = String(row[f.mapping.preferredWholesaler] || '').trim() || null
+          if (f.mapping.minExpiryDate) metadata.min_expiry_date = String(row[f.mapping.minExpiryDate] || '').trim() || null
+
           return {
             monthly_process_id: process.id,
-            customer_id: fileCustomerId,
+            customer_id: rowCustomerId,
             product_id: productEntry.id,
             quantity: qty,
             unit_price: price,
             status: 'pending' as const,
-            metadata: {},
+            metadata,
           }
         })
 
@@ -552,22 +563,22 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
 
   // --------------- Render helpers ---------------
 
-  const getConfidenceBadge = (conf: MappingConfidence) => {
+  const getConfidenceBadge = (conf: OrderMappingConfidence) => {
     if (conf.source === 'none') return null
     if (conf.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Memorise</Badge>
     if (conf.source === 'auto') return <Badge variant="secondary" className="text-[9px] h-4 gap-0.5"><Zap className="h-2.5 w-2.5" /> Auto</Badge>
+    if (conf.source === 'manual') return <Badge variant="outline" className="text-[9px] h-4 gap-0.5 border-blue-300 text-blue-600"><Hand className="h-2.5 w-2.5" /> Manuel</Badge>
     return null
   }
 
-  const getSampleValues = (f: QueuedFile, field: keyof OrderColumnMapping) => {
-    const col = f.mapping[field]
-    if (!col) return []
-    return f.rows.slice(0, 3).map(r => String(r[col] || '').trim()).filter(Boolean)
+  const getSampleValues = (f: QueuedFile, field: OrderField) => {
+    return getSharedSampleValues(f.rows, f.mapping, field)
   }
 
   const canProceed = (f: QueuedFile) => {
     const clientCode = getClientCode(f)
-    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && !!clientCode
+    const hasClientColumn = !!f.mapping.clientColumn
+    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (!!clientCode || hasClientColumn)
   }
 
   // --------------- Manual entry mutation ---------------
@@ -770,9 +781,25 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
               {/* Column mapping */}
               {(f.status === 'mapping' || f.status === 'pending') && (
                 <>
-                  <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs commande.</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs commande.</p>
+                    <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground" onClick={() => resetMapping(f.id)}>
+                      <RotateCcw className="h-3 w-3" /> Reinitialiser
+                    </Button>
+                  </div>
+
+                  {/* Alert for missing required fields */}
+                  {!REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+                      <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                      <p className="text-xs text-red-600 dark:text-red-400">
+                        Champs obligatoires manquants : {REQUIRED_FIELDS.filter(fld => !f.mapping[fld]).map(fld => FIELD_LABELS[fld].replace(' *', '')).join(', ')}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {(Object.keys(FIELD_LABELS) as (keyof OrderColumnMapping)[]).map((field) => {
+                    {(ALL_FIELDS).map((field) => {
                       const samples = getSampleValues(f, field)
                       const conf = f.confidence.find(c => c.field === field)
                       return (
@@ -811,6 +838,19 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                       {Object.values(f.mapping).filter(Boolean).length}/{Object.keys(f.mapping).length} champs
                     </span>
                   </div>
+
+                  {/* Unmapped columns */}
+                  {(() => {
+                    const unmapped = getUnmappedHeaders(f.headers, f.mapping)
+                    return unmapped.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[10px] text-muted-foreground">Colonnes non mappees :</span>
+                        {unmapped.map(h => (
+                          <Badge key={h} variant="outline" className="text-[9px] h-4 text-muted-foreground/70">{h}</Badge>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
 
                   <div className="flex justify-end">
                     <Button

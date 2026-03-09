@@ -13,22 +13,26 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X } from 'lucide-react'
+import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X, RotateCcw, Hand } from 'lucide-react'
 import { toast } from 'sonner'
 import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
 import type { MonthlyProcess, Wholesaler } from '@/types/database'
+import {
+  type MappingConfidence,
+  type QuotaField,
+  QUOTA_PATTERNS,
+  autoDetectMapping,
+  detectEntityFromFilename,
+  detectEntityFromData,
+  getSampleValues as getSharedSampleValues,
+  getUnmappedHeaders,
+} from '@/lib/column-detection'
 
 // --------------- Types ---------------
 
-interface QuotaColumnMapping {
-  cip13: string
-  quantity: string
-  extra: string
-  productName: string
-  wholesalerColumn: string
-}
+type QuotaColumnMapping = Record<QuotaField, string>
 
-const FIELD_LABELS: Record<keyof QuotaColumnMapping, string> = {
+const FIELD_LABELS: Record<QuotaField, string> = {
   cip13: 'CIP13 Produit *',
   quantity: 'Quantite quota *',
   extra: 'Extra disponible',
@@ -36,7 +40,8 @@ const FIELD_LABELS: Record<keyof QuotaColumnMapping, string> = {
   wholesalerColumn: 'Grossiste (multi)',
 }
 
-const REQUIRED_FIELDS: (keyof QuotaColumnMapping)[] = ['cip13', 'quantity']
+const ALL_FIELDS: QuotaField[] = Object.keys(FIELD_LABELS) as QuotaField[]
+const REQUIRED_FIELDS: QuotaField[] = ['cip13', 'quantity']
 
 const STORAGE_KEY = 'rw-pharma-quota-import-history'
 
@@ -74,10 +79,7 @@ function saveMappingForWholesaler(wholesalerCode: string, mapping: QuotaColumnMa
   localStorage.setItem(getMappingStorageKey(wholesalerCode), JSON.stringify(mapping))
 }
 
-interface MappingConfidence {
-  field: keyof QuotaColumnMapping
-  source: 'auto' | 'saved' | 'manual' | 'none'
-}
+type QuotaMappingConfidence = MappingConfidence<QuotaField>
 
 type FileStatus = 'pending' | 'mapping' | 'preview' | 'importing' | 'done' | 'error'
 
@@ -101,7 +103,7 @@ interface QueuedQuotaFile {
   selectedSheet: string
   workbook: XLSX.WorkBook | null
   mapping: QuotaColumnMapping
-  confidence: MappingConfidence[]
+  confidence: QuotaMappingConfidence[]
   importResult: { inserted: number; updated: number; errors: number; skipped: number }
   importProgress: { current: number; total: number; phase: string }
   skippedItems: SkippedQuotaItem[]
@@ -128,108 +130,14 @@ function createQueuedFile(file: File): QueuedQuotaFile {
   }
 }
 
-// --------------- Auto-detect wholesaler from filename or CSV data ---------------
+// --------------- Auto-detect (delegates to shared module) ---------------
 
-function detectWholesalerFromFilename(filename: string, wholesalers: Pick<Wholesaler, 'code' | 'name'>[]): string | null {
-  const upper = filename.toUpperCase()
-  // Direct match: code or name in filename
-  for (const w of wholesalers) {
-    if (w.code && upper.includes(w.code.toUpperCase())) return w.code
-    if (w.name && upper.includes(w.name.toUpperCase())) return w.code ?? w.name
-  }
-  return null
-}
-
-const WHOLESALER_COLUMN_PATTERNS = [
-  /^grossiste$/i, /^wholesaler$/i, /^fournisseur$/i,
-  /code.*grossiste/i, /wholesaler.*code/i, /grossiste.*code/i,
-  /^supplier$/i, /^source$/i,
-]
-
-function detectWholesalerFromData(
-  headers: string[],
-  rows: Record<string, string>[],
-  wholesalers: Pick<Wholesaler, 'code' | 'name'>[]
-): string | null {
-  // Find a column that looks like a wholesaler column
-  for (const pattern of WHOLESALER_COLUMN_PATTERNS) {
-    const col = headers.find(h => pattern.test(h))
-    if (!col) continue
-    // Check first non-empty value
-    const firstValue = rows.find(r => r[col]?.trim())?.[col]?.trim().toUpperCase()
-    if (!firstValue) continue
-    for (const w of wholesalers) {
-      if (w.code && firstValue.includes(w.code.toUpperCase())) return w.code
-      if (w.name && firstValue.includes(w.name.toUpperCase())) return w.code ?? w.name
-    }
-  }
-  return null
-}
-
-// --------------- Auto-detect column mapping ---------------
-
-function autoDetectMapping(headers: string[], wholesalerCode: string | null): { mapping: QuotaColumnMapping; confidence: MappingConfidence[] } {
+function runAutoDetect(headers: string[], wholesalerCode: string | null) {
   const saved = wholesalerCode ? getSavedMapping(wholesalerCode) : null
-  const confidenceMap: MappingConfidence[] = []
-
-  if (saved && headers.includes(saved.cip13) && headers.includes(saved.quantity)) {
-    const resultMapping = { ...saved }
-    for (const field of Object.keys(saved) as (keyof QuotaColumnMapping)[]) {
-      if (saved[field] && headers.includes(saved[field])) {
-        confidenceMap.push({ field, source: 'saved' })
-      } else {
-        resultMapping[field] = ''
-        confidenceMap.push({ field, source: 'none' })
-      }
-    }
-    return { mapping: resultMapping, confidence: confidenceMap }
-  }
-
-  const autoMap: QuotaColumnMapping = { cip13: '', quantity: '', extra: '', productName: '', wholesalerColumn: '' }
-  const usedHeaders = new Set<string>()
-
-  const fieldPatterns: { field: keyof QuotaColumnMapping; patterns: RegExp[] }[] = [
-    {
-      field: 'cip13',
-      patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i, /code.*produit/i, /product.*code/i, /artikelnummer/i, /code.*cip/i, /product.*cip/i],
-    },
-    {
-      field: 'quantity',
-      patterns: [/quota/i, /contingent/i, /quantit/i, /^qty/i, /alloue/i, /disponible/i, /menge/i, /quantity/i, /^qte/i, /mensuel/i],
-    },
-    {
-      field: 'extra',
-      patterns: [/extra/i, /suppl/i, /bonus/i, /additionn/i, /zusatz/i, /hors.*quota/i],
-    },
-    {
-      field: 'productName',
-      patterns: [/nom.*produit/i, /product.*name/i, /designation/i, /bezeichnung/i, /libelle/i, /^nom$/i, /^name$/i, /^produit$/i],
-    },
-    {
-      field: 'wholesalerColumn',
-      patterns: [/^grossiste$/i, /^wholesaler$/i, /^fournisseur$/i, /code.*grossiste/i, /^supplier$/i, /^source$/i],
-    },
-  ]
-
-  for (const { field, patterns } of fieldPatterns) {
-    for (const pattern of patterns) {
-      if (autoMap[field]) break
-      const match = headers.find(h => !usedHeaders.has(h) && pattern.test(h))
-      if (match) {
-        autoMap[field] = match
-        usedHeaders.add(match)
-        confidenceMap.push({ field, source: 'auto' })
-      }
-    }
-  }
-
-  for (const field of Object.keys(FIELD_LABELS) as (keyof QuotaColumnMapping)[]) {
-    if (!confidenceMap.find(c => c.field === field)) {
-      confidenceMap.push({ field, source: autoMap[field] ? 'auto' : 'none' })
-    }
-  }
-
-  return { mapping: autoMap, confidence: confidenceMap }
+  return autoDetectMapping<QuotaField>(
+    headers, QUOTA_PATTERNS, ALL_FIELDS,
+    saved, ['cip13', 'quantity'],
+  )
 }
 
 // --------------- Props ---------------
@@ -300,12 +208,11 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       }
 
       const hdrs = Object.keys(json[0])
-      let detected = wholesalers ? detectWholesalerFromFilename(file.name, wholesalers) : null
-      // Fallback: detect wholesaler from CSV data (column values)
+      let detected = wholesalers ? detectEntityFromFilename(file.name, wholesalers) : null
       if (!detected && wholesalers) {
-        detected = detectWholesalerFromData(hdrs, json, wholesalers)
+        detected = detectEntityFromData(hdrs, json, wholesalers)
       }
-      const { mapping, confidence } = autoDetectMapping(hdrs, detected)
+      const { mapping, confidence } = runAutoDetect(hdrs, detected)
 
       const updatedFile: QueuedQuotaFile = {
         ...qf,
@@ -356,11 +263,11 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
     if (json.length === 0) { toast.error('Feuille vide'); return }
     const hdrs = Object.keys(json[0])
     const wholesalerCode = getWholesalerCode(f)
-    const { mapping, confidence } = autoDetectMapping(hdrs, wholesalerCode)
+    const { mapping, confidence } = runAutoDetect(hdrs, wholesalerCode)
     updateFile(fileId, { selectedSheet: sheetName, headers: hdrs, rows: json, mapping, confidence })
   }
 
-  const updateMapping = (fileId: string, field: keyof QuotaColumnMapping, value: string) => {
+  const updateMapping = (fileId: string, field: QuotaField, value: string) => {
     const f = queue.find(x => x.id === fileId)
     if (!f) return
     const newMapping = { ...f.mapping, [field]: value === 'none' ? '' : value }
@@ -368,6 +275,14 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       c.field === field ? { ...c, source: value === 'none' ? 'none' as const : 'manual' as const } : c
     )
     updateFile(fileId, { mapping: newMapping, confidence: newConfidence })
+  }
+
+  const resetMapping = (fileId: string) => {
+    const f = queue.find(x => x.id === fileId)
+    if (!f) return
+    const wholesalerCode = getWholesalerCode(f)
+    const { mapping, confidence } = runAutoDetect(f.headers, wholesalerCode)
+    updateFile(fileId, { mapping, confidence })
   }
 
   const removeFile = (fileId: string) => {
@@ -598,17 +513,16 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
 
   // --------------- Render helpers ---------------
 
-  const getConfidenceBadge = (conf: MappingConfidence) => {
+  const getConfidenceBadge = (conf: QuotaMappingConfidence) => {
     if (conf.source === 'none') return null
     if (conf.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Memorise</Badge>
     if (conf.source === 'auto') return <Badge variant="secondary" className="text-[9px] h-4 gap-0.5"><Zap className="h-2.5 w-2.5" /> Auto</Badge>
+    if (conf.source === 'manual') return <Badge variant="outline" className="text-[9px] h-4 gap-0.5 border-blue-300 text-blue-600"><Hand className="h-2.5 w-2.5" /> Manuel</Badge>
     return null
   }
 
-  const getSampleValues = (f: QueuedQuotaFile, field: keyof QuotaColumnMapping) => {
-    const col = f.mapping[field]
-    if (!col) return []
-    return f.rows.slice(0, 3).map(r => String(r[col] || '').trim()).filter(Boolean)
+  const getSampleValues = (f: QueuedQuotaFile, field: QuotaField) => {
+    return getSharedSampleValues(f.rows, f.mapping, field)
   }
 
   // --------------- File card render ---------------
@@ -740,9 +654,25 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
               {/* Column mapping */}
               {(f.status === 'mapping' || f.status === 'pending') && (
                 <>
-                  <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs quotas.</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs quotas.</p>
+                    <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground" onClick={() => resetMapping(f.id)}>
+                      <RotateCcw className="h-3 w-3" /> Reinitialiser
+                    </Button>
+                  </div>
+
+                  {/* Alert for missing required fields */}
+                  {!REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+                      <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                      <p className="text-xs text-red-600 dark:text-red-400">
+                        Champs obligatoires manquants : {REQUIRED_FIELDS.filter(fld => !f.mapping[fld]).map(fld => FIELD_LABELS[fld].replace(' *', '')).join(', ')}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {(Object.keys(FIELD_LABELS) as (keyof QuotaColumnMapping)[]).map((field) => {
+                    {(ALL_FIELDS).map((field) => {
                       const samples = getSampleValues(f, field)
                       const conf = f.confidence.find(c => c.field === field)
                       return (
@@ -781,6 +711,19 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                       {Object.values(f.mapping).filter(Boolean).length}/{Object.keys(f.mapping).length} champs
                     </span>
                   </div>
+
+                  {/* Unmapped columns */}
+                  {(() => {
+                    const unmapped = getUnmappedHeaders(f.headers, f.mapping)
+                    return unmapped.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[10px] text-muted-foreground">Colonnes non mappees :</span>
+                        {unmapped.map(h => (
+                          <Badge key={h} variant="outline" className="text-[9px] h-4 text-muted-foreground/70">{h}</Badge>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
 
                   <div className="flex justify-end">
                     <Button

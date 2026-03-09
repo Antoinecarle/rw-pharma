@@ -13,33 +13,39 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X, PackageCheck, Keyboard } from 'lucide-react'
+import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X, PackageCheck, Keyboard, RotateCcw, Hand } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
 import type { MonthlyProcess, Wholesaler } from '@/types/database'
+import {
+  type MappingConfidence,
+  type StockField,
+  STOCK_PATTERNS,
+  autoDetectMapping,
+  detectEntityFromFilename,
+  detectEntityFromData,
+  getSampleValues as getSharedSampleValues,
+  getUnmappedHeaders,
+} from '@/lib/column-detection'
 
 // --------------- Types ---------------
 
-interface StockColumnMapping {
-  cip13: string
-  lot_number: string
-  expiry_date: string
-  quantity: string
-  unit_cost: string
-  date_reception: string
-}
+type StockColumnMapping = Record<StockField, string>
 
-const FIELD_LABELS: Record<keyof StockColumnMapping, string> = {
+const FIELD_LABELS: Record<StockField, string> = {
   cip13: 'CIP13 Produit *',
   lot_number: 'Numero de lot *',
   expiry_date: 'Date expiration *',
   quantity: 'Quantite *',
   unit_cost: 'Cout unitaire',
   date_reception: 'Date reception',
+  productName: 'Nom produit',
+  wholesalerColumn: 'Grossiste (multi)',
 }
 
-const REQUIRED_FIELDS: (keyof StockColumnMapping)[] = ['cip13', 'lot_number', 'expiry_date', 'quantity']
+const ALL_FIELDS: StockField[] = Object.keys(FIELD_LABELS) as StockField[]
+const REQUIRED_FIELDS: StockField[] = ['cip13', 'lot_number', 'expiry_date', 'quantity']
 
 const STORAGE_KEY = 'rw-pharma-stock-import-history'
 
@@ -77,10 +83,7 @@ function saveMappingForWholesaler(wholesalerCode: string, mapping: StockColumnMa
   localStorage.setItem(getMappingStorageKey(wholesalerCode), JSON.stringify(mapping))
 }
 
-interface MappingConfidence {
-  field: keyof StockColumnMapping
-  source: 'auto' | 'saved' | 'manual' | 'none'
-}
+type StockMappingConfidence = MappingConfidence<StockField>
 
 type FileStatus = 'pending' | 'mapping' | 'preview' | 'importing' | 'done' | 'error'
 
@@ -103,10 +106,16 @@ interface QueuedStockFile {
   selectedSheet: string
   workbook: XLSX.WorkBook | null
   mapping: StockColumnMapping
-  confidence: MappingConfidence[]
+  confidence: StockMappingConfidence[]
   importResult: { inserted: number; errors: number; skipped: number }
   importProgress: { current: number; total: number; phase: string }
   skippedItems: SkippedStockItem[]
+}
+
+function emptyMapping(): StockColumnMapping {
+  const m = {} as StockColumnMapping
+  for (const f of ALL_FIELDS) m[f] = ''
+  return m
 }
 
 function createQueuedFile(file: File): QueuedStockFile {
@@ -122,7 +131,7 @@ function createQueuedFile(file: File): QueuedStockFile {
     sheetNames: [],
     selectedSheet: '',
     workbook: null,
-    mapping: { cip13: '', lot_number: '', expiry_date: '', quantity: '', unit_cost: '', date_reception: '' },
+    mapping: emptyMapping(),
     confidence: [],
     importResult: { inserted: 0, errors: 0, skipped: 0 },
     importProgress: { current: 0, total: 0, phase: '' },
@@ -130,85 +139,15 @@ function createQueuedFile(file: File): QueuedStockFile {
   }
 }
 
-// --------------- Auto-detect wholesaler from filename ---------------
+// --------------- Auto-detect (delegates to shared module) ---------------
 
-function detectWholesalerFromFilename(filename: string, wholesalers: Pick<Wholesaler, 'code' | 'name'>[]): string | null {
-  const upper = filename.toUpperCase()
-  for (const w of wholesalers) {
-    if (w.code && upper.includes(w.code.toUpperCase())) return w.code
-    if (w.name && upper.includes(w.name.toUpperCase())) return w.code ?? w.name
-  }
-  return null
-}
-
-// --------------- Auto-detect column mapping ---------------
-
-function autoDetectMapping(headers: string[], wholesalerCode: string | null): { mapping: StockColumnMapping; confidence: MappingConfidence[] } {
+function runAutoDetect(headers: string[], wholesalerCode: string | null) {
   const saved = wholesalerCode ? getSavedMapping(wholesalerCode) : null
-  const confidenceMap: MappingConfidence[] = []
-
-  if (saved && headers.includes(saved.cip13) && headers.includes(saved.lot_number)) {
-    const resultMapping = { ...saved }
-    for (const field of Object.keys(saved) as (keyof StockColumnMapping)[]) {
-      if (saved[field] && headers.includes(saved[field])) {
-        confidenceMap.push({ field, source: 'saved' })
-      } else {
-        resultMapping[field] = ''
-        confidenceMap.push({ field, source: 'none' })
-      }
-    }
-    return { mapping: resultMapping, confidence: confidenceMap }
-  }
-
-  const autoMap: StockColumnMapping = { cip13: '', lot_number: '', expiry_date: '', quantity: '', unit_cost: '', date_reception: '' }
-  const usedHeaders = new Set<string>()
-
-  const fieldPatterns: { field: keyof StockColumnMapping; patterns: RegExp[] }[] = [
-    {
-      field: 'cip13',
-      patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i, /code.*produit/i, /product.*code/i, /artikelnummer/i, /code.*cip/i],
-    },
-    {
-      field: 'lot_number',
-      patterns: [/^lot$/i, /numero.*lot/i, /lot.*num/i, /batch/i, /^n.*lot/i, /charge/i, /chargen/i],
-    },
-    {
-      field: 'expiry_date',
-      patterns: [/expir/i, /perem/i, /^exp$/i, /date.*exp/i, /dluo/i, /verfalls?datum/i, /best.*before/i, /^dte$/i],
-    },
-    {
-      field: 'quantity',
-      patterns: [/quantit/i, /^qty/i, /^qte/i, /menge/i, /nombre/i, /quantity/i, /stock/i, /disponible/i],
-    },
-    {
-      field: 'unit_cost',
-      patterns: [/co[uû]t/i, /prix/i, /price/i, /cost/i, /tarif/i, /preis/i, /pu\b/i, /p\.u/i],
-    },
-    {
-      field: 'date_reception',
-      patterns: [/reception/i, /r[eé]ception/i, /date.*recep/i, /received/i, /eingangsdatum/i, /date.*livr/i],
-    },
-  ]
-
-  for (const { field, patterns } of fieldPatterns) {
-    for (const pattern of patterns) {
-      if (autoMap[field]) break
-      const match = headers.find(h => !usedHeaders.has(h) && pattern.test(h))
-      if (match) {
-        autoMap[field] = match
-        usedHeaders.add(match)
-        confidenceMap.push({ field, source: 'auto' })
-      }
-    }
-  }
-
-  for (const field of Object.keys(FIELD_LABELS) as (keyof StockColumnMapping)[]) {
-    if (!confidenceMap.find(c => c.field === field)) {
-      confidenceMap.push({ field, source: autoMap[field] ? 'auto' : 'none' })
-    }
-  }
-
-  return { mapping: autoMap, confidence: confidenceMap }
+  const fullSaved = saved ? { ...emptyMapping(), ...saved } : null
+  return autoDetectMapping<StockField>(
+    headers, STOCK_PATTERNS, ALL_FIELDS,
+    fullSaved, ['cip13', 'lot_number'],
+  )
 }
 
 // --------------- Parse expiry date ---------------
@@ -317,8 +256,11 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
       }
 
       const hdrs = Object.keys(json[0])
-      const detected = wholesalers ? detectWholesalerFromFilename(file.name, wholesalers) : null
-      const { mapping, confidence } = autoDetectMapping(hdrs, detected)
+      let detected = wholesalers ? detectEntityFromFilename(file.name, wholesalers) : null
+      if (!detected && wholesalers) {
+        detected = detectEntityFromData(hdrs, json, wholesalers)
+      }
+      const { mapping, confidence } = runAutoDetect(hdrs, detected)
 
       const updatedFile: QueuedStockFile = {
         ...qf,
@@ -369,11 +311,11 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
     if (json.length === 0) { toast.error('Feuille vide'); return }
     const hdrs = Object.keys(json[0])
     const wholesalerCode = getWholesalerCode(f)
-    const { mapping, confidence } = autoDetectMapping(hdrs, wholesalerCode)
+    const { mapping, confidence } = runAutoDetect(hdrs, wholesalerCode)
     updateFile(fileId, { selectedSheet: sheetName, headers: hdrs, rows: json, mapping, confidence })
   }
 
-  const updateMapping = (fileId: string, field: keyof StockColumnMapping, value: string) => {
+  const updateMapping = (fileId: string, field: StockField, value: string) => {
     const f = queue.find(x => x.id === fileId)
     if (!f) return
     const newMapping = { ...f.mapping, [field]: value === 'none' ? '' : value }
@@ -383,6 +325,14 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
     updateFile(fileId, { mapping: newMapping, confidence: newConfidence })
   }
 
+  const resetMapping = (fileId: string) => {
+    const f = queue.find(x => x.id === fileId)
+    if (!f) return
+    const wholesalerCode = getWholesalerCode(f)
+    const { mapping, confidence } = runAutoDetect(f.headers, wholesalerCode)
+    updateFile(fileId, { mapping, confidence })
+  }
+
   const removeFile = (fileId: string) => {
     setQueue(prev => prev.filter(f => f.id !== fileId))
     if (activeFileId === fileId) setActiveFileId(null)
@@ -390,7 +340,8 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
 
   const canProceed = (f: QueuedStockFile) => {
     const wholesalerCode = getWholesalerCode(f)
-    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && !!wholesalerCode
+    const hasWholesalerColumn = !!f.mapping.wholesalerColumn
+    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (!!wholesalerCode || hasWholesalerColumn)
   }
 
   // --------------- Import mutation ---------------
@@ -683,17 +634,16 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
 
   // --------------- Render helpers ---------------
 
-  const getConfidenceBadge = (conf: MappingConfidence) => {
+  const getConfidenceBadge = (conf: StockMappingConfidence) => {
     if (conf.source === 'none') return null
     if (conf.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Memorise</Badge>
     if (conf.source === 'auto') return <Badge variant="secondary" className="text-[9px] h-4 gap-0.5"><Zap className="h-2.5 w-2.5" /> Auto</Badge>
+    if (conf.source === 'manual') return <Badge variant="outline" className="text-[9px] h-4 gap-0.5 border-blue-300 text-blue-600"><Hand className="h-2.5 w-2.5" /> Manuel</Badge>
     return null
   }
 
-  const getSampleValues = (f: QueuedStockFile, field: keyof StockColumnMapping) => {
-    const col = f.mapping[field]
-    if (!col) return []
-    return f.rows.slice(0, 3).map(r => String(r[col] || '').trim()).filter(Boolean)
+  const getSampleValues = (f: QueuedStockFile, field: StockField) => {
+    return getSharedSampleValues(f.rows, f.mapping, field)
   }
 
   // --------------- File card render ---------------
@@ -820,9 +770,25 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
               {/* Column mapping */}
               {(f.status === 'mapping' || f.status === 'pending') && (
                 <>
-                  <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs stock (lot, expiration, quantite).</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs stock (lot, expiration, quantite).</p>
+                    <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground" onClick={() => resetMapping(f.id)}>
+                      <RotateCcw className="h-3 w-3" /> Reinitialiser
+                    </Button>
+                  </div>
+
+                  {/* Alert for missing required fields */}
+                  {!REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+                      <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                      <p className="text-xs text-red-600 dark:text-red-400">
+                        Champs obligatoires manquants : {REQUIRED_FIELDS.filter(fld => !f.mapping[fld]).map(fld => FIELD_LABELS[fld].replace(' *', '')).join(', ')}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {(Object.keys(FIELD_LABELS) as (keyof StockColumnMapping)[]).map((field) => {
+                    {(ALL_FIELDS).map((field) => {
                       const samples = getSampleValues(f, field)
                       const conf = f.confidence.find(c => c.field === field)
                       return (
@@ -861,6 +827,19 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
                       {Object.values(f.mapping).filter(Boolean).length}/{Object.keys(f.mapping).length} champs
                     </span>
                   </div>
+
+                  {/* Unmapped columns */}
+                  {(() => {
+                    const unmapped = getUnmappedHeaders(f.headers, f.mapping)
+                    return unmapped.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[10px] text-muted-foreground">Colonnes non mappees :</span>
+                        {unmapped.map(h => (
+                          <Badge key={h} variant="outline" className="text-[9px] h-4 text-muted-foreground/70">{h}</Badge>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
 
                   <div className="flex justify-end">
                     <Button
