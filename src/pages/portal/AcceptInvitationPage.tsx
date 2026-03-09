@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Pill, Lock, Mail, UserPlus, AlertTriangle } from 'lucide-react'
+import { Pill, Lock, Mail, UserPlus, AlertTriangle, LogOut, Info } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function AcceptInvitationPage() {
@@ -17,26 +17,43 @@ export default function AcceptInvitationPage() {
   const [error, setError] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [existingSession, setExistingSession] = useState<string | null>(null)
 
   useEffect(() => {
     if (!token) return
-    supabase
-      .from('customer_invitations')
-      .select('*, customers(name)')
-      .eq('token', token)
-      .eq('status', 'pending')
-      .maybeSingle()
-      .then(({ data, error: err }) => {
-        if (err || !data) {
-          setError('Invitation invalide ou expiree.')
-        } else if (new Date(data.expires_at) < new Date()) {
-          setError('Cette invitation a expire.')
-        } else {
-          setInvitation(data)
-        }
-        setLoading(false)
-      })
+
+    const init = async () => {
+      // Check if someone is already logged in
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        setExistingSession(session.user.email ?? 'utilisateur')
+        // Don't sign out automatically — let user choose
+        // But still load the invitation data (admin has access)
+      }
+
+      const { data, error: err } = await supabase
+        .from('customer_invitations')
+        .select('*, customers(name)')
+        .eq('token', token)
+        .eq('status', 'pending')
+        .maybeSingle()
+
+      if (err || !data) {
+        setError('Invitation invalide ou expiree.')
+      } else if (new Date(data.expires_at) < new Date()) {
+        setError('Cette invitation a expire.')
+      } else {
+        setInvitation(data)
+      }
+      setLoading(false)
+    }
+    init()
   }, [token])
+
+  const handleSignOutAndContinue = async () => {
+    await supabase.auth.signOut()
+    setExistingSession(null)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -106,6 +123,43 @@ export default function AcceptInvitationPage() {
             </Button>
           </CardContent>
         </Card>
+      </div>
+    )
+  }
+
+  // Show warning if already logged in (e.g. Julie opening the invite link)
+  if (existingSession && invitation) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background p-4">
+        <div className="w-full max-w-sm">
+          <div className="flex items-center gap-2.5 mb-6 justify-center">
+            <div className="h-10 w-10 rounded-lg bg-primary/8 flex items-center justify-center">
+              <Pill className="h-5 w-5 text-primary" />
+            </div>
+            <span className="text-xl font-semibold tracking-tight">RW Pharma</span>
+          </div>
+          <Card>
+            <CardContent className="flex flex-col items-center py-8 text-center">
+              <Info className="h-10 w-10 text-blue-500 mb-4" />
+              <p className="text-[14px] font-semibold mb-1">Vous etes deja connecte</p>
+              <p className="text-[12px] text-muted-foreground mb-1">
+                Session active : <strong>{existingSession}</strong>
+              </p>
+              <p className="text-[12px] text-muted-foreground mb-6">
+                Cette invitation est destinee a <strong>{invitation.email}</strong> pour rejoindre le portail de <strong>{(invitation.customers as any)?.name}</strong>.
+              </p>
+              <div className="flex flex-col gap-2 w-full">
+                <Button size="sm" className="w-full gap-1.5" onClick={handleSignOutAndContinue}>
+                  <LogOut className="h-3.5 w-3.5" />
+                  Me deconnecter et creer le compte client
+                </Button>
+                <Button size="sm" variant="outline" className="w-full" onClick={() => navigate('/')}>
+                  Retour au dashboard admin
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     )
   }
