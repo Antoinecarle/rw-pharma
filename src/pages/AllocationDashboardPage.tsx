@@ -13,7 +13,8 @@ import {
 import AnimatedCounter from '@/components/ui/animated-counter'
 import GaugeChart from '@/components/ui/gauge-chart'
 import HorizontalBarChart from '@/components/ui/horizontal-bar'
-import { BarChart3, Users, Truck, Package, Boxes, CalendarRange, ArrowRight, AlertTriangle, ShieldCheck } from 'lucide-react'
+import StockLotView from '@/components/stock/StockLotView'
+import { BarChart3, Users, Truck, Package, Boxes, CalendarRange, ArrowRight, AlertTriangle, ShieldCheck, Warehouse } from 'lucide-react'
 import { useMemo } from 'react'
 
 const MONTH_NAMES = [
@@ -583,6 +584,31 @@ export default function AllocationDashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Stock par lot */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+        <Card>
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                <Warehouse className="h-4 w-4" /> Stock collecte par lot
+              </h4>
+              <Link
+                to="/stock"
+                className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Voir tout <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            <StockLotView
+              processId={activeProcess?.id}
+              showKpis={false}
+              maxHeight="400px"
+              compact
+            />
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Process history */}
       {processHistory.length > 0 && (

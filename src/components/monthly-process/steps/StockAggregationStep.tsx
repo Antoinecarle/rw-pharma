@@ -12,7 +12,8 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip'
 import AnimatedCounter from '@/components/ui/animated-counter'
-import { ArrowRight, ArrowLeft, Layers, Boxes, Package, AlertTriangle, Calendar, Truck } from 'lucide-react'
+import StockLotView from '@/components/stock/StockLotView'
+import { ArrowRight, ArrowLeft, Layers, Boxes, Package, AlertTriangle, Calendar, Truck, LayoutGrid, List } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { MonthlyProcess, CollectedStock, Wholesaler, Product } from '@/types/database'
 
@@ -46,8 +47,11 @@ const cardVariants: import('framer-motion').Variants = {
   }),
 }
 
+type ViewMode = 'table' | 'lots'
+
 export default function StockAggregationStep({ process, onNext, onBack }: StockAggregationStepProps) {
   const [groupBy, setGroupBy] = useState<GroupBy>('product')
+  const [viewMode, setViewMode] = useState<ViewMode>('lots')
 
   const { data: stocks, isLoading } = useQuery({
     queryKey: ['collected-stock', process.id, 'aggregation'],
@@ -224,172 +228,209 @@ export default function StockAggregationStep({ process, onNext, onBack }: StockA
         </motion.div>
       )}
 
-      {/* Group by filter */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <span className="text-xs text-muted-foreground">Grouper par :</span>
-        <div className="flex flex-wrap gap-1.5">
-          {[
-            { value: 'product' as GroupBy, label: `Produit (${uniqueProducts})` },
-            { value: 'lot' as GroupBy, label: `Lot (${uniqueLots})` },
-            { value: 'wholesaler' as GroupBy, label: `Grossiste (${uniqueWholesalers})` },
-          ].map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setGroupBy(opt.value)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                groupBy === opt.value
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-border hover:bg-muted text-muted-foreground'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+      {/* View mode toggle */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setViewMode('lots')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+              viewMode === 'lots'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border hover:bg-muted text-muted-foreground'
+            }`}
+          >
+            <List className="h-3.5 w-3.5" />
+            Vue lots (Qty / Alloue / Restant)
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+              viewMode === 'table'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border hover:bg-muted text-muted-foreground'
+            }`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Vue tableau
+          </button>
         </div>
       </div>
 
-      {/* Data table */}
-      {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-        </div>
-      ) : aggregated.length > 0 ? (
-        <div className="border rounded-lg overflow-x-auto max-h-[500px] overflow-y-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {groupBy === 'product' && (
-                  <>
-                    <TableHead>CIP13</TableHead>
-                    <TableHead>Produit</TableHead>
-                    <TableHead>Exp. la + proche</TableHead>
-                    <TableHead>Grossistes</TableHead>
-                    <TableHead>Lots</TableHead>
-                    <TableHead className="text-right">Qty totale</TableHead>
-                  </>
-                )}
-                {groupBy === 'lot' && (
-                  <>
-                    <TableHead>Lot</TableHead>
-                    <TableHead>CIP13</TableHead>
-                    <TableHead>Produit</TableHead>
-                    <TableHead>Expiry</TableHead>
-                    <TableHead>Fabrication</TableHead>
-                    <TableHead>Grossiste</TableHead>
-                    <TableHead className="text-right">Quantite</TableHead>
-                  </>
-                )}
-                {groupBy === 'wholesaler' && (
-                  <>
-                    <TableHead>Grossiste</TableHead>
-                    <TableHead>Produits</TableHead>
-                    <TableHead>Lots</TableHead>
-                    <TableHead className="text-right">Qty totale</TableHead>
-                  </>
-                )}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {aggregated.map((row) => (
-                <TableRow key={row.key} className={row.isExpiringSoon ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}>
-                  {groupBy === 'product' && (
-                    <>
-                      <TableCell className="font-mono text-sm">{row.productCip13}</TableCell>
-                      <TableCell className="text-sm max-w-[200px] truncate">{row.productName}</TableCell>
-                      <TableCell>
-                        <span className={`text-xs tabular-nums flex items-center gap-1 ${row.isExpiringSoon ? 'text-red-600 font-semibold' : ''}`}>
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          {new Date(row.expiryDate).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' })}
-                          {row.isExpiringSoon && <AlertTriangle className="h-3 w-3 text-red-500" />}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {[...((row as unknown as { wholesalers: Set<string> }).wholesalers ?? [])].map(code => (
-                            <Badge key={code} variant="outline" className="text-[9px]">{code}</Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip>
-                          <TooltipTrigger>
+      {/* Lot view (new) */}
+      {viewMode === 'lots' ? (
+        <StockLotView processId={process.id} showKpis={false} maxHeight="500px" compact />
+      ) : (
+        <>
+          {/* Group by filter */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="text-xs text-muted-foreground">Grouper par :</span>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { value: 'product' as GroupBy, label: `Produit (${uniqueProducts})` },
+                { value: 'lot' as GroupBy, label: `Lot (${uniqueLots})` },
+                { value: 'wholesaler' as GroupBy, label: `Grossiste (${uniqueWholesalers})` },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setGroupBy(opt.value)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                    groupBy === opt.value
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'border-border hover:bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Data table */}
+          {isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : aggregated.length > 0 ? (
+            <div className="border rounded-lg overflow-x-auto max-h-[500px] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {groupBy === 'product' && (
+                      <>
+                        <TableHead>CIP13</TableHead>
+                        <TableHead>Produit</TableHead>
+                        <TableHead>Exp. la + proche</TableHead>
+                        <TableHead>Grossistes</TableHead>
+                        <TableHead>Lots</TableHead>
+                        <TableHead className="text-right">Qty totale</TableHead>
+                      </>
+                    )}
+                    {groupBy === 'lot' && (
+                      <>
+                        <TableHead>Lot</TableHead>
+                        <TableHead>CIP13</TableHead>
+                        <TableHead>Produit</TableHead>
+                        <TableHead>Expiry</TableHead>
+                        <TableHead>Fabrication</TableHead>
+                        <TableHead>Grossiste</TableHead>
+                        <TableHead className="text-right">Quantite</TableHead>
+                      </>
+                    )}
+                    {groupBy === 'wholesaler' && (
+                      <>
+                        <TableHead>Grossiste</TableHead>
+                        <TableHead>Produits</TableHead>
+                        <TableHead>Lots</TableHead>
+                        <TableHead className="text-right">Qty totale</TableHead>
+                      </>
+                    )}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {aggregated.map((row) => (
+                    <TableRow key={row.key} className={row.isExpiringSoon ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}>
+                      {groupBy === 'product' && (
+                        <>
+                          <TableCell className="font-mono text-sm">{row.productCip13}</TableCell>
+                          <TableCell className="text-sm max-w-[200px] truncate">{row.productName}</TableCell>
+                          <TableCell>
+                            <span className={`text-xs tabular-nums flex items-center gap-1 ${row.isExpiringSoon ? 'text-red-600 font-semibold' : ''}`}>
+                              <Calendar className="h-3 w-3 text-muted-foreground" />
+                              {new Date(row.expiryDate).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' })}
+                              {row.isExpiringSoon && <AlertTriangle className="h-3 w-3 text-red-500" />}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {[...((row as unknown as { wholesalers: Set<string> }).wholesalers ?? [])].map(code => (
+                                <Badge key={code} variant="outline" className="text-[9px]">{code}</Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {((row as unknown as { lots: Set<string> }).lots ?? new Set()).size} lot(s)
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {[...((row as unknown as { lots: Set<string> }).lots ?? [])].join(', ')}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums font-bold">{row.totalQty.toLocaleString('fr-FR')}</TableCell>
+                        </>
+                      )}
+                      {groupBy === 'lot' && (
+                        <>
+                          <TableCell>
+                            <Badge variant="secondary" className="font-mono text-[10px] gap-0.5">
+                              <Boxes className="h-2.5 w-2.5" />
+                              {row.lotNumber}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{row.productCip13}</TableCell>
+                          <TableCell className="text-sm max-w-[180px] truncate">{row.productName}</TableCell>
+                          <TableCell>
+                            <span className={`text-xs tabular-nums flex items-center gap-1 ${row.isExpiringSoon ? 'text-red-600 font-semibold' : ''}`}>
+                              <Calendar className="h-3 w-3 text-muted-foreground" />
+                              {new Date(row.expiryDate).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' })}
+                              {row.isExpiringSoon && <AlertTriangle className="h-3 w-3 text-red-500" />}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {row.fabricationDate ? new Date(row.fabricationDate).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) : '-'}
+                          </TableCell>
+                          <TableCell className="font-medium text-sm">{row.wholesalerCode}</TableCell>
+                          <TableCell className="text-right tabular-nums font-bold">{row.totalQty.toLocaleString('fr-FR')}</TableCell>
+                        </>
+                      )}
+                      {groupBy === 'wholesaler' && (
+                        <>
+                          <TableCell>
+                            <div>
+                              <span className="font-bold text-sm">{row.wholesalerCode}</span>
+                              <p className="text-xs text-muted-foreground">{row.wholesalerName}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="text-[10px]">
+                              {((row as unknown as { products: Set<string> }).products ?? new Set()).size} produit(s)
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
                             <Badge variant="secondary" className="text-[10px]">
                               {((row as unknown as { lots: Set<string> }).lots ?? new Set()).size} lot(s)
                             </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {[...((row as unknown as { lots: Set<string> }).lots ?? [])].join(', ')}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums font-bold">{row.totalQty.toLocaleString('fr-FR')}</TableCell>
-                    </>
-                  )}
-                  {groupBy === 'lot' && (
-                    <>
-                      <TableCell>
-                        <Badge variant="secondary" className="font-mono text-[10px] gap-0.5">
-                          <Boxes className="h-2.5 w-2.5" />
-                          {row.lotNumber}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{row.productCip13}</TableCell>
-                      <TableCell className="text-sm max-w-[180px] truncate">{row.productName}</TableCell>
-                      <TableCell>
-                        <span className={`text-xs tabular-nums flex items-center gap-1 ${row.isExpiringSoon ? 'text-red-600 font-semibold' : ''}`}>
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          {new Date(row.expiryDate).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' })}
-                          {row.isExpiringSoon && <AlertTriangle className="h-3 w-3 text-red-500" />}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {row.fabricationDate ? new Date(row.fabricationDate).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) : '-'}
-                      </TableCell>
-                      <TableCell className="font-medium text-sm">{row.wholesalerCode}</TableCell>
-                      <TableCell className="text-right tabular-nums font-bold">{row.totalQty.toLocaleString('fr-FR')}</TableCell>
-                    </>
-                  )}
-                  {groupBy === 'wholesaler' && (
-                    <>
-                      <TableCell>
-                        <div>
-                          <span className="font-bold text-sm">{row.wholesalerCode}</span>
-                          <p className="text-xs text-muted-foreground">{row.wholesalerName}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {((row as unknown as { products: Set<string> }).products ?? new Set()).size} produit(s)
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {((row as unknown as { lots: Set<string> }).lots ?? new Set()).size} lot(s)
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums font-bold">{row.totalQty.toLocaleString('fr-FR')}</TableCell>
-                    </>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ) : (
-        <Card className="ivory-card-empty">
-          <CardContent className="p-8 text-center">
-            <Layers className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-            <p className="font-medium">Aucun stock collecte</p>
-            <p className="text-sm text-muted-foreground mt-1">Importez le stock recu a l'etape precedente.</p>
-            {onBack && (
-              <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={onBack}>
-                <ArrowLeft className="h-4 w-4" />
-                Retour a la reception
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums font-bold">{row.totalQty.toLocaleString('fr-FR')}</TableCell>
+                        </>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <Card className="ivory-card-empty">
+              <CardContent className="p-8 text-center">
+                <Layers className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+                <p className="font-medium">Aucun stock collecte</p>
+                <p className="text-sm text-muted-foreground mt-1">Importez le stock recu a l'etape precedente.</p>
+                {onBack && (
+                  <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={onBack}>
+                    <ArrowLeft className="h-4 w-4" />
+                    Retour a la reception
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Actions */}
