@@ -9,7 +9,7 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip'
 import AnimatedCounter from '@/components/ui/animated-counter'
-import { ChevronDown, Package, Boxes, AlertTriangle, Search, Warehouse } from 'lucide-react'
+import { ChevronDown, AlertTriangle, Search, Warehouse } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -318,8 +318,6 @@ export default function StockLotView({
       <div className={`space-y-2 overflow-y-auto`} style={{ maxHeight }}>
         {filteredGroups.map(group => {
           const isExpanded = expandedProducts.has(group.productId)
-          const dispoPercent = group.totalQty > 0 ? Math.round((group.totalRemaining / group.totalQty) * 100) : 0
-
           return (
             <Card key={group.productId} className="overflow-hidden">
               {/* Product header (clickable) */}
