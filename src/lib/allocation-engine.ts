@@ -567,6 +567,7 @@ export async function runAllocation(
               requested_quantity: order.quantity,
               allocated_quantity: consumed,
               prix_applique: order.unit_price ?? null,
+              debt_resolution_id: null,
               status: 'proposed',
               metadata: { strategy, priority_score: priorityScore, quota_used: true },
             })
@@ -594,6 +595,7 @@ export async function runAllocation(
               requested_quantity: order.quantity,
               allocated_quantity: consumed,
               prix_applique: order.unit_price ?? null,
+              debt_resolution_id: null,
               status: 'proposed',
               metadata: { strategy, priority_score: priorityScore, quota_used: true },
             })
@@ -627,6 +629,7 @@ export async function runAllocation(
               requested_quantity: order.quantity,
               allocated_quantity: consumed,
               prix_applique: order.unit_price ?? null,
+              debt_resolution_id: null,
               status: 'proposed',
               metadata: { strategy, priority_score: priorityScore, quota_used: true },
             })
@@ -656,6 +659,7 @@ export async function runAllocation(
               requested_quantity: order.quantity,
               allocated_quantity: qty,
               prix_applique: order.unit_price ?? null,
+              debt_resolution_id: null,
               status: 'proposed',
               metadata: { strategy, priority_score: priorityScore, quota_used: false },
             })
