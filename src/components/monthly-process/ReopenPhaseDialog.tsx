@@ -74,12 +74,13 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
       if (targetPhaseId === 1) {
         toStep = 1
         // Delete all allocations
-        await supabase
+        const { error: delErr } = await supabase
           .from('allocations')
           .delete()
           .eq('monthly_process_id', process.id)
+        if (delErr) throw delErr
         // Reset process
-        await supabase
+        const { error: updErr } = await supabase
           .from('monthly_processes')
           .update({
             current_step: toStep,
@@ -89,15 +90,17 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
             date_cloture: null,
           })
           .eq('id', process.id)
+        if (updErr) throw updErr
       } else if (targetPhaseId === 2) {
         toStep = 5
         // Delete all allocations
-        await supabase
+        const { error: delErr } = await supabase
           .from('allocations')
           .delete()
           .eq('monthly_process_id', process.id)
+        if (delErr) throw delErr
         // Reset process
-        await supabase
+        const { error: updErr } = await supabase
           .from('monthly_processes')
           .update({
             current_step: toStep,
@@ -107,10 +110,11 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
             date_cloture: null,
           })
           .eq('id', process.id)
+        if (updErr) throw updErr
       } else {
         toStep = 8
         // Just reopen — keep allocations but unlock for editing
-        await supabase
+        const { error: updErr } = await supabase
           .from('monthly_processes')
           .update({
             current_step: toStep,
@@ -119,21 +123,26 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
             date_cloture: null,
           })
           .eq('id', process.id)
+        if (updErr) throw updErr
       }
 
-      // Log the reopening for audit
-      await supabase
-        .from('phase_reopenings')
-        .insert({
-          monthly_process_id: process.id,
-          from_step: fromStep,
-          to_step: toStep,
-          reason: reason.trim() || null,
-          impact_summary: {
-            phase_reopened: targetPhaseId,
-            allocations_deleted: targetPhaseId < 3,
-          },
-        })
+      // Log the reopening for audit (non-blocking — table might not exist yet)
+      try {
+        await supabase
+          .from('phase_reopenings')
+          .insert({
+            monthly_process_id: process.id,
+            from_step: fromStep,
+            to_step: toStep,
+            reason: reason.trim() || null,
+            impact_summary: {
+              phase_reopened: targetPhaseId,
+              allocations_deleted: targetPhaseId < 3,
+            },
+          })
+      } catch {
+        // Audit log failure is non-blocking
+      }
 
       return toStep
     },

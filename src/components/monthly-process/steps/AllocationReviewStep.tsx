@@ -131,7 +131,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
 
       await supabase
         .from('monthly_processes')
-        .update({ status: 'reviewing_allocations', current_step: 7 })
+        .update({ status: 'reviewing_allocations', phase: 'allocation' })
         .eq('id', process.id)
     },
     onSuccess: () => {
@@ -143,7 +143,14 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
     onError: (err: Error) => toast.error(err.message),
   })
 
-  const totalRequested = allocations?.reduce((s, a) => s + a.requested_quantity, 0) ?? 0
+  // Deduplicate requested_quantity per order_id (one order can generate multiple allocation rows)
+  const totalRequested = useMemo(() => {
+    const byOrder = new Map<string, number>()
+    for (const a of allocations ?? []) {
+      if (!byOrder.has(a.order_id)) byOrder.set(a.order_id, a.requested_quantity)
+    }
+    return [...byOrder.values()].reduce((s, v) => s + v, 0)
+  }, [allocations])
   const totalAllocated = allocations?.reduce((s, a) => s + a.allocated_quantity, 0) ?? 0
   const fulfillmentRate = totalRequested > 0 ? ((totalAllocated / totalRequested) * 100) : 0
   const fulfillmentRateStr = fulfillmentRate.toFixed(1)
@@ -162,20 +169,31 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
     }
   }
 
-  // Group by customer with fulfillment %
-  const customerSummary = new Map<string, { name: string; code: string; count: number; totalQty: number; totalReq: number }>()
-  for (const a of allocations ?? []) {
-    const key = a.customer_id
-    const c = a.customer as unknown as { name: string; code: string } | undefined
-    const existing = customerSummary.get(key)
-    if (existing) {
-      existing.count++
-      existing.totalQty += a.allocated_quantity
-      existing.totalReq += a.requested_quantity
-    } else {
-      customerSummary.set(key, { name: c?.name ?? '', code: c?.code ?? '?', count: 1, totalQty: a.allocated_quantity, totalReq: a.requested_quantity })
+  // Group by customer with fulfillment % (deduplicate requested per order_id)
+  const customerSummary = useMemo(() => {
+    const map = new Map<string, { name: string; code: string; count: number; totalQty: number; totalReq: number; seenOrders: Set<string> }>()
+    for (const a of allocations ?? []) {
+      const key = a.customer_id
+      const c = a.customer as unknown as { name: string; code: string } | undefined
+      const existing = map.get(key)
+      if (existing) {
+        existing.count++
+        existing.totalQty += a.allocated_quantity
+        if (!existing.seenOrders.has(a.order_id)) {
+          existing.totalReq += a.requested_quantity
+          existing.seenOrders.add(a.order_id)
+        }
+      } else {
+        map.set(key, { name: c?.name ?? '', code: c?.code ?? '?', count: 1, totalQty: a.allocated_quantity, totalReq: a.requested_quantity, seenOrders: new Set([a.order_id]) })
+      }
     }
-  }
+    // Strip seenOrders from result
+    const result = new Map<string, { name: string; code: string; count: number; totalQty: number; totalReq: number }>()
+    for (const [k, v] of map) {
+      result.set(k, { name: v.name, code: v.code, count: v.count, totalQty: v.totalQty, totalReq: v.totalReq })
+    }
+    return result
+  }, [allocations])
 
   // Under-allocated products
   const productCoverage = useMemo(() => {
@@ -557,7 +575,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
         </div>
-      ) : viewMode !== 'by_lot' && filteredAllocations.length > 0 ? (
+      ) : viewMode !== 'by_lot' && (allocations?.length ?? 0) > 0 && filteredAllocations.length > 0 ? (
         <div className="border rounded-lg overflow-x-auto max-h-[450px] overflow-y-auto">
           <Table>
             <TableHeader>
@@ -701,7 +719,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
             </TableBody>
           </Table>
         </div>
-      ) : (
+      ) : viewMode !== 'by_lot' && (allocations?.length ?? 0) === 0 ? (
         <Card className="ivory-card-empty">
           <CardContent className="p-8 text-center">
             <AlertTriangle className="h-10 w-10 mx-auto text-muted-foreground mb-3" />

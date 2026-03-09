@@ -394,6 +394,7 @@ export async function runAllocation(
   year: number,
   strategy: AllocationStrategy,
   excludedWholesalers: Set<string>,
+  dryRun: boolean = false,
 ): Promise<{ allocations: AllocationResult[]; logs: AllocationLog[] }> {
   // 1. Fetch all data in parallel
   const [orders, quotaRows, stockRows, wholesalers, products] = await Promise.all([
@@ -771,13 +772,15 @@ export async function runAllocation(
         }
       }
 
-      // Persist debt resolutions to DB
-      for (const alloc of allocations) {
-        if (alloc.debt_resolution_id) {
-          const totalResolved = allocations
-            .filter(a => a.debt_resolution_id === alloc.debt_resolution_id)
-            .reduce((s, a) => s + a.allocated_quantity, 0)
-          await resolveDebt(alloc.debt_resolution_id, totalResolved)
+      // Persist debt resolutions to DB (skip in dry-run)
+      if (!dryRun) {
+        for (const alloc of allocations) {
+          if (alloc.debt_resolution_id) {
+            const totalResolved = allocations
+              .filter(a => a.debt_resolution_id === alloc.debt_resolution_id)
+              .reduce((s, a) => s + a.allocated_quantity, 0)
+            await resolveDebt(alloc.debt_resolution_id, totalResolved)
+          }
         }
       }
     }
@@ -786,57 +789,60 @@ export async function runAllocation(
     console.warn('Debt resolution skipped:', debtErr)
   }
 
-  // Persist quota_used back to DB — batched in parallel
-  const quotaUtilization = quotaTracker.getUtilization()
-  if (quotaUtilization.length > 0) {
-    const usedByQuota = quotaTracker.getDetailedUsage()
-    const quotaPromises = usedByQuota
-      .filter(({ used }) => used > 0)
-      .map(({ quotaId, used }) =>
-        supabase.from('wholesaler_quotas').update({ quota_used: used }).eq('id', quotaId)
-      )
-    // Execute in parallel batches of 20 to avoid overwhelming Supabase
-    for (let i = 0; i < quotaPromises.length; i += 20) {
-      await Promise.all(quotaPromises.slice(i, i + 20))
+  // Persist to DB only when NOT in dry-run mode
+  if (!dryRun) {
+    // Persist quota_used back to DB — batched in parallel
+    const quotaUtilization = quotaTracker.getUtilization()
+    if (quotaUtilization.length > 0) {
+      const usedByQuota = quotaTracker.getDetailedUsage()
+      const quotaPromises = usedByQuota
+        .filter(({ used }) => used > 0)
+        .map(({ quotaId, used }) =>
+          supabase.from('wholesaler_quotas').update({ quota_used: used }).eq('id', quotaId)
+        )
+      // Execute in parallel batches of 20 to avoid overwhelming Supabase
+      for (let i = 0; i < quotaPromises.length; i += 20) {
+        await Promise.all(quotaPromises.slice(i, i + 20))
+      }
     }
-  }
 
-  // Persist allocated_quantity + status on orders — batched in parallel
-  const orderAllocMap = new Map<string, number>()
-  for (const a of allocations) {
-    orderAllocMap.set(a.order_id, (orderAllocMap.get(a.order_id) ?? 0) + a.allocated_quantity)
-  }
-  const orderPromises = sortedOrders.map(order => {
-    const totalAlloc = orderAllocMap.get(order.id) ?? 0
-    const newStatus = totalAlloc <= 0
-      ? 'pending'
-      : totalAlloc >= order.quantity
-        ? 'allocated'
-        : 'partially_allocated'
-    return supabase.from('orders').update({ allocated_quantity: totalAlloc, status: newStatus }).eq('id', order.id)
-  })
-  // Execute in parallel batches of 20
-  for (let i = 0; i < orderPromises.length; i += 20) {
-    await Promise.all(orderPromises.slice(i, i + 20))
-  }
-
-  // Update collected_stock status based on remaining quantity
-  const stockUsage = new Map<string, number>() // stockId → total consumed
-  for (const a of allocations) {
-    if (a.stock_id) {
-      stockUsage.set(a.stock_id, (stockUsage.get(a.stock_id) ?? 0) + a.allocated_quantity)
+    // Persist allocated_quantity + status on orders — batched in parallel
+    const orderAllocMap = new Map<string, number>()
+    for (const a of allocations) {
+      orderAllocMap.set(a.order_id, (orderAllocMap.get(a.order_id) ?? 0) + a.allocated_quantity)
     }
-  }
-  if (stockUsage.size > 0) {
-    // Compare consumed vs original quantity to determine status
-    const stockOriginal = new Map(stockRows.map(s => [s.id, s.quantity]))
-    const stockStatusPromises = [...stockUsage.entries()].map(([stockId, consumed]) => {
-      const original = stockOriginal.get(stockId) ?? 0
-      const newStatus = consumed >= original ? 'allocated' : 'partially_allocated'
-      return supabase.from('collected_stock').update({ status: newStatus }).eq('id', stockId)
+    const orderPromises = sortedOrders.map(order => {
+      const totalAlloc = orderAllocMap.get(order.id) ?? 0
+      const newStatus = totalAlloc <= 0
+        ? 'pending'
+        : totalAlloc >= order.quantity
+          ? 'allocated'
+          : 'partially_allocated'
+      return supabase.from('orders').update({ allocated_quantity: totalAlloc, status: newStatus }).eq('id', order.id)
     })
-    for (let i = 0; i < stockStatusPromises.length; i += 20) {
-      await Promise.all(stockStatusPromises.slice(i, i + 20))
+    // Execute in parallel batches of 20
+    for (let i = 0; i < orderPromises.length; i += 20) {
+      await Promise.all(orderPromises.slice(i, i + 20))
+    }
+
+    // Update collected_stock status based on remaining quantity
+    const stockUsage = new Map<string, number>() // stockId → total consumed
+    for (const a of allocations) {
+      if (a.stock_id) {
+        stockUsage.set(a.stock_id, (stockUsage.get(a.stock_id) ?? 0) + a.allocated_quantity)
+      }
+    }
+    if (stockUsage.size > 0) {
+      // Compare consumed vs original quantity to determine status
+      const stockOriginal = new Map(stockRows.map(s => [s.id, s.quantity]))
+      const stockStatusPromises = [...stockUsage.entries()].map(([stockId, consumed]) => {
+        const original = stockOriginal.get(stockId) ?? 0
+        const newStatus = consumed >= original ? 'allocated' : 'partially_allocated'
+        return supabase.from('collected_stock').update({ status: newStatus }).eq('id', stockId)
+      })
+      for (let i = 0; i < stockStatusPromises.length; i += 20) {
+        await Promise.all(stockStatusPromises.slice(i, i + 20))
+      }
     }
   }
 

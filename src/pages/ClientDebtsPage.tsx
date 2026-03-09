@@ -294,8 +294,11 @@ export default function ClientDebtsPage() {
                 {filtered.map(debt => {
                   const st = STATUS_MAP[debt.status] ?? STATUS_MAP.pending
                   const remainingOwed = debt.quantity_owed - debt.resolved_quantity
-                  const monthDate = new Date(debt.month)
-                  const monthLabel = `${MONTH_NAMES[monthDate.getMonth()]} ${monthDate.getFullYear()}`
+                  // Parse month string directly to avoid timezone issues (format: YYYY-MM-DD)
+                  const monthParts = String(debt.month).split('-')
+                  const monthIdx = parseInt(monthParts[1] ?? '1', 10) - 1
+                  const monthYear = parseInt(monthParts[0] ?? '2026', 10)
+                  const monthLabel = `${MONTH_NAMES[monthIdx] ?? '?'} ${monthYear}`
 
                   return (
                     <TableRow key={debt.id}>

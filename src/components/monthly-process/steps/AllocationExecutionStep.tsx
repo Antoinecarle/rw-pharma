@@ -95,7 +95,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
   const dryRunMut = useMutation({
     mutationFn: async () => {
       const { allocations, logs } = await runAllocation(
-        process.id, process.month, process.year, strategy, excludedWholesalers,
+        process.id, process.month, process.year, strategy, excludedWholesalers, true,
       )
       setAllocationLogs(logs)
       return computeStats(allocations, logs, wholesalers ?? [])

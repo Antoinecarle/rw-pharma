@@ -67,10 +67,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRole('admin')
         setCustomerId(null)
         setCustomerName(null)
+        // Always set loading=false on sign out (not just initial)
+        setLoading(false)
         if (!initialDone) {
           initialDone = true
           clearTimeout(timeout)
-          setLoading(false)
         }
       }
 

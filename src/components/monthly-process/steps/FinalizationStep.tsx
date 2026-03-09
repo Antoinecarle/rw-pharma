@@ -35,6 +35,7 @@ interface FinalizationStepProps {
 
 interface AllocationRow {
   id: string
+  order_id: string
   requested_quantity: number
   allocated_quantity: number
   prix_applique: number | null
@@ -52,7 +53,7 @@ async function fetchAllocations(processId: string): Promise<AllocationRow[]> {
   while (true) {
     const { data, error } = await supabase
       .from('allocations')
-      .select('id, requested_quantity, allocated_quantity, prix_applique, status, metadata, customer:customers(code, name, country), product:products(cip13, name), wholesaler:wholesalers(code, name)')
+      .select('id, order_id, requested_quantity, allocated_quantity, prix_applique, status, metadata, customer:customers(code, name, country), product:products(cip13, name), wholesaler:wholesalers(code, name)')
       .eq('monthly_process_id', processId)
       .range(from, from + pageSize - 1)
     if (error) throw error
@@ -213,10 +214,10 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
       }
 
       // Paginated fetch for allocations
-      const allocData: { allocated_quantity: number; requested_quantity: number; customer_id: string; wholesaler_id: string }[] = []
+      const allocData: { allocated_quantity: number; requested_quantity: number; customer_id: string; wholesaler_id: string; order_id: string }[] = []
       let aFrom = 0
       while (true) {
-        const { data, error } = await supabase.from('allocations').select('allocated_quantity, requested_quantity, customer_id, wholesaler_id').eq('monthly_process_id', process.id).range(aFrom, aFrom + 999)
+        const { data, error } = await supabase.from('allocations').select('allocated_quantity, requested_quantity, customer_id, wholesaler_id, order_id').eq('monthly_process_id', process.id).range(aFrom, aFrom + 999)
         if (error) throw error
         if (!data || data.length === 0) break
         allocData.push(...data)
@@ -224,7 +225,16 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
         aFrom += 1000
       }
 
-      const totalRequested = allocData.reduce((s, a) => s + (a.requested_quantity ?? 0), 0)
+      // Deduplicate requested_quantity per order (one order can have multiple allocation rows)
+      const reqByOrder = new Map<string, number>()
+      for (const a of allocData) {
+        if (a.order_id && !reqByOrder.has(a.order_id)) {
+          reqByOrder.set(a.order_id, a.requested_quantity ?? 0)
+        }
+      }
+      const totalRequested = reqByOrder.size > 0
+        ? [...reqByOrder.values()].reduce((s, v) => s + v, 0)
+        : allocData.reduce((s, a) => s + (a.requested_quantity ?? 0), 0)
       const totalAllocated = allocData.reduce((s, a) => s + (a.allocated_quantity ?? 0), 0)
       const uniqueCustomers = new Set(ordersData.map((o) => o.customer_id)).size
       const uniqueWholesalers = new Set(allocData.map((a) => a.wholesaler_id)).size
@@ -277,38 +287,44 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
     queryFn: () => fetchAllocations(process.id),
   })
 
-  // Summaries by wholesaler
+  // Summaries by wholesaler (deduplicate requested per order_id)
   const wholesalerSummary = useMemo(() => {
-    const map = new Map<string, { code: string; name: string; totalQty: number; totalReq: number; count: number }>()
+    const map = new Map<string, { code: string; name: string; totalQty: number; totalReq: number; count: number; seenOrders: Set<string> }>()
     for (const a of allocations ?? []) {
       const code = a.wholesaler?.code ?? 'INCONNU'
       const existing = map.get(code)
       if (existing) {
         existing.totalQty += a.allocated_quantity
-        existing.totalReq += a.requested_quantity
+        if (a.order_id && !existing.seenOrders.has(a.order_id)) {
+          existing.totalReq += a.requested_quantity
+          existing.seenOrders.add(a.order_id)
+        }
         existing.count++
       } else {
-        map.set(code, { code, name: a.wholesaler?.name ?? code, totalQty: a.allocated_quantity, totalReq: a.requested_quantity, count: 1 })
+        map.set(code, { code, name: a.wholesaler?.name ?? code, totalQty: a.allocated_quantity, totalReq: a.requested_quantity, count: 1, seenOrders: new Set(a.order_id ? [a.order_id] : []) })
       }
     }
-    return [...map.values()].sort((a, b) => b.totalQty - a.totalQty)
+    return [...map.values()].map(({ seenOrders: _, ...rest }) => rest).sort((a, b) => b.totalQty - a.totalQty)
   }, [allocations])
 
-  // Summaries by customer
+  // Summaries by customer (deduplicate requested per order_id)
   const customerSummary = useMemo(() => {
-    const map = new Map<string, { code: string; name: string; totalQty: number; totalReq: number; count: number }>()
+    const map = new Map<string, { code: string; name: string; totalQty: number; totalReq: number; count: number; seenOrders: Set<string> }>()
     for (const a of allocations ?? []) {
       const code = a.customer?.code ?? 'INCONNU'
       const existing = map.get(code)
       if (existing) {
         existing.totalQty += a.allocated_quantity
-        existing.totalReq += a.requested_quantity
+        if (a.order_id && !existing.seenOrders.has(a.order_id)) {
+          existing.totalReq += a.requested_quantity
+          existing.seenOrders.add(a.order_id)
+        }
         existing.count++
       } else {
-        map.set(code, { code, name: a.customer?.name ?? code, totalQty: a.allocated_quantity, totalReq: a.requested_quantity, count: 1 })
+        map.set(code, { code, name: a.customer?.name ?? code, totalQty: a.allocated_quantity, totalReq: a.requested_quantity, count: 1, seenOrders: new Set(a.order_id ? [a.order_id] : []) })
       }
     }
-    return [...map.values()].sort((a, b) => b.totalQty - a.totalQty)
+    return [...map.values()].map(({ seenOrders: _, ...rest }) => rest).sort((a, b) => b.totalQty - a.totalQty)
   }, [allocations])
 
   const isCompleted = process.status === 'completed'
