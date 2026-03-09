@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query' // deploy trigger
 import { supabase } from '@/lib/supabase'
 import { runAllocation, computeStats, type AllocationStrategy, type AllocationLog, type DryRunStats } from '@/lib/allocation-engine'
 import { Button } from '@/components/ui/button'
