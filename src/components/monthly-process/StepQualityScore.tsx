@@ -50,6 +50,11 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
     const details: string[] = []
     let score = 0
 
+    // When process is completed, all steps that were passed are implicitly done
+    if (process.status === 'completed' && step <= (process.current_step ?? 9)) {
+      return { score: 100, label: 'Excellent', details: ['Etape completee'] }
+    }
+
     switch (step) {
       case 1: {
         // Quota import: score based on having quotas

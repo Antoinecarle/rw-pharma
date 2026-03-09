@@ -67,7 +67,7 @@ interface WholesalerRow {
 
 export interface AllocationResult {
   monthly_process_id: string
-  order_id: string
+  order_id: string | null
   customer_id: string
   product_id: string
   wholesaler_id: string
@@ -738,7 +738,7 @@ export async function runAllocation(
               if (toResolve > 0) {
                 allocations.push({
                   monthly_process_id: processId,
-                  order_id: '', // No specific order — debt resolution
+                  order_id: null, // No specific order — debt resolution
                   customer_id: debtCustomerId,
                   product_id: debtProductId,
                   wholesaler_id: ws.wholesalerId,
@@ -809,6 +809,7 @@ export async function runAllocation(
     // Persist allocated_quantity + status on orders — batched in parallel
     const orderAllocMap = new Map<string, number>()
     for (const a of allocations) {
+      if (!a.order_id) continue // Skip debt resolution allocations
       orderAllocMap.set(a.order_id, (orderAllocMap.get(a.order_id) ?? 0) + a.allocated_quantity)
     }
     const orderPromises = sortedOrders.map(order => {
@@ -915,6 +916,7 @@ export function computeStats(
 
   // Deduplicate requested_quantity (one order can have multiple allocation rows)
   for (const a of allocations) {
+    if (!a.order_id) continue // Skip debt resolution allocations
     if (!totalRequested.has(a.order_id)) {
       totalRequested.set(a.order_id, a.requested_quantity)
     }

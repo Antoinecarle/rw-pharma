@@ -25,7 +25,7 @@ export interface SkippedItem {
   cip13: string
   quantity: number
   unitPrice: number | null
-  reason: 'unknown_customer' | 'unknown_product' | 'invalid_quantity' | 'both_unknown'
+  reason: 'unknown_customer' | 'unknown_product' | 'invalid_quantity' | 'both_unknown' | 'duplicate'
 }
 
 interface SkippedItemsReviewModalProps {
@@ -62,6 +62,7 @@ const REASON_LABELS: Record<SkippedItem['reason'], string> = {
   unknown_product: 'Produit inconnu',
   invalid_quantity: 'Quantite invalide',
   both_unknown: 'Client et produit inconnus',
+  duplicate: 'Doublon (deja importe)',
 }
 
 const COUNTRIES = [

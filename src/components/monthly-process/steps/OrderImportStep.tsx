@@ -462,6 +462,24 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       const skippedDetails: SkippedItem[] = []
       const batchSize = 100
 
+      // Fetch existing orders for this process to prevent duplicates on re-import
+      const existingKeys = new Set<string>()
+      {
+        let page = 0
+        const pageSize = 1000
+        while (true) {
+          const { data: existing } = await supabase
+            .from('orders')
+            .select('customer_id, product_id')
+            .eq('monthly_process_id', process.id)
+            .range(page * pageSize, (page + 1) * pageSize - 1)
+          if (!existing || existing.length === 0) break
+          for (const e of existing) existingKeys.add(`${e.customer_id}::${e.product_id}`)
+          if (existing.length < pageSize) break
+          page++
+        }
+      }
+
       updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: 'Validation et insertion...' } })
 
       for (let i = 0; i < f.rows.length; i += batchSize) {
@@ -503,6 +521,21 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
             })
             return null
           }
+
+          // Skip duplicate (same customer + product already exists for this process)
+          const dedupKey = `${rowCustomerId}::${productEntry.id}`
+          if (existingKeys.has(dedupKey)) {
+            skippedDetails.push({
+              rowIndex,
+              customerCode: isMultiClient ? String(row[f.mapping.clientColumn] || '').trim() : (clientCode ?? ''),
+              cip13,
+              quantity: qty,
+              unitPrice: price,
+              reason: 'duplicate' as SkippedItem['reason'],
+            })
+            return null
+          }
+          existingKeys.add(dedupKey) // prevent intra-batch duplicates too
 
           // Build metadata from enriched fields
           const metadata: Record<string, string | null> = {}

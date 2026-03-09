@@ -42,6 +42,7 @@ interface ProcessRow {
 interface AllocationRow {
   id: string
   monthly_process_id: string
+  order_id: string
   customer_id: string
   product_id: string
   wholesaler_id: string
@@ -84,7 +85,7 @@ export default function AllocationDashboardPage() {
       while (true) {
         const { data, error } = await supabase
           .from('allocations')
-          .select('id, monthly_process_id, customer_id, product_id, wholesaler_id, requested_quantity, allocated_quantity, status, metadata, customer:customers(code, name), product:products(cip13, name), wholesaler:wholesalers(code, name)')
+          .select('id, monthly_process_id, order_id, customer_id, product_id, wholesaler_id, requested_quantity, allocated_quantity, status, metadata, customer:customers(code, name), product:products(cip13, name), wholesaler:wholesalers(code, name)')
           .eq('monthly_process_id', activeProcess.id)
           .range(from, from + pageSize - 1)
         if (error) throw error
@@ -184,19 +185,22 @@ export default function AllocationDashboardPage() {
     }
   }, [allocations])
 
-  // Customer breakdown
+  // Customer breakdown — deduplicate requested_quantity by order_id to avoid inflating demand
   const customerBreakdown = useMemo(() => {
     if (!allocations) return []
-    const map = new Map<string, { code: string; name: string; req: number; alloc: number; count: number }>()
+    const map = new Map<string, { code: string; name: string; req: number; alloc: number; count: number; seenOrders: Set<string> }>()
     for (const a of allocations) {
       const code = a.customer?.code ?? '?'
       const existing = map.get(code)
       if (existing) {
-        existing.req += a.requested_quantity
+        if (!existing.seenOrders.has(a.order_id)) {
+          existing.req += a.requested_quantity
+          existing.seenOrders.add(a.order_id)
+        }
         existing.alloc += a.allocated_quantity
         existing.count++
       } else {
-        map.set(code, { code, name: a.customer?.name ?? code, req: a.requested_quantity, alloc: a.allocated_quantity, count: 1 })
+        map.set(code, { code, name: a.customer?.name ?? code, req: a.requested_quantity, alloc: a.allocated_quantity, count: 1, seenOrders: new Set([a.order_id]) })
       }
     }
     return [...map.values()].sort((a, b) => b.alloc - a.alloc)

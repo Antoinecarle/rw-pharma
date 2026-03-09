@@ -54,6 +54,9 @@ export function getPhaseStatus(phaseId: number, currentStep: number, processStat
   const phase = PHASES[phaseId - 1]
   if (!phase) return 'future'
 
+  // When process is fully completed, all phases are completed
+  if (processStatus === 'completed') return 'completed'
+
   const maxStep = Math.max(...phase.steps)
   const minStep = Math.min(...phase.steps)
 
@@ -62,8 +65,6 @@ export function getPhaseStatus(phaseId: number, currentStep: number, processStat
 
   if (currentStep > maxStep) return 'completed'
   if (currentStep >= minStep && currentStep <= maxStep) return 'active'
-  // Phase 1 completed when step is past its max, even if not in "attente"
-  if (currentStep > maxStep) return 'completed'
   return 'future'
 }
 

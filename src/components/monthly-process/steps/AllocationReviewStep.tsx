@@ -197,14 +197,18 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
     return result
   }, [allocations])
 
-  // Under-allocated products
+  // Under-allocated products — deduplicate requested by order_id to avoid inflating demand
   const productCoverage = useMemo(() => {
-    const map = new Map<string, { name: string; cip13: string; req: number; alloc: number }>()
+    const map = new Map<string, { name: string; cip13: string; req: number; alloc: number; seenOrders: Set<string> }>()
     for (const a of allocations ?? []) {
       const prod = a.product as unknown as { cip13: string; name: string } | undefined
+      const oid = a.order_id ?? ''
       const existing = map.get(a.product_id)
       if (existing) {
-        existing.req += a.requested_quantity
+        if (oid && !existing.seenOrders.has(oid)) {
+          existing.req += a.requested_quantity
+          existing.seenOrders.add(oid)
+        }
         existing.alloc += a.allocated_quantity
       } else {
         map.set(a.product_id, {
@@ -212,6 +216,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
           cip13: prod?.cip13 ?? '',
           req: a.requested_quantity,
           alloc: a.allocated_quantity,
+          seenOrders: new Set(oid ? [oid] : []),
         })
       }
     }
