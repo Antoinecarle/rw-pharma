@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import CountUp from 'react-countup'
 import { motion, useInView } from 'framer-motion'
 
@@ -60,12 +60,7 @@ export default function AnimatedCounter({
   valueClassName = '',
 }: AnimatedCounterProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: '-50px' })
-  const [hasAnimated, setHasAnimated] = useState(false)
-
-  useEffect(() => {
-    if (isInView && !hasAnimated) setHasAnimated(true)
-  }, [isInView, hasAnimated])
+  const isInView = useInView(ref, { once: true, margin: '-40px' })
 
   return (
     <motion.div
@@ -76,20 +71,16 @@ export default function AnimatedCounter({
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
       <span className={valueClassName}>
-        {hasAnimated ? (
-          <CountUp
-            key={value}
-            start={0}
-            end={value}
-            duration={duration}
-            decimals={decimals}
-            separator=" "
-            prefix={prefix}
-            suffix={suffix}
-          />
-        ) : (
-          `${prefix}0${suffix}`
-        )}
+        <CountUp
+          key={`${value}-${isInView}`}
+          start={0}
+          end={isInView ? value : 0}
+          duration={isInView ? duration : 0}
+          decimals={decimals}
+          separator=" "
+          prefix={prefix}
+          suffix={suffix}
+        />
       </span>
 
       {delta != null && delta !== 0 && (
