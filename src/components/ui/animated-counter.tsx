@@ -59,13 +59,17 @@ export default function AnimatedCounter({
   className = '',
   valueClassName = '',
 }: AnimatedCounterProps) {
-  const [ready, setReady] = useState(false)
+  // Track the first non-zero value to avoid CountUp remount issues
+  // When value starts at 0 (async loading) and later becomes e.g. 32,
+  // we wait for real data before mounting CountUp so it animates correctly.
+  const [snappedValue, setSnappedValue] = useState(value)
 
-  // Trigger animation shortly after mount — no IntersectionObserver needed
   useEffect(() => {
-    const timer = setTimeout(() => setReady(true), 100)
-    return () => clearTimeout(timer)
-  }, [])
+    setSnappedValue(value)
+  }, [value])
+
+  // Format number for static display (used when value is 0)
+  const formatted = `${prefix}${snappedValue.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}${suffix}`
 
   return (
     <motion.div
@@ -75,16 +79,20 @@ export default function AnimatedCounter({
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
       <span className={valueClassName}>
-        <CountUp
-          key={value}
-          start={0}
-          end={value}
-          duration={ready ? duration : 0}
-          decimals={decimals}
-          separator=" "
-          prefix={prefix}
-          suffix={suffix}
-        />
+        {snappedValue > 0 ? (
+          <CountUp
+            key={snappedValue}
+            start={0}
+            end={snappedValue}
+            duration={duration}
+            decimals={decimals}
+            separator=" "
+            prefix={prefix}
+            suffix={suffix}
+          />
+        ) : (
+          formatted
+        )}
       </span>
 
       {delta != null && delta !== 0 && (
