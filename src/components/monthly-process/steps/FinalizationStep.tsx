@@ -198,58 +198,39 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
   const [exporting, setExporting] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
 
-  const { data: stats } = useQuery({
-    queryKey: ['monthly-process', process.id, 'final-stats'],
-    queryFn: async () => {
-      // Paginated fetch for orders
-      const ordersData: { customer_id: string }[] = []
-      let oFrom = 0
-      while (true) {
-        const { data, error } = await supabase.from('orders').select('customer_id').eq('monthly_process_id', process.id).range(oFrom, oFrom + 999)
-        if (error) throw error
-        if (!data || data.length === 0) break
-        ordersData.push(...data)
-        if (data.length < 1000) break
-        oFrom += 1000
-      }
-
-      // Paginated fetch for allocations
-      const allocData: { allocated_quantity: number; requested_quantity: number; customer_id: string; wholesaler_id: string; order_id: string }[] = []
-      let aFrom = 0
-      while (true) {
-        const { data, error } = await supabase.from('allocations').select('allocated_quantity, requested_quantity, customer_id, wholesaler_id, order_id').eq('monthly_process_id', process.id).range(aFrom, aFrom + 999)
-        if (error) throw error
-        if (!data || data.length === 0) break
-        allocData.push(...data)
-        if (data.length < 1000) break
-        aFrom += 1000
-      }
-
-      // Deduplicate requested_quantity per order (one order can have multiple allocation rows)
-      const reqByOrder = new Map<string, number>()
-      for (const a of allocData) {
-        if (a.order_id && !reqByOrder.has(a.order_id)) {
-          reqByOrder.set(a.order_id, a.requested_quantity ?? 0)
-        }
-      }
-      const totalRequested = reqByOrder.size > 0
-        ? [...reqByOrder.values()].reduce((s, v) => s + v, 0)
-        : allocData.reduce((s, a) => s + (a.requested_quantity ?? 0), 0)
-      const totalAllocated = allocData.reduce((s, a) => s + (a.allocated_quantity ?? 0), 0)
-      const uniqueCustomers = new Set(ordersData.map((o) => o.customer_id)).size
-      const uniqueWholesalers = new Set(allocData.map((a) => a.wholesaler_id)).size
-
-      return {
-        orders: ordersData.length,
-        allocations: allocData.length,
-        totalRequested,
-        totalAllocated,
-        fulfillmentRate: totalRequested > 0 ? ((totalAllocated / totalRequested) * 100) : 0,
-        uniqueCustomers,
-        uniqueWholesalers,
-      }
-    },
+  const { data: allocations } = useQuery({
+    queryKey: ['monthly-process', process.id, 'final-allocations'],
+    queryFn: () => fetchAllocations(process.id),
   })
+
+  // Derive stats from the allocations data (avoids separate query with auth race conditions)
+  const stats = useMemo(() => {
+    if (!allocations || allocations.length === 0) return undefined
+    // Deduplicate requested_quantity per order (one order can have multiple allocation rows)
+    const reqByOrder = new Map<string, number>()
+    for (const a of allocations) {
+      const oid = a.order_id ?? ''
+      if (oid && !reqByOrder.has(oid)) {
+        reqByOrder.set(oid, a.requested_quantity ?? 0)
+      }
+    }
+    const totalRequested = reqByOrder.size > 0
+      ? [...reqByOrder.values()].reduce((s, v) => s + v, 0)
+      : allocations.reduce((s, a) => s + (a.requested_quantity ?? 0), 0)
+    const totalAllocated = allocations.reduce((s, a) => s + (a.allocated_quantity ?? 0), 0)
+    const uniqueCustomers = new Set(allocations.map(a => a.customer?.code).filter(Boolean)).size
+    const uniqueWholesalers = new Set(allocations.map(a => a.wholesaler?.code).filter(Boolean)).size
+
+    return {
+      orders: reqByOrder.size,
+      allocations: allocations.length,
+      totalRequested,
+      totalAllocated,
+      fulfillmentRate: totalRequested > 0 ? ((totalAllocated / totalRequested) * 100) : 0,
+      uniqueCustomers,
+      uniqueWholesalers,
+    }
+  }, [allocations])
 
   const fireConfetti = useCallback(async () => {
     try {
@@ -280,11 +261,6 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
       fireConfetti()
     },
     onError: (err: Error) => toast.error(err.message),
-  })
-
-  const { data: allocations } = useQuery({
-    queryKey: ['monthly-process', process.id, 'final-allocations'],
-    queryFn: () => fetchAllocations(process.id),
   })
 
   // Summaries by wholesaler (deduplicate requested per order_id)
