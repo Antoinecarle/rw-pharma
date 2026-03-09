@@ -131,7 +131,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
 
       await supabase
         .from('monthly_processes')
-        .update({ status: 'reviewing_allocations', phase: 'allocation' })
+        .update({ status: 'finalizing', current_step: 9, phase: 'cloture' })
         .eq('id', process.id)
     },
     onSuccess: () => {

@@ -45,13 +45,13 @@ export default function DashboardPage() {
   const { data: blockedCount, isLoading: loadingBlocked } = useQuery({
     queryKey: ['products', 'blocked', 'count'],
     staleTime: 1000 * 60 * 30,
-    queryFn: async () => { const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_ansm_blocked', true); return count ?? 0 },
+    queryFn: async () => { const { data } = await supabase.from('products').select('id').eq('is_ansm_blocked', true); return data?.length ?? 0 },
   })
 
   const { data: quotaCount, isLoading: loadingQuotas } = useQuery({
     queryKey: ['quotas', 'count'],
     staleTime: 1000 * 60 * 30,
-    queryFn: async () => { const { count } = await supabase.from('wholesaler_quotas').select('*', { count: 'exact', head: true }); return count ?? 0 },
+    queryFn: async () => { const { data } = await supabase.from('wholesaler_quotas').select('id'); return data?.length ?? 0 },
   })
 
   const { data: activeProcess } = useQuery({
