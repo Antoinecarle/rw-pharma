@@ -571,7 +571,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
             </TableBody>
           </Table>
         </div>
-      ) : null}
+      )}
 
       {/* Allocations table */}
       {isLoading ? (
