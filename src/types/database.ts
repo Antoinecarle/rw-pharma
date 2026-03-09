@@ -34,6 +34,7 @@ export interface Product {
   pfht: number | null
   laboratory: string | null
   is_ansm_blocked: boolean
+  is_demo_generated: boolean
   categorie: string | null
   expiry_dates: string[] | null
   metadata: Record<string, unknown>
@@ -95,13 +96,16 @@ export interface Customer {
 export type CustomerInsert = Omit<Customer, 'id' | 'created_at' | 'updated_at'>
 export type CustomerUpdate = Partial<CustomerInsert>
 
-export type MonthlyProcessStatus = 'draft' | 'importing_quotas' | 'importing_orders' | 'reviewing_orders' | 'macro_allocating' | 'exporting_wholesalers' | 'collecting_stock' | 'allocating_lots' | 'reviewing_allocations' | 'finalizing' | 'completed'
+export type MonthlyProcessStatus = 'draft' | 'importing_quotas' | 'importing_orders' | 'reviewing_orders' | 'exporting_wholesalers' | 'collecting_stock' | 'aggregating_stock' | 'allocating_lots' | 'reviewing_allocations' | 'finalizing' | 'completed'
+
+export type MonthlyProcessPhase = 'commandes' | 'collecte' | 'allocation' | 'cloture'
 
 export interface MonthlyProcess {
   id: string
   month: number
   year: number
   status: MonthlyProcessStatus
+  phase: MonthlyProcessPhase
   current_step: number
   quotas_count: number
   orders_count: number
@@ -153,6 +157,7 @@ export interface Allocation {
   requested_quantity: number
   allocated_quantity: number
   prix_applique: number | null
+  refusal_reason: string | null
   status: AllocationStatus
   metadata: Record<string, unknown>
   created_at: string
@@ -197,6 +202,7 @@ export interface CollectedStock {
   lot_id: string | null
   lot_number: string
   expiry_date: string
+  fabrication_date: string | null
   quantity: number
   unit_cost: number | null
   date_reception: string | null

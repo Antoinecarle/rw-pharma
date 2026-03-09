@@ -53,13 +53,23 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
   const { data: orders, isLoading } = useQuery({
     queryKey: ['orders', process.id, 'review'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*, customer:customers(id, name, code, country, is_top_client, documents), product:products(id, cip13, name, is_ansm_blocked)')
-        .eq('monthly_process_id', process.id)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return data as unknown as Order[]
+      const all: Order[] = []
+      let from = 0
+      const pageSize = 500
+      while (true) {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*, customer:customers(id, name, code, country, is_top_client, documents), product:products(id, cip13, name, is_ansm_blocked)')
+          .eq('monthly_process_id', process.id)
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        all.push(...(data as unknown as Order[]))
+        if (data.length < pageSize) break
+        from += pageSize
+      }
+      return all
     },
   })
 

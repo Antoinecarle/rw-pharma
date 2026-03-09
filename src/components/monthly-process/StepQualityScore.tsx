@@ -29,7 +29,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
       if (error) throw error
       return data ?? []
     },
-    enabled: step >= 2 && step <= 3,
+    enabled: step >= 2 && step <= 4,
   })
 
   // Steps 4-7: Allocation quality
@@ -43,7 +43,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
       if (error) throw error
       return data ?? []
     },
-    enabled: step >= 4,
+    enabled: step >= 7,
   })
 
   return useMemo(() => {
@@ -107,7 +107,31 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         break
       }
       case 4: {
-        // Macro allocation: fulfillment rate
+        // Export wholesalers: score based on having validated orders
+        const validatedOrders = orders?.filter(o => o.status === 'validated').length ?? 0
+        if (validatedOrders === 0) {
+          score = 0
+          details.push('Aucune commande validee a exporter')
+        } else {
+          score = 70
+          details.push(`${validatedOrders} commandes validees a exporter`)
+        }
+        break
+      }
+      case 5: {
+        // Stock collection
+        score = 50
+        details.push('Import stocks en cours')
+        break
+      }
+      case 6: {
+        // Stock aggregation
+        score = 50
+        details.push('Verification du stock collecte')
+        break
+      }
+      case 7: {
+        // Allocation: fulfillment rate
         if (!allocations || allocations.length === 0) {
           score = 0
           details.push("Lancer l'allocation")
@@ -122,25 +146,8 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         if (zeros > 0) details.push(`${zeros} produits a 0`)
         break
       }
-      case 5: {
-        // Export wholesalers: score based on having allocations
-        if (!allocations || allocations.length === 0) {
-          score = 0
-          details.push('Aucune allocation a exporter')
-        } else {
-          score = 70
-          details.push(`${allocations.length} allocations a exporter`)
-        }
-        break
-      }
-      case 6: {
-        // Stock collection: placeholder (no easy query from here)
-        score = 50
-        details.push('Import stocks en cours')
-        break
-      }
-      case 7: {
-        // Lot allocation review: confirmed vs total
+      case 8: {
+        // Allocation review: confirmed vs total
         if (!allocations || allocations.length === 0) {
           score = 0
           details.push('Aucune allocation')
@@ -158,7 +165,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         if (partial > 0) details.push(`${partial} allocations partielles`)
         break
       }
-      case 8: {
+      case 9: {
         // Finalization: process completed
         if (process.status === 'completed') {
           score = 100

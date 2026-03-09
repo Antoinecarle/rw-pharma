@@ -106,23 +106,26 @@ export default function ProductsPage() {
 
   const { data: laboratories } = useQuery({
     queryKey: ['products', 'laboratories'],
-    staleTime: 1000 * 60 * 30, // Labs rarely change
+    staleTime: 1000 * 60 * 60, // Labs rarely change — cache 1h
     queryFn: async () => {
-      // Paginate to avoid Supabase 1000-row cap
+      // Use a single lightweight query: fetch only distinct labs via the products_laboratory_idx
+      const { data, error } = await supabase.rpc('get_distinct_laboratories')
+      if (!error && data) return (data as { laboratory: string }[]).map(r => r.laboratory)
+      // Fallback: paginate to avoid Supabase 1000-row cap
       const all: string[] = []
       let from = 0
       const pageSize = 1000
       while (true) {
-        const { data, error } = await supabase
+        const { data: rows, error: err } = await supabase
           .from('products')
           .select('laboratory')
           .not('laboratory', 'is', null)
           .order('laboratory')
           .range(from, from + pageSize - 1)
-        if (error) throw error
-        if (!data || data.length === 0) break
-        all.push(...data.map(r => r.laboratory).filter(Boolean) as string[])
-        if (data.length < pageSize) break
+        if (err) throw err
+        if (!rows || rows.length === 0) break
+        all.push(...rows.map(r => r.laboratory).filter(Boolean) as string[])
+        if (rows.length < pageSize) break
         from += pageSize
       }
       return [...new Set(all)]

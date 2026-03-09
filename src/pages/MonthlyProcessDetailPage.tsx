@@ -13,9 +13,10 @@ import StepQualityScore from '@/components/monthly-process/StepQualityScore'
 import QuotaImportStep from '@/components/monthly-process/steps/QuotaImportStep'
 import OrderImportStep from '@/components/monthly-process/steps/OrderImportStep'
 import OrderReviewStep from '@/components/monthly-process/steps/OrderReviewStep'
-import AllocationExecutionStep from '@/components/monthly-process/steps/AllocationExecutionStep'
 import WholesalerExportStep from '@/components/monthly-process/steps/WholesalerExportStep'
 import StockImportStep from '@/components/monthly-process/steps/StockImportStep'
+import StockAggregationStep from '@/components/monthly-process/steps/StockAggregationStep'
+import AllocationExecutionStep from '@/components/monthly-process/steps/AllocationExecutionStep'
 import AllocationReviewStep from '@/components/monthly-process/steps/AllocationReviewStep'
 import FinalizationStep from '@/components/monthly-process/steps/FinalizationStep'
 import DemoDataLoader from '@/components/monthly-process/DemoDataLoader'
@@ -33,13 +34,20 @@ const STATUS_LABELS: Record<string, string> = {
   importing_quotas: 'Import quotas',
   importing_orders: 'Import commandes',
   reviewing_orders: 'Revue commandes',
-  macro_allocating: 'Allocation macro',
   exporting_wholesalers: 'Export grossistes',
   collecting_stock: 'Reception stocks',
-  allocating_lots: 'Allocation lots',
+  aggregating_stock: 'Aggregation stock',
+  allocating_lots: 'Allocation',
   reviewing_allocations: 'Revue allocations',
   finalizing: 'Finalisation',
   completed: 'Termine',
+}
+
+const PHASE_LABELS: Record<string, string> = {
+  commandes: 'Phase Commandes',
+  collecte: 'Phase Collecte',
+  allocation: 'Phase Allocation',
+  cloture: 'Cloture',
 }
 
 const stepTransition = {
@@ -122,7 +130,7 @@ export default function MonthlyProcessDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-5 md:p-7 lg:p-8 space-y-5 max-w-[1200px] mx-auto ivory-page-glow">
+      <div className="p-4 md:p-7 lg:p-8 space-y-5 max-w-[1200px] mx-auto ivory-page-glow">
         <Skeleton className="h-8 w-48 rounded-xl" />
         <Skeleton className="h-16 w-full rounded-xl" />
         <Skeleton className="h-64 w-full rounded-xl" />
@@ -132,7 +140,7 @@ export default function MonthlyProcessDetailPage() {
 
   if (!process) {
     return (
-      <div className="p-5 md:p-7 lg:p-8 text-center max-w-[1200px] mx-auto ivory-page-glow">
+      <div className="p-4 md:p-7 lg:p-8 text-center max-w-[1200px] mx-auto ivory-page-glow">
         <p style={{ color: 'var(--ivory-text-muted)' }}>Processus introuvable</p>
         <Button variant="outline" className="mt-4 rounded-xl" onClick={() => navigate('/monthly-processes')}>
           Retour
@@ -144,7 +152,7 @@ export default function MonthlyProcessDetailPage() {
   const monthName = MONTH_NAMES[process.month - 1] ?? ''
 
   return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1200px] mx-auto ivory-page-glow">
+    <div className="p-4 md:p-7 lg:p-8 space-y-6 max-w-[1200px] mx-auto ivory-page-glow overflow-x-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -161,34 +169,36 @@ export default function MonthlyProcessDetailPage() {
           <span>{monthName} {process.year}</span>
         </div>
 
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3.5 flex-1">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-3.5 min-w-0 flex-1">
             <div className="h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm shrink-0"
               style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.08))' }}>
               <CalendarRange className="h-5 w-5" style={{ color: 'var(--ivory-accent)' }} />
             </div>
-            <div>
-              <h2 className="ivory-heading text-xl md:text-2xl">
+            <div className="min-w-0">
+              <h2 className="ivory-heading text-xl md:text-2xl truncate">
                 Allocation - {monthName} {process.year}
               </h2>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
                 <Badge variant={process.status === 'completed' ? 'default' : 'secondary'} className="text-[10px] h-5">
                   {STATUS_LABELS[process.status] ?? process.status}
                 </Badge>
-                <span className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
-                  {process.orders_count} commandes / {process.allocations_count} allocations
+                {process.phase && process.phase !== 'cloture' && (
+                  <Badge variant="outline" className="text-[10px] h-5">
+                    {PHASE_LABELS[process.phase] ?? process.phase}
+                  </Badge>
+                )}
+                <span className="text-[11px] sm:text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
+                  {process.orders_count} cmd / {process.allocations_count} alloc
                   {process.date_ouverture && (
-                    <> &middot; Ouvert {new Date(process.date_ouverture).toLocaleDateString('fr-FR')}</>
-                  )}
-                  {process.date_cloture && (
-                    <> &middot; Cloture {new Date(process.date_cloture).toLocaleDateString('fr-FR')}</>
+                    <> &middot; {new Date(process.date_ouverture).toLocaleDateString('fr-FR')}</>
                   )}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <StepQualityScore process={process} step={currentStep} />
 
             {process.status !== 'completed' && (
@@ -209,7 +219,7 @@ export default function MonthlyProcessDetailPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.1 }}
       >
-        <div className="ivory-glass p-4 md:p-5">
+        <div className="ivory-glass p-3 md:p-5 overflow-x-hidden">
             <ProcessStepper
               currentStep={currentStep}
               onStepClick={(step) => {
@@ -221,8 +231,9 @@ export default function MonthlyProcessDetailPage() {
                 if ((process.quotas_count ?? 0) > 0) stats[1] = { value: process.quotas_count ?? 0, label: 'quotas' }
                 if (process.orders_count > 0) stats[2] = { value: process.orders_count, label: 'commandes' }
                 if (process.orders_count > 0 && currentStep > 3) stats[3] = { value: 'validees', label: '' }
-                if (process.allocations_count > 0) stats[4] = { value: process.allocations_count, label: 'allocations' }
-                if (process.allocations_count > 0 && currentStep > 7) stats[7] = { value: 'confirmees', label: '' }
+                if (process.orders_count > 0 && currentStep > 4) stats[4] = { value: 'envoye', label: '' }
+                if (process.allocations_count > 0) stats[7] = { value: process.allocations_count, label: 'allocations' }
+                if (process.allocations_count > 0 && currentStep > 8) stats[8] = { value: 'confirmees', label: '' }
                 return stats
               })()}
             />
@@ -250,18 +261,21 @@ export default function MonthlyProcessDetailPage() {
             <OrderReviewStep process={process} onNext={() => advanceStep(4)} onBack={() => setActiveStep(2)} />
           )}
           {currentStep === 4 && (
-            <AllocationExecutionStep process={process} onNext={() => advanceStep(5)} />
+            <WholesalerExportStep process={process} onNext={() => advanceStep(5)} />
           )}
           {currentStep === 5 && (
-            <WholesalerExportStep process={process} onNext={() => advanceStep(6)} />
+            <StockImportStep process={process} onNext={() => advanceStep(6)} />
           )}
           {currentStep === 6 && (
-            <StockImportStep process={process} onNext={() => advanceStep(7)} />
+            <StockAggregationStep process={process} onNext={() => advanceStep(7)} onBack={() => setActiveStep(5)} />
           )}
           {currentStep === 7 && (
-            <AllocationReviewStep process={process} onNext={() => advanceStep(8)} onBack={() => setActiveStep(6)} />
+            <AllocationExecutionStep process={process} onNext={() => advanceStep(8)} />
           )}
           {currentStep === 8 && (
+            <AllocationReviewStep process={process} onNext={() => advanceStep(9)} onBack={() => setActiveStep(7)} />
+          )}
+          {currentStep === 9 && (
             <FinalizationStep process={process} />
           )}
         </motion.div>

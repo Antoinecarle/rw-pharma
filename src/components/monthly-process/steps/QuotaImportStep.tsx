@@ -24,12 +24,16 @@ interface QuotaColumnMapping {
   cip13: string
   quantity: string
   extra: string
+  productName: string
+  wholesalerColumn: string
 }
 
 const FIELD_LABELS: Record<keyof QuotaColumnMapping, string> = {
   cip13: 'CIP13 Produit *',
   quantity: 'Quantite quota *',
   extra: 'Extra disponible',
+  productName: 'Nom produit',
+  wholesalerColumn: 'Grossiste (multi)',
 }
 
 const REQUIRED_FIELDS: (keyof QuotaColumnMapping)[] = ['cip13', 'quantity']
@@ -116,7 +120,7 @@ function createQueuedFile(file: File): QueuedQuotaFile {
     sheetNames: [],
     selectedSheet: '',
     workbook: null,
-    mapping: { cip13: '', quantity: '', extra: '' },
+    mapping: { cip13: '', quantity: '', extra: '', productName: '', wholesalerColumn: '' },
     confidence: [],
     importResult: { inserted: 0, updated: 0, errors: 0, skipped: 0 },
     importProgress: { current: 0, total: 0, phase: '' },
@@ -124,13 +128,40 @@ function createQueuedFile(file: File): QueuedQuotaFile {
   }
 }
 
-// --------------- Auto-detect wholesaler from filename ---------------
+// --------------- Auto-detect wholesaler from filename or CSV data ---------------
 
 function detectWholesalerFromFilename(filename: string, wholesalers: Pick<Wholesaler, 'code' | 'name'>[]): string | null {
   const upper = filename.toUpperCase()
+  // Direct match: code or name in filename
   for (const w of wholesalers) {
     if (w.code && upper.includes(w.code.toUpperCase())) return w.code
     if (w.name && upper.includes(w.name.toUpperCase())) return w.code ?? w.name
+  }
+  return null
+}
+
+const WHOLESALER_COLUMN_PATTERNS = [
+  /^grossiste$/i, /^wholesaler$/i, /^fournisseur$/i,
+  /code.*grossiste/i, /wholesaler.*code/i, /grossiste.*code/i,
+  /^supplier$/i, /^source$/i,
+]
+
+function detectWholesalerFromData(
+  headers: string[],
+  rows: Record<string, string>[],
+  wholesalers: Pick<Wholesaler, 'code' | 'name'>[]
+): string | null {
+  // Find a column that looks like a wholesaler column
+  for (const pattern of WHOLESALER_COLUMN_PATTERNS) {
+    const col = headers.find(h => pattern.test(h))
+    if (!col) continue
+    // Check first non-empty value
+    const firstValue = rows.find(r => r[col]?.trim())?.[col]?.trim().toUpperCase()
+    if (!firstValue) continue
+    for (const w of wholesalers) {
+      if (w.code && firstValue.includes(w.code.toUpperCase())) return w.code
+      if (w.name && firstValue.includes(w.name.toUpperCase())) return w.code ?? w.name
+    }
   }
   return null
 }
@@ -154,21 +185,29 @@ function autoDetectMapping(headers: string[], wholesalerCode: string | null): { 
     return { mapping: resultMapping, confidence: confidenceMap }
   }
 
-  const autoMap: QuotaColumnMapping = { cip13: '', quantity: '', extra: '' }
+  const autoMap: QuotaColumnMapping = { cip13: '', quantity: '', extra: '', productName: '', wholesalerColumn: '' }
   const usedHeaders = new Set<string>()
 
   const fieldPatterns: { field: keyof QuotaColumnMapping; patterns: RegExp[] }[] = [
     {
       field: 'cip13',
-      patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i, /code.*produit/i, /product.*code/i, /artikelnummer/i, /code.*cip/i],
+      patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i, /code.*produit/i, /product.*code/i, /artikelnummer/i, /code.*cip/i, /product.*cip/i],
     },
     {
       field: 'quantity',
-      patterns: [/quota/i, /contingent/i, /quantit/i, /^qty/i, /alloue/i, /disponible/i, /menge/i, /quantity/i, /^qte/i],
+      patterns: [/quota/i, /contingent/i, /quantit/i, /^qty/i, /alloue/i, /disponible/i, /menge/i, /quantity/i, /^qte/i, /mensuel/i],
     },
     {
       field: 'extra',
       patterns: [/extra/i, /suppl/i, /bonus/i, /additionn/i, /zusatz/i, /hors.*quota/i],
+    },
+    {
+      field: 'productName',
+      patterns: [/nom.*produit/i, /product.*name/i, /designation/i, /bezeichnung/i, /libelle/i, /^nom$/i, /^name$/i, /^produit$/i],
+    },
+    {
+      field: 'wholesalerColumn',
+      patterns: [/^grossiste$/i, /^wholesaler$/i, /^fournisseur$/i, /code.*grossiste/i, /^supplier$/i, /^source$/i],
     },
   ]
 
@@ -261,7 +300,11 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       }
 
       const hdrs = Object.keys(json[0])
-      const detected = wholesalers ? detectWholesalerFromFilename(file.name, wholesalers) : null
+      let detected = wholesalers ? detectWholesalerFromFilename(file.name, wholesalers) : null
+      // Fallback: detect wholesaler from CSV data (column values)
+      if (!detected && wholesalers) {
+        detected = detectWholesalerFromData(hdrs, json, wholesalers)
+      }
       const { mapping, confidence } = autoDetectMapping(hdrs, detected)
 
       const updatedFile: QueuedQuotaFile = {
@@ -334,7 +377,8 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
 
   const canProceed = (f: QueuedQuotaFile) => {
     const wholesalerCode = getWholesalerCode(f)
-    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && !!wholesalerCode
+    const hasWholesalerColumn = !!f.mapping.wholesalerColumn
+    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (!!wholesalerCode || hasWholesalerColumn)
   }
 
   // --------------- Import mutation ---------------
@@ -361,11 +405,77 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       }
 
       const productMap = new Map(allProducts.map(p => [p.cip13, p]))
-      const wholesalersList = wholesalers ?? []
-      const wholesaler = wholesalersList.find(w => w.code?.toUpperCase() === wholesalerCode?.toUpperCase())
 
-      if (!wholesaler) {
-        throw new Error(`Grossiste "${wholesalerCode ?? '?'}" introuvable en base. Verifiez le code grossiste.`)
+      // Auto-create missing products (demo mode)
+      const missingCip13s = new Set<string>()
+      const cip13NameMap = new Map<string, string>()
+      for (const row of f.rows) {
+        const cip13 = String(row[f.mapping.cip13] || '').trim()
+        if (cip13 && !productMap.has(cip13)) {
+          missingCip13s.add(cip13)
+          if (f.mapping.productName) {
+            const name = String(row[f.mapping.productName] || '').trim()
+            if (name) cip13NameMap.set(cip13, name)
+          }
+        }
+      }
+
+      if (missingCip13s.size > 0) {
+        updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Creation de ${missingCip13s.size} produit(s) manquant(s)...` } })
+        const newProducts = [...missingCip13s].map(cip13 => ({
+          cip13,
+          cip7: cip13.length >= 7 ? cip13.slice(-7) : null,
+          name: cip13NameMap.get(cip13) || `Produit ${cip13}`,
+          is_ansm_blocked: false,
+          is_demo_generated: true,
+          metadata: { auto_created_from: f.fileName },
+        }))
+        const { data: created, error: createErr } = await supabase
+          .from('products')
+          .upsert(newProducts, { onConflict: 'cip13', ignoreDuplicates: true })
+          .select('id, cip13, name, is_ansm_blocked')
+        if (createErr) console.error('Auto-create products error:', createErr)
+        if (created) {
+          for (const p of created) productMap.set(p.cip13, p)
+        }
+      }
+
+      const wholesalersList = wholesalers ?? []
+      const isMultiWholesaler = !!f.mapping.wholesalerColumn
+      const wholesalerIdMap = new Map(wholesalersList.map(w => [w.code?.toUpperCase() ?? '', w.id]))
+
+      // For single-wholesaler mode, resolve now
+      let singleWholesalerId: string | undefined
+      if (!isMultiWholesaler) {
+        const wholesaler = wholesalersList.find(w => w.code?.toUpperCase() === wholesalerCode?.toUpperCase())
+        if (!wholesaler) {
+          throw new Error(`Grossiste "${wholesalerCode ?? '?'}" introuvable en base. Verifiez le code grossiste.`)
+        }
+        singleWholesalerId = wholesaler.id
+      }
+
+      // For multi-wholesaler mode, auto-create missing wholesalers
+      if (isMultiWholesaler) {
+        const wsCodesInFile = new Set<string>()
+        for (const row of f.rows) {
+          const wsCode = String(row[f.mapping.wholesalerColumn] || '').trim().toUpperCase()
+          if (wsCode && !wholesalerIdMap.has(wsCode)) wsCodesInFile.add(wsCode)
+        }
+        if (wsCodesInFile.size > 0) {
+          updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Creation de ${wsCodesInFile.size} grossiste(s) manquant(s)...` } })
+          const newWholesalers = [...wsCodesInFile].map(code => ({
+            code,
+            name: code,
+            metadata: { auto_created_from: f.fileName },
+          }))
+          const { data: createdWs } = await supabase
+            .from('wholesalers')
+            .upsert(newWholesalers, { onConflict: 'code', ignoreDuplicates: true })
+            .select('id, code')
+          if (createdWs) {
+            for (const w of createdWs) wholesalerIdMap.set(w.code?.toUpperCase() ?? '', w.id)
+          }
+        }
       }
 
       const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}-01`
@@ -375,6 +485,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       let skipped = 0
       const skippedDetails: SkippedQuotaItem[] = []
       const batchSize = 100
+      let autoCreatedProducts = missingCip13s.size
 
       updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: 'Validation et insertion...' } })
 
@@ -397,8 +508,19 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
             return null
           }
 
+          // Resolve wholesaler: per-row for multi, or single for all
+          let rowWholesalerId = singleWholesalerId
+          if (isMultiWholesaler) {
+            const wsCode = String(row[f.mapping.wholesalerColumn] || '').trim().toUpperCase()
+            rowWholesalerId = wholesalerIdMap.get(wsCode)
+          }
+          if (!rowWholesalerId) {
+            skippedDetails.push({ rowIndex, cip13, quantity: qty, reason: 'unknown_product' })
+            return null
+          }
+
           return {
-            wholesaler_id: wholesaler.id,
+            wholesaler_id: rowWholesalerId,
             product_id: product.id,
             monthly_process_id: process.id,
             month: monthStr,
@@ -422,8 +544,6 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
             errors += validBatch.length
             console.error('Batch error:', error)
           } else {
-            // We can't easily distinguish inserted vs updated from upsert response,
-            // so we count all as "processed" and track separately
             inserted += data?.length ?? validBatch.length
           }
         }
@@ -455,7 +575,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
         wholesalerCode,
       })
 
-      return { fileId, inserted, updated, errors, skipped, skippedDetails }
+      return { fileId, inserted, updated, errors, skipped, skippedDetails, autoCreatedProducts }
     },
     onSuccess: (result) => {
       updateFile(result.fileId, {
@@ -465,7 +585,10 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       })
       queryClient.invalidateQueries({ queryKey: ['wholesaler_quotas'] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      toast.success(`${result.inserted} quotas importes`)
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      const parts = [`${result.inserted} quotas importes`]
+      if (result.autoCreatedProducts > 0) parts.push(`${result.autoCreatedProducts} produit(s) cree(s) automatiquement`)
+      toast.success(parts.join(' — '))
     },
     onError: (err: Error, fileId: string) => {
       updateFile(fileId, { status: 'mapping' })

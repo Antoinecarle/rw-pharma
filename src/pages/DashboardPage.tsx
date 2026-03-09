@@ -56,6 +56,7 @@ export default function DashboardPage() {
 
   const { data: activeProcess } = useQuery({
     queryKey: ['monthly-processes', 'active'],
+    staleTime: 1000 * 60 * 10,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('monthly_processes').select('*')

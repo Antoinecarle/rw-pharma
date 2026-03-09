@@ -27,12 +27,14 @@ interface OrderColumnMapping {
   cip13: string
   quantity: string
   unit_price: string
+  productName: string
 }
 
 const FIELD_LABELS: Record<keyof OrderColumnMapping, string> = {
   cip13: 'CIP13 Produit *',
   quantity: 'Quantite *',
   unit_price: 'Prix unitaire',
+  productName: 'Nom produit',
 }
 
 const REQUIRED_FIELDS: (keyof OrderColumnMapping)[] = ['cip13', 'quantity']
@@ -124,7 +126,7 @@ function createQueuedFile(file: File): QueuedFile {
     sheetNames: [],
     selectedSheet: '',
     workbook: null,
-    mapping: { cip13: '', quantity: '', unit_price: '' },
+    mapping: { cip13: '', quantity: '', unit_price: '', productName: '' },
     confidence: [],
     importResult: { inserted: 0, errors: 0, skipped: 0 },
     importProgress: { current: 0, total: 0, phase: '' },
@@ -151,7 +153,7 @@ function autoDetectMapping(headers: string[], clientCode: string | null): { mapp
     return { mapping: resultMapping, confidence: confidenceMap }
   }
 
-  const autoMap: OrderColumnMapping = { cip13: '', quantity: '', unit_price: '' }
+  const autoMap: OrderColumnMapping = { cip13: '', quantity: '', unit_price: '', productName: '' }
   const usedHeaders = new Set<string>()
 
   const fieldPatterns: { field: keyof OrderColumnMapping; patterns: RegExp[] }[] = [
@@ -166,6 +168,10 @@ function autoDetectMapping(headers: string[], clientCode: string | null): { mapp
     {
       field: 'unit_price',
       patterns: [/prix.*unit/i, /unit.*pri/i, /price/i, /^prix/i, /^pfht$/i, /einkaufspreis/i, /preis/i, /^unitprice$/i],
+    },
+    {
+      field: 'productName',
+      patterns: [/nom.*produit/i, /product.*name/i, /designation/i, /bezeichnung/i, /libelle/i, /^nom$/i, /^name$/i, /^produit$/i],
     },
   ]
 
@@ -365,7 +371,43 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       setCachedProducts(productsList)
 
       const customerMap = new Map(customersList.map(c => [c.code?.toUpperCase(), c.id]))
-      const productMap = new Map(productsList.map(p => [p.cip13, p.id]))
+      const productMap = new Map(productsList.map(p => [p.cip13, { id: p.id, name: p.name }]))
+
+      // Auto-create missing products (demo mode)
+      const missingCip13s = new Set<string>()
+      const cip13NameMap = new Map<string, string>()
+      for (const row of f.rows) {
+        const cip13 = String(row[f.mapping.cip13] || '').trim()
+        if (cip13 && !productMap.has(cip13)) {
+          missingCip13s.add(cip13)
+          if (f.mapping.productName) {
+            const name = String(row[f.mapping.productName] || '').trim()
+            if (name) cip13NameMap.set(cip13, name)
+          }
+        }
+      }
+
+      let autoCreatedProducts = 0
+      if (missingCip13s.size > 0) {
+        updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Creation de ${missingCip13s.size} produit(s) manquant(s)...` } })
+        const newProducts = [...missingCip13s].map(cip13 => ({
+          cip13,
+          cip7: cip13.length >= 7 ? cip13.slice(-7) : null,
+          name: cip13NameMap.get(cip13) || `Produit ${cip13}`,
+          is_ansm_blocked: false,
+          is_demo_generated: true,
+          metadata: { auto_created_from: f.fileName },
+        }))
+        const { data: created, error: createErr } = await supabase
+          .from('products')
+          .upsert(newProducts, { onConflict: 'cip13', ignoreDuplicates: true })
+          .select('id, cip13, name')
+        if (createErr) console.error('Auto-create products error:', createErr)
+        if (created) {
+          for (const p of created) productMap.set(p.cip13, { id: p.id, name: p.name })
+          autoCreatedProducts = created.length
+        }
+      }
 
       const fileCustomerId = clientCode ? customerMap.get(clientCode.toUpperCase()) : undefined
       if (!fileCustomerId) {
@@ -387,10 +429,10 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
           const qty = parseInt(String(row[f.mapping.quantity] || '0'), 10)
           const price = f.mapping.unit_price ? parseFloat(String(row[f.mapping.unit_price]).replace(',', '.')) || null : null
 
-          const productId = productMap.get(cip13)
+          const productEntry = productMap.get(cip13)
 
-          if (!productId || qty <= 0) {
-            const reason: SkippedItem['reason'] = !productId ? 'unknown_product' : 'invalid_quantity'
+          if (!productEntry || qty <= 0) {
+            const reason: SkippedItem['reason'] = !productEntry ? 'unknown_product' : 'invalid_quantity'
             skippedDetails.push({
               rowIndex,
               customerCode: clientCode ?? '',
@@ -405,7 +447,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
           return {
             monthly_process_id: process.id,
             customer_id: fileCustomerId,
-            product_id: productId,
+            product_id: productEntry.id,
             quantity: qty,
             unit_price: price,
             status: 'pending' as const,
@@ -457,7 +499,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         clientCode,
       })
 
-      return { fileId, inserted, errors, skipped, skippedDetails }
+      return { fileId, inserted, errors, skipped, skippedDetails, autoCreatedProducts }
     },
     onSuccess: (result) => {
       updateFile(result.fileId, {
@@ -467,7 +509,10 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       })
       queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      toast.success(`${result.inserted} commandes importees`)
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      const parts = [`${result.inserted} commandes importees`]
+      if (result.autoCreatedProducts > 0) parts.push(`${result.autoCreatedProducts} produit(s) cree(s)`)
+      toast.success(parts.join(' — '))
     },
     onError: (err: Error, fileId: string) => {
       updateFile(fileId, { status: 'mapping' })

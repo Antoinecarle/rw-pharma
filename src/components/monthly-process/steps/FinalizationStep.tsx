@@ -46,12 +46,22 @@ interface AllocationRow {
 }
 
 async function fetchAllocations(processId: string): Promise<AllocationRow[]> {
-  const { data, error } = await supabase
-    .from('allocations')
-    .select('id, requested_quantity, allocated_quantity, prix_applique, status, metadata, customer:customers(code, name, country), product:products(cip13, name), wholesaler:wholesalers(code, name)')
-    .eq('monthly_process_id', processId)
-  if (error) throw error
-  return (data ?? []) as unknown as AllocationRow[]
+  const all: AllocationRow[] = []
+  let from = 0
+  const pageSize = 500
+  while (true) {
+    const { data, error } = await supabase
+      .from('allocations')
+      .select('id, requested_quantity, allocated_quantity, prix_applique, status, metadata, customer:customers(code, name, country), product:products(cip13, name), wholesaler:wholesalers(code, name)')
+      .eq('monthly_process_id', processId)
+      .range(from, from + pageSize - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...(data as unknown as AllocationRow[]))
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  return all
 }
 
 function generateCSV(rows: AllocationRow[], includeHeaders = true): string {
@@ -190,13 +200,30 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
   const { data: stats } = useQuery({
     queryKey: ['monthly-process', process.id, 'final-stats'],
     queryFn: async () => {
-      const [ordersRes, allocRes] = await Promise.all([
-        supabase.from('orders').select('customer_id').eq('monthly_process_id', process.id),
-        supabase.from('allocations').select('allocated_quantity, requested_quantity, customer_id, wholesaler_id').eq('monthly_process_id', process.id),
-      ])
+      // Paginated fetch for orders
+      const ordersData: { customer_id: string }[] = []
+      let oFrom = 0
+      while (true) {
+        const { data, error } = await supabase.from('orders').select('customer_id').eq('monthly_process_id', process.id).range(oFrom, oFrom + 999)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        ordersData.push(...data)
+        if (data.length < 1000) break
+        oFrom += 1000
+      }
 
-      const ordersData = ordersRes.data ?? []
-      const allocData = allocRes.data ?? []
+      // Paginated fetch for allocations
+      const allocData: { allocated_quantity: number; requested_quantity: number; customer_id: string; wholesaler_id: string }[] = []
+      let aFrom = 0
+      while (true) {
+        const { data, error } = await supabase.from('allocations').select('allocated_quantity, requested_quantity, customer_id, wholesaler_id').eq('monthly_process_id', process.id).range(aFrom, aFrom + 999)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        allocData.push(...data)
+        if (data.length < 1000) break
+        aFrom += 1000
+      }
+
       const totalRequested = allocData.reduce((s, a) => s + (a.requested_quantity ?? 0), 0)
       const totalAllocated = allocData.reduce((s, a) => s + (a.allocated_quantity ?? 0), 0)
       const uniqueCustomers = new Set(ordersData.map((o) => o.customer_id)).size

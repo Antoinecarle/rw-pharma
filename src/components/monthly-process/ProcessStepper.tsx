@@ -1,17 +1,19 @@
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { Check, FileUp, ClipboardCheck, Cpu, SearchCheck, Flag, BarChart3, Send, PackageCheck, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, FileUp, ClipboardCheck, Cpu, SearchCheck, Flag, BarChart3, Send, PackageCheck, ChevronLeft, ChevronRight, Layers } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import type { MonthlyProcessPhase } from '@/types/database'
 
-const STEPS = [
-  { label: 'Import Quotas', shortLabel: 'Quotas', icon: BarChart3 },
-  { label: 'Import Commandes', shortLabel: 'Commandes', icon: FileUp },
-  { label: 'Revue Commandes', shortLabel: 'Revue', icon: ClipboardCheck },
-  { label: 'Allocation Macro', shortLabel: 'Macro', icon: Cpu },
-  { label: 'Export Grossistes', shortLabel: 'Export', icon: Send },
-  { label: 'Reception Stocks', shortLabel: 'Stocks', icon: PackageCheck },
-  { label: 'Allocation Lots', shortLabel: 'Lots', icon: SearchCheck },
-  { label: 'Finalisation', shortLabel: 'Final', icon: Flag },
+export const STEPS = [
+  { label: 'Import Quotas', shortLabel: 'Quotas', icon: BarChart3, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Import Commandes', shortLabel: 'Commandes', icon: FileUp, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Revue Commandes', shortLabel: 'Revue', icon: ClipboardCheck, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Export Grossistes', shortLabel: 'Export', icon: Send, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Reception Stocks', shortLabel: 'Stocks', icon: PackageCheck, phase: 'collecte' as MonthlyProcessPhase },
+  { label: 'Aggregation Stock', shortLabel: 'Agregation', icon: Layers, phase: 'collecte' as MonthlyProcessPhase },
+  { label: 'Allocation', shortLabel: 'Allocation', icon: Cpu, phase: 'allocation' as MonthlyProcessPhase },
+  { label: 'Revue Allocations', shortLabel: 'Revue Alloc', icon: SearchCheck, phase: 'allocation' as MonthlyProcessPhase },
+  { label: 'Finalisation', shortLabel: 'Final', icon: Flag, phase: 'cloture' as MonthlyProcessPhase },
 ]
 
 interface StepStat {
@@ -77,7 +79,7 @@ export default function ProcessStepper({ currentStep, onStepClick, stepStats }: 
     <TooltipProvider delayDuration={200}>
       <div className="w-full">
         {/* Large desktop — full horizontal stepper with labels */}
-        <div className="hidden xl:flex items-center gap-0">
+        <div className="hidden 2xl:flex items-center gap-0">
           {STEPS.map((step, i) => {
             const stepNum = i + 1
             const isCompleted = stepNum < currentStep
@@ -126,11 +128,11 @@ export default function ProcessStepper({ currentStep, onStepClick, stepStats }: 
           })}
         </div>
 
-        {/* Medium desktop — 2 rows of 4 with icons + short labels */}
-        <div className="hidden md:flex xl:hidden flex-col gap-2">
-          {[0, 4].map((rowStart) => (
+        {/* Medium desktop — 2 rows of 5+4 with icons + short labels */}
+        <div className="hidden md:flex 2xl:hidden flex-col gap-2">
+          {[0, 5].map((rowStart) => (
             <div key={rowStart} className="flex items-center gap-0">
-              {STEPS.slice(rowStart, rowStart + 4).map((step, i) => {
+              {STEPS.slice(rowStart, rowStart + 5).map((step, i) => {
                 const stepNum = rowStart + i + 1
                 const isCompleted = stepNum < currentStep
                 const isCurrent = stepNum === currentStep
@@ -174,7 +176,7 @@ export default function ProcessStepper({ currentStep, onStepClick, stepStats }: 
                         {stat && <p className="text-primary">{stat.value} {stat.label}</p>}
                       </TooltipContent>
                     </Tooltip>
-                    {i < 3 && (
+                    {i < STEPS.slice(rowStart, rowStart + 5).length - 1 && (
                       <Connector filled={stepNum < currentStep} delay={i * 0.1} />
                     )}
                   </div>
