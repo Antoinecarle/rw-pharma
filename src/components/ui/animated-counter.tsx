@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import CountUp from 'react-countup'
 import { motion, useInView } from 'framer-motion'
 
@@ -61,21 +61,32 @@ export default function AnimatedCounter({
 }: AnimatedCounterProps) {
   const ref = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true, margin: '-40px' })
+  const [forceVisible, setForceVisible] = useState(false)
+
+  // Fallback: if useInView hasn't fired after 800ms (e.g. nested in animated wrapper),
+  // force visibility so counters don't stay stuck at 0
+  useEffect(() => {
+    if (isInView) return
+    const timer = setTimeout(() => setForceVisible(true), 800)
+    return () => clearTimeout(timer)
+  }, [isInView])
+
+  const visible = isInView || forceVisible
 
   return (
     <motion.div
       ref={ref}
       className={`flex items-center gap-2 ${className}`}
       initial={{ opacity: 0, y: 8 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
+      animate={visible ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
       <span className={valueClassName}>
         <CountUp
-          key={`${value}-${isInView}`}
+          key={`${value}-${visible}`}
           start={0}
-          end={isInView ? value : 0}
-          duration={isInView ? duration : 0}
+          end={visible ? value : 0}
+          duration={visible ? duration : 0}
           decimals={decimals}
           separator=" "
           prefix={prefix}
