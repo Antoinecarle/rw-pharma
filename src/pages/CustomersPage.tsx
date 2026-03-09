@@ -184,6 +184,47 @@ export default function CustomersPage() {
     toast.success('Lien copie !')
   }
 
+  const handleResendInvitation = async (inv: any) => {
+    try {
+      const customerName = customers?.find(c => c.id === inv.customer_id)?.name ?? 'Client'
+      const link = `${window.location.origin}/invite/${inv.token}`
+      const { error: emailError } = await supabase.functions.invoke('send-invitation-email', {
+        body: {
+          to: inv.email,
+          customerName,
+          inviteLink: link,
+          invitedBy: 'Julie - RW Pharma',
+        },
+      })
+      if (emailError) throw emailError
+      toast.success(`Email renvoye a ${inv.email}`)
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur envoi email')
+    }
+  }
+
+  const handleDeleteInvitation = async (invId: string) => {
+    try {
+      const { error } = await supabase.from('customer_invitations').delete().eq('id', invId)
+      if (error) throw error
+      toast.success('Invitation supprimee')
+      refetchInvitations()
+    } catch (err: any) {
+      toast.error(err.message)
+    }
+  }
+
+  const handleDeletePortalUser = async (userId: string, email: string) => {
+    try {
+      const { error } = await supabase.from('customer_users').delete().eq('id', userId)
+      if (error) throw error
+      toast.success(`Acces supprime pour ${email}`)
+      queryClient.invalidateQueries({ queryKey: ['customer-portal-users'] })
+    } catch (err: any) {
+      toast.error(err.message)
+    }
+  }
+
   const upsert = useMutation({
     mutationFn: async (c: CustomerInsert & { id?: string }) => {
       const payload = { ...c, documents: docs, allocation_preferences: prefs }
@@ -524,6 +565,15 @@ export default function CustomersPage() {
                             <span className="text-[10px]" style={{ color: 'var(--ivory-text-muted)' }}>
                               {new Date(u.created_at).toLocaleDateString('fr-FR')}
                             </span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-red-50"
+                                  onClick={() => handleDeletePortalUser(u.id, u.email ?? 'utilisateur')}>
+                                  <Trash2 className="h-3 w-3 text-red-400" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Supprimer l'acces</TooltipContent>
+                            </Tooltip>
                           </div>
                       ))}
                     </div>
@@ -556,15 +606,33 @@ export default function CustomersPage() {
                                 {isExpired ? 'Expiree' : 'En attente'}
                               </Badge>
                               {!isExpired && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => copyInviteLink(inv.token)}>
-                                      <Copy className="h-3 w-3" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Copier le lien d'invitation</TooltipContent>
-                                </Tooltip>
+                                <>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleResendInvitation(inv)}>
+                                        <Send className="h-3 w-3" style={{ color: 'var(--ivory-accent)' }} />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Renvoyer l'email</TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => copyInviteLink(inv.token)}>
+                                        <Copy className="h-3 w-3" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Copier le lien</TooltipContent>
+                                  </Tooltip>
+                                </>
                               )}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-red-50" onClick={() => handleDeleteInvitation(inv.id)}>
+                                    <Trash2 className="h-3 w-3 text-red-400" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Supprimer l'invitation</TooltipContent>
+                              </Tooltip>
                             </div>
                           )
                         })}
