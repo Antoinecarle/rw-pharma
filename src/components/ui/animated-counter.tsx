@@ -78,6 +78,7 @@ export default function AnimatedCounter({
       <span className={valueClassName}>
         {hasAnimated ? (
           <CountUp
+            key={value}
             start={0}
             end={value}
             duration={duration}
