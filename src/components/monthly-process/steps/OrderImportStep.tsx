@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import SkippedItemsReviewModal, {
   type SkippedItem, type ResolvedItem,
 } from '@/components/allocations/SkippedItemsReviewModal'
+import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
 import type { MonthlyProcess, Customer, Product } from '@/types/database'
 
 // --------------- Types ---------------
@@ -156,15 +157,15 @@ function autoDetectMapping(headers: string[], clientCode: string | null): { mapp
   const fieldPatterns: { field: keyof OrderColumnMapping; patterns: RegExp[] }[] = [
     {
       field: 'cip13',
-      patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i, /artikelnummer/i, /code.*cip/i, /product.*code/i],
+      patterns: [/^cip\s*13$/i, /cip.*13/i, /^cip$/i, /^cipcode$/i, /artikelnummer/i, /code.*cip/i, /product.*code/i, /^external$/i, /product.*number/i, /^local\s*code/i],
     },
     {
       field: 'quantity',
-      patterns: [/qte.*command/i, /quantit/i, /^qty/i, /quantity/i, /^qte/i, /commandee?/i, /menge/i, /bestell/i, /ordered/i],
+      patterns: [/qte.*command/i, /quantit/i, /^qty/i, /quantity/i, /^qte/i, /commandee?/i, /menge/i, /bestell/i, /ordered/i, /^poqnt$/i],
     },
     {
       field: 'unit_price',
-      patterns: [/prix.*unit/i, /unit.*pri/i, /price/i, /^prix/i, /^pfht$/i, /einkaufspreis/i, /preis/i],
+      patterns: [/prix.*unit/i, /unit.*pri/i, /price/i, /^prix/i, /^pfht$/i, /einkaufspreis/i, /preis/i, /^unitprice$/i],
     },
   ]
 
@@ -1012,6 +1013,11 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         </p>
       </div>}
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileInput} multiple className="hidden" />
+
+      {/* Example files suggestion */}
+      {importSource === 'excel' && queue.length === 0 && (
+        <ExampleFilesLoader category="orders" onLoadFiles={(files) => handleFiles(files)} />
+      )}
 
       {/* Import history */}
       {importSource === 'excel' && queue.length === 0 && importHistory.length > 0 && (

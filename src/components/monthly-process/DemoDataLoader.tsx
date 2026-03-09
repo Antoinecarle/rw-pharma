@@ -15,11 +15,16 @@ import { FlaskConical, Loader2, Trash2, CheckCircle2, AlertCircle } from 'lucide
 import { toast } from 'sonner'
 
 import scenarioComplet from '../../../data/examples/demo-scenarios/scenario_complet.json'
+import scenarioNotion from '../../../data/examples/demo-scenarios/scenario_notion_jan2026.json'
 
 const SCENARIOS: Record<string, { label: string; data: unknown }> = {
   complet: {
     label: 'Scenario Complet (6 clients, 10 produits)',
     data: scenarioComplet,
+  },
+  notion_jan2026: {
+    label: 'Scenario Notion Jan 2026 (4 clients, 2 produits, FEFO)',
+    data: scenarioNotion,
   },
 }
 

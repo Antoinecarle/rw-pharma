@@ -1,0 +1,15 @@
+CODE;NOM;PAYS;EMAIL;IS_TOP_CLIENT;PRIORITY_LEVEL
+ORI;Orifarm;DK;orders@orifarm.dk;OUI;1
+MPA;MPA Pharma;DE;bestellungen@mpa-pharma.de;OUI;1
+CC;CC Pharma;DE;orders@cc-pharma.de;OUI;2
+AXI;Axicorp;DE;import@axicorp.de;OUI;2
+MEDCOR;Medcor;DE;contact@medcor.de;NON;3
+ABA;Abacus Medicine;DK;sourcing@abacus-medicine.com;NON;3
+BMODESTO;B. Modesto;PT;commandes@bmodesto.pt;NON;4
+BROCACEF;Brocacef;NL;inkoop@brocacef.nl;NON;3
+2CARE4;2care4;DK;order@2care4.dk;NON;3
+MELY;Mely Pharma;FR;export@mely-pharma.fr;NON;4
+INPHARM;Inpharm;DE;einkauf@inpharm.de;NON;4
+BNS;BNS Pharma;DE;orders@bns-pharma.de;NON;5
+SIGMA;Sigma Pharma;AT;import@sigma-pharma.at;NON;5
+IMED;IMed Pharma;SE;bestallning@imed-pharma.se;NON;4

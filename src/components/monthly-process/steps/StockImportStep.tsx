@@ -16,6 +16,7 @@ import {
 import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X, PackageCheck, Keyboard } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
+import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
 import type { MonthlyProcess, Wholesaler } from '@/types/database'
 
 // --------------- Types ---------------
@@ -1143,6 +1144,11 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
         </p>
       </div>}
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileInput} multiple className="hidden" />
+
+      {/* Example files suggestion */}
+      {importSource === 'excel' && queue.length === 0 && (
+        <ExampleFilesLoader category="stock" onLoadFiles={(files) => handleFiles(files)} />
+      )}
 
       {/* Import history (Excel mode) */}
       {importSource === 'excel' && queue.length === 0 && importHistory.length > 0 && (

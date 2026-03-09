@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/table'
 import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X } from 'lucide-react'
 import { toast } from 'sonner'
+import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
 import type { MonthlyProcess, Wholesaler } from '@/types/database'
 
 // --------------- Types ---------------
@@ -846,6 +847,11 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
         </p>
       </div>
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileInput} multiple className="hidden" />
+
+      {/* Example files suggestion */}
+      {queue.length === 0 && (
+        <ExampleFilesLoader category="quotas" onLoadFiles={(files) => handleFiles(files)} />
+      )}
 
       {/* Import history */}
       {queue.length === 0 && importHistory.length > 0 && (
