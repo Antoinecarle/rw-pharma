@@ -48,6 +48,7 @@ export default function PortalDocumentsPage() {
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!customerId) throw new Error('Customer ID not available')
       const storagePath = `customer-docs/${customerId}/${Date.now()}-${file.name}`
       const { error: uploadError } = await supabase.storage
         .from('customer-docs')
