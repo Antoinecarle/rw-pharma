@@ -571,7 +571,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
             </TableBody>
           </Table>
         </div>
-      )}
+      ) : null}
 
       {/* Allocations table */}
       {isLoading ? (
@@ -736,9 +736,9 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
             )}
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {allocations && allocations.length > 0 && (
+      {allocations && allocations.length > 0 ? (
         <div className="flex justify-end gap-3">
           <Button
             onClick={() => setConfirmOpen(true)}
@@ -750,7 +750,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
             {!confirmMut.isPending && <ArrowRight className="h-4 w-4" />}
           </Button>
         </div>
-      )}
+      ) : null}
 
       <FinalAllocationConfirmationModal
         open={confirmOpen}
