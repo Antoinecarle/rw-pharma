@@ -48,29 +48,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    // Safety timeout: force loading=false after 3s no matter what
-    const timeout = setTimeout(() => setLoading(false), 3000)
+    // Safety timeout: force loading=false after 5s no matter what
+    const timeout = setTimeout(() => setLoading(false), 5000)
+    let initialDone = false
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    // Use ONLY onAuthStateChange — handles INITIAL_SESSION event
+    // This avoids the race condition between getSession() and the listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
-      if (session?.user) await resolveRole(session.user.id)
-    }).catch(() => {
-      // Session retrieval failed, clear state
-      setSession(null)
-      setUser(null)
-    }).finally(() => {
-      clearTimeout(timeout)
-      setLoading(false)
-    })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
       if (session?.user) {
         await resolveRole(session.user.id)
+      } else {
+        setRole('admin')
+        setCustomerId(null)
+        setCustomerName(null)
       }
-      setLoading(false)
+
+      if (!initialDone) {
+        initialDone = true
+        clearTimeout(timeout)
+        setLoading(false)
+      }
     })
 
     return () => {

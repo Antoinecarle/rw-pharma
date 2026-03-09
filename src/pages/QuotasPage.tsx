@@ -58,7 +58,21 @@ export default function QuotasPage() {
   const [form, setForm] = useState<WholesalerQuotaInsert>({ wholesaler_id: '', product_id: '', month: monthFilter, quota_quantity: 0, extra_available: 0, quota_used: 0, monthly_process_id: null, import_file_name: null, metadata: {} })
 
   const { data: wholesalers } = useQuery({ queryKey: ['wholesalers'], queryFn: async () => { const { data, error } = await supabase.from('wholesalers').select('*').order('name'); if (error) throw error; return data as Wholesaler[] } })
-  const { data: products } = useQuery({ queryKey: ['products', 'all-for-select'], queryFn: async () => { const { data, error } = await supabase.from('products').select('id, cip13, name').order('name').limit(2000); if (error) throw error; return data as Pick<Product, 'id' | 'cip13' | 'name'>[] } })
+  const { data: products } = useQuery({ queryKey: ['products', 'all-for-select'], staleTime: 1000 * 60 * 30, queryFn: async () => {
+    // Paginate to get all products (1733 rows > Supabase 1000 cap)
+    const all: Pick<Product, 'id' | 'cip13' | 'name'>[] = []
+    let from = 0
+    const pageSize = 1000
+    while (true) {
+      const { data, error } = await supabase.from('products').select('id, cip13, name').order('name').range(from, from + pageSize - 1)
+      if (error) throw error
+      if (!data || data.length === 0) break
+      all.push(...data as Pick<Product, 'id' | 'cip13' | 'name'>[])
+      if (data.length < pageSize) break
+      from += pageSize
+    }
+    return all
+  } })
 
   const { data: quotas, isLoading } = useQuery({
     queryKey: ['quotas', wholesalerFilter, monthFilter, search, page],

@@ -679,36 +679,38 @@ export async function runAllocation(
     }
   }
 
-  // Persist quota_used back to DB
+  // Persist quota_used back to DB — batched in parallel
   const quotaUtilization = quotaTracker.getUtilization()
   if (quotaUtilization.length > 0) {
     const usedByQuota = quotaTracker.getDetailedUsage()
-    for (const { quotaId, used } of usedByQuota) {
-      if (used > 0) {
-        await supabase
-          .from('wholesaler_quotas')
-          .update({ quota_used: used })
-          .eq('id', quotaId)
-      }
+    const quotaPromises = usedByQuota
+      .filter(({ used }) => used > 0)
+      .map(({ quotaId, used }) =>
+        supabase.from('wholesaler_quotas').update({ quota_used: used }).eq('id', quotaId)
+      )
+    // Execute in parallel batches of 20 to avoid overwhelming Supabase
+    for (let i = 0; i < quotaPromises.length; i += 20) {
+      await Promise.all(quotaPromises.slice(i, i + 20))
     }
   }
 
-  // Persist allocated_quantity + status on orders
+  // Persist allocated_quantity + status on orders — batched in parallel
   const orderAllocMap = new Map<string, number>()
   for (const a of allocations) {
     orderAllocMap.set(a.order_id, (orderAllocMap.get(a.order_id) ?? 0) + a.allocated_quantity)
   }
-  for (const order of sortedOrders) {
+  const orderPromises = sortedOrders.map(order => {
     const totalAlloc = orderAllocMap.get(order.id) ?? 0
     const newStatus = totalAlloc <= 0
       ? 'pending'
       : totalAlloc >= order.quantity
         ? 'allocated'
         : 'partially_allocated'
-    await supabase
-      .from('orders')
-      .update({ allocated_quantity: totalAlloc, status: newStatus })
-      .eq('id', order.id)
+    return supabase.from('orders').update({ allocated_quantity: totalAlloc, status: newStatus }).eq('id', order.id)
+  })
+  // Execute in parallel batches of 20
+  for (let i = 0; i < orderPromises.length; i += 20) {
+    await Promise.all(orderPromises.slice(i, i + 20))
   }
 
   return { allocations, logs }

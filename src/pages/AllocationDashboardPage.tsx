@@ -95,28 +95,48 @@ export default function AllocationDashboardPage() {
     enabled: !!activeProcess,
   })
 
-  // Fetch quota data
+  // Fetch quota data (paginated)
   const { data: quotas } = useQuery({
     queryKey: ['quotas', 'dashboard'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('wholesaler_quotas')
-        .select('wholesaler_id, product_id, quota_quantity, extra_available, wholesaler:wholesalers(code, name)')
-      if (error) throw error
-      return data ?? []
+      const all: any[] = []
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        const { data, error } = await supabase
+          .from('wholesaler_quotas')
+          .select('wholesaler_id, product_id, quota_quantity, extra_available, wholesaler:wholesalers(code, name)')
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        all.push(...data)
+        if (data.length < pageSize) break
+        from += pageSize
+      }
+      return all
     },
   })
 
-  // Fetch stock
+  // Fetch stock (paginated)
   const { data: stock } = useQuery({
     queryKey: ['collected_stock', 'dashboard'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('collected_stock')
-        .select('id, wholesaler_id, product_id, lot_number, expiry_date, quantity, status')
-        .in('status', ['received', 'partially_allocated'])
-      if (error) throw error
-      return data ?? []
+      const all: any[] = []
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        const { data, error } = await supabase
+          .from('collected_stock')
+          .select('id, wholesaler_id, product_id, lot_number, expiry_date, quantity, status')
+          .in('status', ['received', 'partially_allocated'])
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        all.push(...data)
+        if (data.length < pageSize) break
+        from += pageSize
+      }
+      return all
     },
   })
 
@@ -272,7 +292,7 @@ export default function AllocationDashboardPage() {
     : '-'
 
   return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1400px] mx-auto ivory-page-glow">
+    <div className="p-4 md:p-7 lg:p-8 space-y-6 max-w-[1400px] mx-auto ivory-page-glow overflow-x-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -414,7 +434,7 @@ export default function AllocationDashboardPage() {
                 <Badge variant="secondary" className="text-[10px]">{customerBreakdown.length} clients</Badge>
               </div>
               {customerBreakdown.length > 0 ? (
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -470,10 +490,10 @@ export default function AllocationDashboardPage() {
                     {underAllocated.map(p => {
                       const rate = p.req > 0 ? Math.round((p.alloc / p.req) * 100) : 0
                       return (
-                        <div key={p.cip13} className="flex items-center gap-2 text-sm">
-                          <span className="font-mono text-xs text-muted-foreground w-28 shrink-0">{p.cip13}</span>
-                          <span className="truncate flex-1">{p.name}</span>
-                          <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden shrink-0">
+                        <div key={p.cip13} className="flex items-center gap-2 text-sm min-w-0">
+                          <span className="font-mono text-xs text-muted-foreground w-20 sm:w-28 shrink-0 truncate">{p.cip13}</span>
+                          <span className="truncate flex-1 min-w-0">{p.name}</span>
+                          <div className="w-12 sm:w-16 h-1.5 bg-muted rounded-full overflow-hidden shrink-0">
                             <div
                               className="h-full bg-amber-500 rounded-full"
                               style={{ width: `${rate}%` }}
@@ -501,18 +521,18 @@ export default function AllocationDashboardPage() {
                     {quotaUtilization.map(q => {
                       const pct = q.total > 0 ? Math.round((q.used / q.total) * 100) : 0
                       return (
-                        <div key={q.code} className="flex items-center gap-3">
-                          <span className="text-sm font-mono font-medium w-16 shrink-0">{q.code}</span>
-                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                        <div key={q.code} className="flex items-center gap-2 sm:gap-3 min-w-0">
+                          <span className="text-sm font-mono font-medium w-12 sm:w-16 shrink-0 truncate">{q.code}</span>
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden min-w-0">
                             <div
                               className={`h-full rounded-full transition-all ${pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                               style={{ width: `${Math.min(pct, 100)}%` }}
                             />
                           </div>
-                          <span className="text-xs tabular-nums text-muted-foreground w-24 text-right">
+                          <span className="text-xs tabular-nums text-muted-foreground shrink-0 text-right hidden sm:inline">
                             {q.used.toLocaleString('fr-FR')} / {q.total.toLocaleString('fr-FR')}
                           </span>
-                          <Badge variant={pct > 90 ? 'destructive' : pct > 70 ? 'secondary' : 'default'} className="text-[10px] w-10 justify-center">
+                          <Badge variant={pct > 90 ? 'destructive' : pct > 70 ? 'secondary' : 'default'} className="text-[10px] w-10 justify-center shrink-0">
                             {pct}%
                           </Badge>
                         </div>

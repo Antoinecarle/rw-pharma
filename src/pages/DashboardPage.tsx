@@ -26,26 +26,31 @@ function StatSkeleton() {
 export default function DashboardPage() {
   const { data: productCount, isLoading: loadingProducts } = useQuery({
     queryKey: ['products', 'count'],
+    staleTime: 1000 * 60 * 30,
     queryFn: async () => { const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }); return count ?? 0 },
   })
 
   const { data: wholesalerCount, isLoading: loadingWholesalers } = useQuery({
     queryKey: ['wholesalers', 'count'],
+    staleTime: 1000 * 60 * 30,
     queryFn: async () => { const { count } = await supabase.from('wholesalers').select('*', { count: 'exact', head: true }); return count ?? 0 },
   })
 
   const { data: customerCount, isLoading: loadingCustomers } = useQuery({
     queryKey: ['customers', 'count'],
+    staleTime: 1000 * 60 * 30,
     queryFn: async () => { const { count } = await supabase.from('customers').select('*', { count: 'exact', head: true }); return count ?? 0 },
   })
 
   const { data: blockedCount, isLoading: loadingBlocked } = useQuery({
     queryKey: ['products', 'blocked', 'count'],
+    staleTime: 1000 * 60 * 30,
     queryFn: async () => { const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_ansm_blocked', true); return count ?? 0 },
   })
 
   const { data: quotaCount, isLoading: loadingQuotas } = useQuery({
     queryKey: ['quotas', 'count'],
+    staleTime: 1000 * 60 * 30,
     queryFn: async () => { const { count } = await supabase.from('wholesaler_quotas').select('*', { count: 'exact', head: true }); return count ?? 0 },
   })
 

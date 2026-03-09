@@ -126,17 +126,11 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
         totalInserted += data?.length ?? batch.length
       }
 
-      // Update process
+      // Update process (orders already updated by runAllocation)
       await supabase
         .from('monthly_processes')
         .update({ allocations_count: totalInserted, status: 'macro_allocating', current_step: 4 })
         .eq('id', process.id)
-
-      // Mark orders as allocated
-      await supabase
-        .from('orders')
-        .update({ status: 'allocated' })
-        .eq('monthly_process_id', process.id)
 
       return totalInserted
     },

@@ -58,13 +58,23 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
   const { data: allocations, isLoading } = useQuery({
     queryKey: ['allocations', process.id, 'review'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('allocations')
-        .select('*, customer:customers(id, name, code), product:products(id, cip13, name), wholesaler:wholesalers(id, name, code)')
-        .eq('monthly_process_id', process.id)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return data as unknown as Allocation[]
+      const all: any[] = []
+      let from = 0
+      const pageSize = 500
+      while (true) {
+        const { data, error } = await supabase
+          .from('allocations')
+          .select('*, customer:customers(id, name, code), product:products(id, cip13, name), wholesaler:wholesalers(id, name, code)')
+          .eq('monthly_process_id', process.id)
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        all.push(...data)
+        if (data.length < pageSize) break
+        from += pageSize
+      }
+      return all as unknown as Allocation[]
     },
   })
 
@@ -152,8 +162,8 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
     }
   }
 
-  // Group by customer
-  const customerSummary = new Map<string, { name: string; code: string; count: number; totalQty: number }>()
+  // Group by customer with fulfillment %
+  const customerSummary = new Map<string, { name: string; code: string; count: number; totalQty: number; totalReq: number }>()
   for (const a of allocations ?? []) {
     const key = a.customer_id
     const c = a.customer as unknown as { name: string; code: string } | undefined
@@ -161,8 +171,9 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
     if (existing) {
       existing.count++
       existing.totalQty += a.allocated_quantity
+      existing.totalReq += a.requested_quantity
     } else {
-      customerSummary.set(key, { name: c?.name ?? '', code: c?.code ?? '?', count: 1, totalQty: a.allocated_quantity })
+      customerSummary.set(key, { name: c?.name ?? '', code: c?.code ?? '?', count: 1, totalQty: a.allocated_quantity, totalReq: a.requested_quantity })
     }
   }
 
@@ -427,15 +438,19 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
                 code: c.code,
                 value: c.totalQty,
               }))}
-              formatValue={(v) => `${v.toLocaleString('fr-FR')} u.`}
+              formatValue={(v, item) => {
+                const cust = [...customerSummary.values()].find(c => c.name === item?.label)
+                const pct = cust && cust.totalReq > 0 ? Math.round((cust.totalQty / cust.totalReq) * 100) : 0
+                return `${v.toLocaleString('fr-FR')} u. (${pct}%)`
+              }}
             />
           </motion.div>
         )}
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-3">
-        <div className="flex gap-1.5">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap gap-1.5">
           {[
             { value: 'all' as ViewMode, label: `Toutes (${allocations?.length ?? 0})` },
             { value: 'by_lot' as ViewMode, label: `Par lot (${lotConsolidated.length})` },
@@ -455,7 +470,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
             </button>
           ))}
         </div>
-        <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground sm:ml-auto flex items-center gap-1.5">
           <Pencil className="h-3 w-3" /> Cliquez sur une cellule pour modifier
         </span>
       </div>

@@ -106,15 +106,26 @@ export default function ProductsPage() {
 
   const { data: laboratories } = useQuery({
     queryKey: ['products', 'laboratories'],
+    staleTime: 1000 * 60 * 30, // Labs rarely change
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('laboratory')
-        .not('laboratory', 'is', null)
-        .order('laboratory')
-      if (error) throw error
-      const unique = [...new Set(data.map(r => r.laboratory).filter(Boolean))] as string[]
-      return unique
+      // Paginate to avoid Supabase 1000-row cap
+      const all: string[] = []
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('laboratory')
+          .not('laboratory', 'is', null)
+          .order('laboratory')
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        all.push(...data.map(r => r.laboratory).filter(Boolean) as string[])
+        if (data.length < pageSize) break
+        from += pageSize
+      }
+      return [...new Set(all)]
     },
   })
 

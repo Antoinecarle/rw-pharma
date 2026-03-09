@@ -1,30 +1,34 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { Toaster } from '@/components/ui/sonner'
 import Layout from '@/components/Layout'
-import PortalLayout from '@/components/portal/PortalLayout'
-import LoginPage from '@/pages/LoginPage'
-import DashboardPage from '@/pages/DashboardPage'
-import ProductsPage from '@/pages/ProductsPage'
-import WholesalersPage from '@/pages/WholesalersPage'
-import CustomersPage from '@/pages/CustomersPage'
-import QuotasPage from '@/pages/QuotasPage'
-import MonthlyProcessesPage from '@/pages/MonthlyProcessesPage'
-import MonthlyProcessDetailPage from '@/pages/MonthlyProcessDetailPage'
-import AllocationDashboardPage from '@/pages/AllocationDashboardPage'
-import AnsmPage from '@/pages/AnsmPage'
-import PortalOrdersPage from '@/pages/portal/PortalOrdersPage'
-import PortalAllocationsPage from '@/pages/portal/PortalAllocationsPage'
-import PortalStockPage from '@/pages/portal/PortalStockPage'
-import PortalDocumentsPage from '@/pages/portal/PortalDocumentsPage'
-import AcceptInvitationPage from '@/pages/portal/AcceptInvitationPage'
+
+// Lazy-loaded pages — split into separate chunks
+const LoginPage = lazy(() => import('@/pages/LoginPage'))
+const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
+const ProductsPage = lazy(() => import('@/pages/ProductsPage'))
+const WholesalersPage = lazy(() => import('@/pages/WholesalersPage'))
+const CustomersPage = lazy(() => import('@/pages/CustomersPage'))
+const QuotasPage = lazy(() => import('@/pages/QuotasPage'))
+const MonthlyProcessesPage = lazy(() => import('@/pages/MonthlyProcessesPage'))
+const MonthlyProcessDetailPage = lazy(() => import('@/pages/MonthlyProcessDetailPage'))
+const AllocationDashboardPage = lazy(() => import('@/pages/AllocationDashboardPage'))
+const AnsmPage = lazy(() => import('@/pages/AnsmPage'))
+const PortalLayout = lazy(() => import('@/components/portal/PortalLayout'))
+const PortalOrdersPage = lazy(() => import('@/pages/portal/PortalOrdersPage'))
+const PortalAllocationsPage = lazy(() => import('@/pages/portal/PortalAllocationsPage'))
+const PortalStockPage = lazy(() => import('@/pages/portal/PortalStockPage'))
+const PortalDocumentsPage = lazy(() => import('@/pages/portal/PortalDocumentsPage'))
+const AcceptInvitationPage = lazy(() => import('@/pages/portal/AcceptInvitationPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: false,
       retry: 1,
     },
   },
@@ -78,56 +82,62 @@ function NotFoundPage() {
   )
 }
 
+function LazyPage({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<div className="flex items-center justify-center py-24"><p className="text-sm text-muted-foreground">Chargement...</p></div>}>{children}</Suspense>
+}
+
 function AppRoutes() {
   const { user, loading, role } = useAuth()
 
   if (loading) return <LoadingScreen />
 
   return (
-    <Routes>
-      <Route path="/login" element={
-        user ? <Navigate to={role === 'customer' ? '/portal' : '/'} replace /> : <LoginPage />
-      } />
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
+        <Route path="/login" element={
+          user ? <Navigate to={role === 'customer' ? '/portal' : '/'} replace /> : <LazyPage><LoginPage /></LazyPage>
+        } />
 
-      {/* Invitation acceptance (public) */}
-      <Route path="/invite/:token" element={<AcceptInvitationPage />} />
+        {/* Invitation acceptance (public) */}
+        <Route path="/invite/:token" element={<LazyPage><AcceptInvitationPage /></LazyPage>} />
 
-      {/* Admin routes */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<DashboardPage />} />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="wholesalers" element={<WholesalersPage />} />
-        <Route path="quotas" element={<QuotasPage />} />
-        <Route path="customers" element={<CustomersPage />} />
-        <Route path="monthly-processes" element={<MonthlyProcessesPage />} />
-        <Route path="monthly-processes/:id" element={<MonthlyProcessDetailPage />} />
-        <Route path="allocation-dashboard" element={<AllocationDashboardPage />} />
-        <Route path="ansm" element={<AnsmPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
+        {/* Admin routes */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<LazyPage><DashboardPage /></LazyPage>} />
+          <Route path="products" element={<LazyPage><ProductsPage /></LazyPage>} />
+          <Route path="wholesalers" element={<LazyPage><WholesalersPage /></LazyPage>} />
+          <Route path="quotas" element={<LazyPage><QuotasPage /></LazyPage>} />
+          <Route path="customers" element={<LazyPage><CustomersPage /></LazyPage>} />
+          <Route path="monthly-processes" element={<LazyPage><MonthlyProcessesPage /></LazyPage>} />
+          <Route path="monthly-processes/:id" element={<LazyPage><MonthlyProcessDetailPage /></LazyPage>} />
+          <Route path="allocation-dashboard" element={<LazyPage><AllocationDashboardPage /></LazyPage>} />
+          <Route path="ansm" element={<LazyPage><AnsmPage /></LazyPage>} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
 
-      {/* Customer portal routes */}
-      <Route
-        path="/portal"
-        element={
-          <CustomerRoute>
-            <PortalLayout />
-          </CustomerRoute>
-        }
-      >
-        <Route index element={<PortalOrdersPage />} />
-        <Route path="allocations" element={<PortalAllocationsPage />} />
-        <Route path="stock" element={<PortalStockPage />} />
-        <Route path="documents" element={<PortalDocumentsPage />} />
-      </Route>
-    </Routes>
+        {/* Customer portal routes */}
+        <Route
+          path="/portal"
+          element={
+            <CustomerRoute>
+              <LazyPage><PortalLayout /></LazyPage>
+            </CustomerRoute>
+          }
+        >
+          <Route index element={<LazyPage><PortalOrdersPage /></LazyPage>} />
+          <Route path="allocations" element={<LazyPage><PortalAllocationsPage /></LazyPage>} />
+          <Route path="stock" element={<LazyPage><PortalStockPage /></LazyPage>} />
+          <Route path="documents" element={<LazyPage><PortalDocumentsPage /></LazyPage>} />
+        </Route>
+      </Routes>
+    </Suspense>
   )
 }
 
