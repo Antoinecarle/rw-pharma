@@ -120,22 +120,54 @@ export default function AnsmPage() {
   })
 
   // Fetch blocked products list (paginated, searchable)
+  // Falls back to products table if ansm_blocked_products is empty
   const { data: blockedProducts, isLoading: loadingProducts } = useQuery({
     queryKey: ['ansm-blocked-products', search, page],
     queryFn: async () => {
-      let query = supabase
+      // First try ansm_blocked_products table
+      const { count: ansmCount } = await supabase
         .from('ansm_blocked_products')
-        .select('*', { count: 'exact' })
-        .order('product_name', { ascending: true })
+        .select('*', { count: 'exact', head: true })
+
+      if (ansmCount && ansmCount > 0) {
+        let query = supabase
+          .from('ansm_blocked_products')
+          .select('*', { count: 'exact' })
+          .order('product_name', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+
+        if (search) {
+          query = query.or(`cip13.ilike.%${search}%,product_name.ilike.%${search}%`)
+        }
+
+        const { data, count, error } = await query
+        if (error) throw error
+        return { data: data as AnsmBlockedProduct[], count: count ?? 0 }
+      }
+
+      // Fallback: show blocked products from the products table
+      let query = supabase
+        .from('products')
+        .select('id, cip13, name, updated_at', { count: 'exact' })
+        .eq('is_ansm_blocked', true)
+        .order('name', { ascending: true })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
       if (search) {
-        query = query.or(`cip13.ilike.%${search}%,product_name.ilike.%${search}%`)
+        query = query.or(`cip13.ilike.%${search}%,name.ilike.%${search}%`)
       }
 
       const { data, count, error } = await query
       if (error) throw error
-      return { data: data as AnsmBlockedProduct[], count: count ?? 0 }
+      return {
+        data: (data ?? []).map(p => ({
+          id: p.id,
+          cip13: p.cip13,
+          product_name: p.name,
+          blocked_date: p.updated_at,
+        })) as AnsmBlockedProduct[],
+        count: count ?? 0,
+      }
     },
   })
 
