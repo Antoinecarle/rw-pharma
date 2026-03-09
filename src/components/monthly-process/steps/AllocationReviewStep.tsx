@@ -438,7 +438,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
                 code: c.code,
                 value: c.totalQty,
               }))}
-              formatValue={(v, item) => {
+              formatValue={(v: number, item?: { label: string; code?: string; value: number }) => {
                 const cust = [...customerSummary.values()].find(c => c.name === item?.label)
                 const pct = cust && cust.totalReq > 0 ? Math.round((cust.totalQty / cust.totalReq) * 100) : 0
                 return `${v.toLocaleString('fr-FR')} u. (${pct}%)`
