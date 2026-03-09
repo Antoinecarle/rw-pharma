@@ -321,12 +321,24 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
 
       const productMap = new Map(allProducts.map(p => [p.cip13, p]))
 
+      // Build CIP7 reverse lookup: CIP7 = CIP13[5:12] (French pharma standard)
+      const cip7Map = new Map<string, typeof allProducts[0]>()
+      for (const p of allProducts) {
+        if (p.cip13 && p.cip13.length === 13) {
+          const c7 = p.cip13.substring(5, 12)
+          if (!cip7Map.has(c7)) cip7Map.set(c7, p)
+        }
+      }
+      const resolveProduct = (code: string) => {
+        return productMap.get(code) ?? (code.length === 7 && /^\d+$/.test(code) ? cip7Map.get(code) : null) ?? null
+      }
+
       // Auto-create missing products (demo mode)
       const missingCip13s = new Set<string>()
       const cip13NameMap = new Map<string, string>()
       for (const row of f.rows) {
         const cip13 = String(row[f.mapping.cip13] || '').trim()
-        if (cip13 && !productMap.has(cip13)) {
+        if (cip13 && !resolveProduct(cip13)) {
           missingCip13s.add(cip13)
           if (f.mapping.productName) {
             const name = String(row[f.mapping.productName] || '').trim()
@@ -339,7 +351,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
         updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Creation de ${missingCip13s.size} produit(s) manquant(s)...` } })
         const newProducts = [...missingCip13s].map(cip13 => ({
           cip13,
-          cip7: cip13.length >= 7 ? cip13.slice(-7) : null,
+          cip7: cip13.length === 13 ? cip13.substring(5, 12) : (cip13.length === 7 ? cip13 : null),
           name: cip13NameMap.get(cip13) || `Produit ${cip13}`,
           is_ansm_blocked: false,
           is_demo_generated: true,
@@ -411,7 +423,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
           const qty = parseInt(String(row[f.mapping.quantity] || '0').replace(/\s/g, ''), 10)
           const extra = f.mapping.extra ? parseInt(String(row[f.mapping.extra] || '0').replace(/\s/g, ''), 10) || 0 : 0
 
-          const product = productMap.get(cip13)
+          const product = resolveProduct(cip13)
 
           if (!product) {
             skippedDetails.push({ rowIndex, cip13, quantity: qty, reason: 'unknown_product' })

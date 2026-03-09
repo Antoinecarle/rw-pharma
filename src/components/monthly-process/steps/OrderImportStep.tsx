@@ -354,16 +354,39 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       const customerMap = new Map(customersList.map(c => [c.code?.toUpperCase(), c.id]))
       const productMap = new Map(productsList.map(p => [p.cip13, { id: p.id, name: p.name }]))
 
-      // Auto-create missing products (demo mode)
+      // Build CIP7 reverse lookup: CIP7 = CIP13[5:12] (French pharma standard)
+      const cip7Map = new Map<string, { id: string; name: string }>()
+      for (const p of productsList) {
+        if (p.cip13 && p.cip13.length === 13) {
+          const cip7 = p.cip13.substring(5, 12)
+          if (!cip7Map.has(cip7)) {
+            cip7Map.set(cip7, { id: p.id, name: p.name })
+          }
+        }
+      }
+
+      // Resolve product by CIP13 or CIP7 fallback
+      const resolveProduct = (code: string) => {
+        // Direct CIP13 match
+        const direct = productMap.get(code)
+        if (direct) return direct
+        // CIP7 match (input is 7 digits → lookup in CIP7 reverse map)
+        if (code.length === 7 && /^\d+$/.test(code)) {
+          return cip7Map.get(code) ?? null
+        }
+        return null
+      }
+
+      // Auto-create missing products (only for codes that don't resolve via CIP7 either)
       const missingCip13s = new Set<string>()
       const cip13NameMap = new Map<string, string>()
       for (const row of f.rows) {
-        const cip13 = String(row[f.mapping.cip13] || '').trim()
-        if (cip13 && !productMap.has(cip13)) {
-          missingCip13s.add(cip13)
+        const code = String(row[f.mapping.cip13] || '').trim()
+        if (code && !resolveProduct(code)) {
+          missingCip13s.add(code)
           if (f.mapping.productName) {
             const name = String(row[f.mapping.productName] || '').trim()
-            if (name) cip13NameMap.set(cip13, name)
+            if (name) cip13NameMap.set(code, name)
           }
         }
       }
@@ -373,7 +396,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Creation de ${missingCip13s.size} produit(s) manquant(s)...` } })
         const newProducts = [...missingCip13s].map(cip13 => ({
           cip13,
-          cip7: cip13.length >= 7 ? cip13.slice(-7) : null,
+          cip7: cip13.length === 13 ? cip13.substring(5, 12) : (cip13.length === 7 ? cip13 : null),
           name: cip13NameMap.get(cip13) || `Produit ${cip13}`,
           is_ansm_blocked: false,
           is_demo_generated: true,
@@ -416,7 +439,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
           const qty = parseInt(String(row[f.mapping.quantity] || '0'), 10)
           const price = f.mapping.unit_price ? parseFloat(String(row[f.mapping.unit_price]).replace(',', '.')) || null : null
 
-          const productEntry = productMap.get(cip13)
+          const productEntry = resolveProduct(cip13)
 
           if (!productEntry || qty <= 0) {
             const reason: SkippedItem['reason'] = !productEntry ? 'unknown_product' : 'invalid_quantity'
@@ -600,11 +623,22 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         from += 1000
       }
       const productMap = new Map(allProducts.map(p => [p.cip13, p]))
+      // CIP7 reverse lookup for manual entry too
+      const manualCip7Map = new Map<string, { id: string; cip13: string }>()
+      for (const p of allProducts) {
+        if (p.cip13 && p.cip13.length === 13) {
+          const c7 = p.cip13.substring(5, 12)
+          if (!manualCip7Map.has(c7)) manualCip7Map.set(c7, p)
+        }
+      }
+      const resolveManual = (code: string) => {
+        return productMap.get(code) ?? (code.length === 7 && /^\d+$/.test(code) ? manualCip7Map.get(code) : null) ?? null
+      }
 
       const validRows = manualRows
         .filter(r => r.cip13.trim() && parseInt(r.quantity) > 0)
         .map(r => {
-          const product = productMap.get(r.cip13.trim())
+          const product = resolveManual(r.cip13.trim())
           if (!product) return null
           return {
             monthly_process_id: process.id,

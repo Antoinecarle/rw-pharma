@@ -368,6 +368,19 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
       }
 
       const productMap = new Map(allProducts.map(p => [p.cip13, p]))
+
+      // Build CIP7 reverse lookup: CIP7 = CIP13[5:12] (French pharma standard)
+      const cip7Map = new Map<string, typeof allProducts[0]>()
+      for (const p of allProducts) {
+        if (p.cip13 && p.cip13.length === 13) {
+          const c7 = p.cip13.substring(5, 12)
+          if (!cip7Map.has(c7)) cip7Map.set(c7, p)
+        }
+      }
+      const resolveProduct = (code: string) => {
+        return productMap.get(code) ?? (code.length === 7 && /^\d+$/.test(code) ? cip7Map.get(code) : null) ?? null
+      }
+
       const wholesalersList = wholesalers ?? []
       const wholesaler = wholesalersList.find(w => w.code?.toUpperCase() === wholesalerCode?.toUpperCase())
 
@@ -396,7 +409,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
           const dateReceptionRaw = f.mapping.date_reception ? String(row[f.mapping.date_reception] || '').trim() : ''
           const dateReception = dateReceptionRaw ? parseExpiryDate(dateReceptionRaw) : null
 
-          const product = productMap.get(cip13)
+          const product = resolveProduct(cip13)
           if (!product) {
             skippedDetails.push({ rowIndex, cip13, reason: 'unknown_product' })
             return null
