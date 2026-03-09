@@ -39,10 +39,63 @@
   ],
 
   "reference_customers": [
-    { "name": "ORIFARM", "code": "ORI", "country": "DK", "is_top_client": true },
-    { "name": "MPA", "code": "MPA", "country": "DE", "is_top_client": false },
-    { "name": "AXICORP", "code": "AXI", "country": "DE", "is_top_client": false },
-    { "name": "MEDCOR", "code": "MEDCOR", "country": "NL", "is_top_client": false }
+    {
+      "name": "ORIFARM",
+      "code": "ORI",
+      "country": "DK",
+      "is_top_client": true,
+      "min_lot_acceptable": 50,
+      "format_import": "External, Itemname, Quantity, Unitprice",
+      "excel_column_mapping": {
+        "cip13_column": "External",
+        "product_name_column": "Itemname",
+        "quantity_column": "Quantity",
+        "price_column": "Unitprice"
+      }
+    },
+    {
+      "name": "MPA",
+      "code": "MPA",
+      "country": "DE",
+      "is_top_client": false,
+      "min_lot_acceptable": 30,
+      "format_import": "LocalCode/EMA, Product, Quantity, Price",
+      "excel_column_mapping": {
+        "cip13_column": "LocalCode",
+        "eunb_column": "EMA",
+        "product_name_column": "Product",
+        "quantity_column": "Quantity",
+        "price_column": "Price"
+      }
+    },
+    {
+      "name": "AXICORP",
+      "code": "AXI",
+      "country": "DE",
+      "is_top_client": false,
+      "min_lot_acceptable": 40,
+      "format_import": "CIPcode, Product, Price, POqnt",
+      "excel_column_mapping": {
+        "cip13_column": "CIPcode",
+        "product_name_column": "Product",
+        "price_column": "Price",
+        "quantity_column": "POqnt"
+      }
+    },
+    {
+      "name": "MEDCOR",
+      "code": "MEDCOR",
+      "country": "NL",
+      "is_top_client": false,
+      "min_lot_acceptable": 20,
+      "format_import": "ProductNumber, Name, Qty, Price",
+      "excel_column_mapping": {
+        "cip13_column": "ProductNumber",
+        "product_name_column": "Name",
+        "quantity_column": "Qty",
+        "price_column": "Price"
+      }
+    }
   ],
 
   "quotas": [

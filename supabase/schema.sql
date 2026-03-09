@@ -86,16 +86,39 @@ CREATE TABLE IF NOT EXISTS monthly_processes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
   year INTEGER NOT NULL CHECK (year BETWEEN 2020 AND 2100),
-  status VARCHAR(30) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'importing_quotas', 'importing_orders', 'reviewing_orders', 'macro_allocating', 'exporting_wholesalers', 'collecting_stock', 'allocating_lots', 'reviewing_allocations', 'finalizing', 'completed')),
+  status VARCHAR(30) NOT NULL DEFAULT 'draft' CHECK (status IN (
+    'draft', 'importing_quotas', 'importing_orders', 'reviewing_orders',
+    'exporting_wholesalers', 'attente_stock',
+    'collecting_stock', 'aggregating_stock', 'allocating_lots',
+    'reviewing_allocations', 'finalizing', 'completed'
+  )),
+  phase VARCHAR(20) DEFAULT 'commandes' CHECK (phase IN (
+    'commandes', 'attente_stock', 'collecte', 'allocation', 'cloture'
+  )),
   current_step INTEGER NOT NULL DEFAULT 1,
   quotas_count INTEGER DEFAULT 0,
   orders_count INTEGER DEFAULT 0,
   allocations_count INTEGER DEFAULT 0,
+  date_ouverture TIMESTAMPTZ DEFAULT NOW(),
+  date_cloture TIMESTAMPTZ,
   notes TEXT,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(month, year)
+);
+
+-- =============================================
+-- Table: phase_reopenings (traçabilité des réouvertures)
+-- =============================================
+CREATE TABLE IF NOT EXISTS phase_reopenings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  monthly_process_id UUID NOT NULL REFERENCES monthly_processes(id) ON DELETE CASCADE,
+  from_step INTEGER NOT NULL,
+  to_step INTEGER NOT NULL,
+  reason TEXT,
+  impact_summary JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- =============================================

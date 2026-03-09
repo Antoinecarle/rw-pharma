@@ -43,6 +43,16 @@ interface ScenarioStock {
   unit_cost: number
 }
 
+interface ScenarioCustomerRef {
+  code: string
+  name: string
+  country?: string
+  is_top_client?: boolean
+  min_lot_acceptable?: number
+  format_import?: string
+  excel_column_mapping?: Record<string, string>
+}
+
 interface Scenario {
   name: string
   month: number
@@ -50,6 +60,7 @@ interface Scenario {
   products_cip13: string[]
   customers_codes: string[]
   wholesalers_codes: string[]
+  reference_customers?: ScenarioCustomerRef[]
   quotas: ScenarioQuota[]
   orders: ScenarioOrder[]
   lots: ScenarioLot[]
@@ -93,6 +104,32 @@ Deno.serve(async (req: Request) => {
 
     // Step 2: Resolve references (codes → UUIDs)
     const refs = await resolveReferences(supabase, scenario)
+
+    // Step 2b: Update customers with min_lot and excel_column_mapping from scenario
+    if (scenario.reference_customers && scenario.reference_customers.length > 0) {
+      for (const custRef of scenario.reference_customers) {
+        const custId = refs.customers[custRef.code]
+        if (!custId) continue
+
+        const updateFields: Record<string, unknown> = {}
+        if (custRef.min_lot_acceptable !== undefined) {
+          updateFields.min_lot_acceptable = custRef.min_lot_acceptable
+        }
+        if (custRef.excel_column_mapping) {
+          updateFields.excel_column_mapping = custRef.excel_column_mapping
+        }
+        if (custRef.is_top_client !== undefined) {
+          updateFields.is_top_client = custRef.is_top_client
+        }
+        if (custRef.format_import) {
+          updateFields.metadata = { format_import: custRef.format_import }
+        }
+
+        if (Object.keys(updateFields).length > 0) {
+          await supabase.from('customers').update(updateFields).eq('id', custId)
+        }
+      }
+    }
 
     // Step 3: Create demo monthly process
     const { data: processData, error: processError } = await supabase

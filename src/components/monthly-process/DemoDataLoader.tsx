@@ -17,14 +17,16 @@ import { toast } from 'sonner'
 import scenarioComplet from '../../../data/examples/demo-scenarios/scenario_complet.json'
 import scenarioNotion from '../../../data/examples/demo-scenarios/scenario_notion_jan2026.json'
 
-const SCENARIOS: Record<string, { label: string; data: unknown }> = {
-  complet: {
-    label: 'Scenario Complet (6 clients, 10 produits)',
-    data: scenarioComplet,
-  },
+const SCENARIOS: Record<string, { label: string; description: string; data: unknown }> = {
   notion_jan2026: {
-    label: 'Scenario Notion Jan 2026 (4 clients, 2 produits, FEFO)',
+    label: 'Notion Jan 2026 — Process de référence',
+    description: '4 clients (ORI, MPA, AXI, MEDCOR) · 2 produits · 4 grossistes réels · FEFO + lot expiré',
     data: scenarioNotion,
+  },
+  complet: {
+    label: 'Complet Fév 2026 — Multi-clients',
+    description: '6 clients · 8 produits · 4 grossistes réels · min_lot + format_import par client',
+    data: scenarioComplet,
   },
 }
 
@@ -39,7 +41,7 @@ export default function DemoDataLoader() {
   // Only render in dev mode
   if (!import.meta.env.DEV) return null
 
-  const [selectedScenario, setSelectedScenario] = useState('complet')
+  const [selectedScenario, setSelectedScenario] = useState('notion_jan2026')
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
@@ -174,8 +176,13 @@ export default function DemoDataLoader() {
         </Button>
       </div>
 
+      {SCENARIOS[selectedScenario]?.description && (
+        <p className="text-[11px] text-purple-600 dark:text-purple-400 font-medium">
+          {SCENARIOS[selectedScenario].description}
+        </p>
+      )}
       <p className="text-[11px] text-muted-foreground">
-        Charge un jeu de donnees complet (quotas, commandes, lots, stock) pour tester le parcours de bout en bout.
+        Charge un jeu de donnees complet (quotas, commandes, lots, stock, min_lot clients) issu du process Notion.
         Les donnees precedentes marquees [DEMO] seront automatiquement nettoyees avant chargement.
       </p>
     </div>

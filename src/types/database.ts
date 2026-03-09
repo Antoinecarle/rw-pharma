@@ -96,9 +96,9 @@ export interface Customer {
 export type CustomerInsert = Omit<Customer, 'id' | 'created_at' | 'updated_at'>
 export type CustomerUpdate = Partial<CustomerInsert>
 
-export type MonthlyProcessStatus = 'draft' | 'importing_quotas' | 'importing_orders' | 'reviewing_orders' | 'exporting_wholesalers' | 'collecting_stock' | 'aggregating_stock' | 'allocating_lots' | 'reviewing_allocations' | 'finalizing' | 'completed'
+export type MonthlyProcessStatus = 'draft' | 'importing_quotas' | 'importing_orders' | 'reviewing_orders' | 'exporting_wholesalers' | 'attente_stock' | 'collecting_stock' | 'aggregating_stock' | 'allocating_lots' | 'reviewing_allocations' | 'finalizing' | 'completed'
 
-export type MonthlyProcessPhase = 'commandes' | 'collecte' | 'allocation' | 'cloture'
+export type MonthlyProcessPhase = 'commandes' | 'attente_stock' | 'collecte' | 'allocation' | 'cloture'
 
 export interface MonthlyProcess {
   id: string
