@@ -75,7 +75,7 @@ export default function CommandPalette() {
   })
 
   const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
-  const STEP_LABELS = ['Import', 'Revue commandes', 'Allocation', 'Revue allocations', 'Finalisation']
+  const STEP_LABELS = ['Import quotas', 'Import commandes', 'Revue commandes', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
   const isOnProcess = location.pathname.startsWith('/monthly-processes/')
 

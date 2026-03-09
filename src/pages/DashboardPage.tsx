@@ -51,7 +51,7 @@ export default function DashboardPage() {
   const { data: quotaCount, isLoading: loadingQuotas } = useQuery({
     queryKey: ['quotas', 'count'],
     staleTime: 1000 * 60 * 30,
-    queryFn: async () => { const { data } = await supabase.from('wholesaler_quotas').select('id'); return data?.length ?? 0 },
+    queryFn: async () => { const { count } = await supabase.from('wholesaler_quotas').select('*', { count: 'exact', head: true }); return count ?? 0 },
   })
 
   const { data: activeProcess } = useQuery({
@@ -69,7 +69,7 @@ export default function DashboardPage() {
   })
 
   const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
-  const STEP_LABELS = ['Import quotas', 'Import commandes', 'Revue commandes', 'Allocation macro', 'Export grossistes', 'Reception stocks', 'Allocation lots', 'Finalisation']
+  const STEP_LABELS = ['Import quotas', 'Import commandes', 'Revue commandes', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
   const stats = [
     { name: 'Produits', value: productCount, loading: loadingProducts, icon: Pill, gradient: 'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.04))', iconColor: '#0D9488', href: '/products', target: 1760 },
@@ -123,7 +123,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="ivory-heading text-[14px]">Processus en cours</h3>
                       <span className="ivory-badge" style={{ background: 'rgba(13,148,136,0.08)', color: 'var(--ivory-accent)' }}>
-                        Etape {activeProcess.current_step}/8
+                        Etape {activeProcess.current_step}/{STEP_LABELS.length}
                       </span>
                     </div>
                     <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>

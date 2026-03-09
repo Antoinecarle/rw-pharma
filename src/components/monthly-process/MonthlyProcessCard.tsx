@@ -22,8 +22,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   completed: { label: 'Termine', color: 'var(--ivory-teal)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
 }
 
-const TOTAL_STEPS = 8
-const STEP_LABELS = ['', 'Import quotas', 'Import commandes', 'Revue commandes', 'Allocation macro', 'Export grossistes', 'Reception stocks', 'Allocation lots', 'Finalisation']
+const TOTAL_STEPS = 9
+const STEP_LABELS = ['', 'Import quotas', 'Import commandes', 'Revue commandes', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
 interface MonthlyProcessCardProps {
   process: MonthlyProcess
