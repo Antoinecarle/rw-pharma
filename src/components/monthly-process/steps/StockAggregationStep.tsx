@@ -78,9 +78,9 @@ export default function StockAggregationStep({ process, onNext, onBack }: StockA
 
   // KPIs
   const totalQty = stocks?.reduce((s, st) => s + st.quantity, 0) ?? 0
-  const uniqueProducts = new Set(stocks?.map(s => s.cip13)).size
-  const uniqueLots = new Set(stocks?.map(s => s.lot_number)).size
-  const uniqueWholesalers = new Set(stocks?.map(s => s.wholesaler_id)).size
+  const uniqueProducts = new Set(stocks?.map(s => s.product_id ?? s.cip13) ?? []).size
+  const uniqueLots = new Set(stocks?.map(s => s.lot_number) ?? []).size
+  const uniqueWholesalers = new Set(stocks?.map(s => s.wholesaler_id) ?? []).size
 
   // Expiry check
   const now = new Date()

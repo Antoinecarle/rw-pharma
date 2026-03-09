@@ -49,8 +49,8 @@ export default function PortalOrdersPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from('monthly_processes')
-        .select('id, month, status')
-        .order('month', { ascending: false })
+        .select('id, month, year, status')
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
       return data
@@ -115,7 +115,7 @@ export default function PortalOrdersPage() {
         <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px]" style={{ background: 'rgba(13,148,136,0.04)', border: '1px solid rgba(13,148,136,0.1)' }}>
           <Clock className="h-3.5 w-3.5" style={{ color: 'var(--ivory-accent)' }} />
           <span style={{ color: 'var(--ivory-text-heading)' }}>
-            Mois en cours : <strong>{new Date(currentProcess.month).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</strong>
+            Mois en cours : <strong>{new Date(currentProcess.year, currentProcess.month - 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</strong>
           </span>
           <Badge variant="outline" className="ml-2 text-[10px]">{currentProcess.status}</Badge>
         </div>

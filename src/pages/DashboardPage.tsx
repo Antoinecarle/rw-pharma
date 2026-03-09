@@ -51,7 +51,7 @@ export default function DashboardPage() {
   const { data: quotaCount, isLoading: loadingQuotas } = useQuery({
     queryKey: ['quotas', 'count'],
     staleTime: 1000 * 60 * 30,
-    queryFn: async () => { const { count } = await supabase.from('wholesaler_quotas').select('*', { count: 'exact', head: true }); return count ?? 0 },
+    queryFn: async () => { const { data } = await supabase.from('wholesaler_quotas').select('id'); return data?.length ?? 0 },
   })
 
   const { data: activeProcess } = useQuery({
