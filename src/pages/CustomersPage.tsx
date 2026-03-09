@@ -151,7 +151,24 @@ export default function CustomersPage() {
       if (error) throw error
       const link = `${window.location.origin}/invite/${token}`
       await navigator.clipboard.writeText(link)
-      toast.success('Invitation creee ! Lien copie dans le presse-papier.')
+
+      // Send invitation email via Edge Function
+      const customerName = customers?.find(c => c.id === customerId)?.name ?? 'Client'
+      const { error: emailError } = await supabase.functions.invoke('send-invitation-email', {
+        body: {
+          to: inviteEmail.trim(),
+          customerName,
+          inviteLink: link,
+          invitedBy: 'Julie - RW Pharma',
+        },
+      })
+      if (emailError) {
+        console.warn('Email send failed:', emailError)
+        toast.success('Invitation creee ! Lien copie. (Email non envoye)')
+      } else {
+        toast.success('Invitation creee ! Email envoye + lien copie.')
+      }
+
       setInviteEmail('')
       refetchInvitations()
     } catch (err: any) {
