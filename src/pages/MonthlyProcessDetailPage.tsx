@@ -165,7 +165,6 @@ export default function MonthlyProcessDetailPage() {
     const phase = PHASES[phaseId - 1]
     if (!phase) return
     // Navigate to the first step of that phase that's reachable
-    const firstReachable = phase.steps.find(s => s <= processStep) ?? phase.steps[0]
     // If viewing a completed phase, show the last step
     const status = getPhaseStatus(phaseId, processStep, process?.status ?? 'draft')
     if (status === 'completed') {

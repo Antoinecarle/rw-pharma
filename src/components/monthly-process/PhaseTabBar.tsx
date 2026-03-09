@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { Check, ShoppingCart, Warehouse, Cpu, Flag, Clock } from 'lucide-react'
+import { Check, ShoppingCart, Warehouse, Flag, Clock } from 'lucide-react'
 import type { MonthlyProcessPhase } from '@/types/database'
 
 export interface PhaseDefinition {
@@ -89,7 +89,7 @@ const STATUS_ICONS: Record<PhaseStatus, typeof Check | null> = {
   waiting: Clock,
 }
 
-export default function PhaseTabBar({ currentStep, processStatus, activePhase, onPhaseClick, completedSteps }: PhaseTabBarProps) {
+export default function PhaseTabBar({ currentStep, processStatus, activePhase, onPhaseClick }: PhaseTabBarProps) {
   return (
     <div className="w-full">
       {/* Desktop / Tablet */}
