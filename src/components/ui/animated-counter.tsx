@@ -1,6 +1,6 @@
-import { useRef, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import CountUp from 'react-countup'
-import { motion, useInView } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 interface SparklineProps {
   data?: number[]
@@ -59,34 +59,27 @@ export default function AnimatedCounter({
   className = '',
   valueClassName = '',
 }: AnimatedCounterProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: '-40px' })
-  const [forceVisible, setForceVisible] = useState(false)
+  const [ready, setReady] = useState(false)
 
-  // Fallback: if useInView hasn't fired after 800ms (e.g. nested in animated wrapper),
-  // force visibility so counters don't stay stuck at 0
+  // Trigger animation shortly after mount — no IntersectionObserver needed
   useEffect(() => {
-    if (isInView) return
-    const timer = setTimeout(() => setForceVisible(true), 800)
+    const timer = setTimeout(() => setReady(true), 100)
     return () => clearTimeout(timer)
-  }, [isInView])
-
-  const visible = isInView || forceVisible
+  }, [])
 
   return (
     <motion.div
-      ref={ref}
       className={`flex items-center gap-2 ${className}`}
       initial={{ opacity: 0, y: 8 }}
-      animate={visible ? { opacity: 1, y: 0 } : {}}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
       <span className={valueClassName}>
         <CountUp
-          key={`${value}-${visible}`}
+          key={value}
           start={0}
-          end={visible ? value : 0}
-          duration={visible ? duration : 0}
+          end={value}
+          duration={ready ? duration : 0}
           decimals={decimals}
           separator=" "
           prefix={prefix}
