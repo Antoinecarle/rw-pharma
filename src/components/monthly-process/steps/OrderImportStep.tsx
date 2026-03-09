@@ -19,6 +19,7 @@ import SkippedItemsReviewModal, {
   type SkippedItem, type ResolvedItem,
 } from '@/components/allocations/SkippedItemsReviewModal'
 import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
+import HorizontalBarChart from '@/components/ui/horizontal-bar'
 import type { MonthlyProcess, Customer, Product } from '@/types/database'
 import {
   type MappingConfidence,
@@ -192,6 +193,37 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         .eq('monthly_process_id', process.id)
       return count ?? 0
     },
+  })
+
+  const { data: orderSummary } = useQuery({
+    queryKey: ['orders', process.id, 'summary'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select('customer_id, quantity, customer:customers(code, name, is_top_client)')
+        .eq('monthly_process_id', process.id)
+      if (!data || data.length === 0) return null
+
+      const byCustomer = new Map<string, { code: string; name: string; isTop: boolean; totalQty: number; orderCount: number }>()
+      for (const o of data) {
+        const cust = o.customer as unknown as { code: string; name: string; is_top_client: boolean } | null
+        const code = cust?.code ?? 'N/A'
+        const name = cust?.name ?? code
+        const existing = byCustomer.get(code) ?? { code, name, isTop: cust?.is_top_client ?? false, totalQty: 0, orderCount: 0 }
+        existing.totalQty += o.quantity ?? 0
+        existing.orderCount += 1
+        byCustomer.set(code, existing)
+      }
+
+      const entries = [...byCustomer.values()].sort((a, b) => b.totalQty - a.totalQty)
+      return {
+        totalOrders: data.length,
+        totalQty: entries.reduce((s, e) => s + e.totalQty, 0),
+        customerCount: entries.length,
+        entries,
+      }
+    },
+    enabled: (existingOrders ?? 0) > 0,
   })
 
   const { data: customers } = useQuery({
@@ -1073,6 +1105,44 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {orderSummary && queue.length === 0 && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold">{orderSummary.customerCount}</p>
+                <p className="text-xs text-muted-foreground">Clients</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold">{orderSummary.totalOrders.toLocaleString('fr-FR')}</p>
+                <p className="text-xs text-muted-foreground">Lignes de commandes</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold">{orderSummary.totalQty.toLocaleString('fr-FR')}</p>
+                <p className="text-xs text-muted-foreground">Unites commandees</p>
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold mb-3">Repartition par client</p>
+              <HorizontalBarChart
+                items={orderSummary.entries.map(e => ({
+                  label: `${e.name}${e.isTop ? ' ★' : ''}`,
+                  code: e.code,
+                  value: e.totalQty,
+                }))}
+                formatValue={(v) => `${v.toLocaleString('fr-FR')} u.`}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* File queue (Excel mode only) */}

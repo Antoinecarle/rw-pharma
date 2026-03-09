@@ -17,6 +17,7 @@ import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkle
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
+import HorizontalBarChart from '@/components/ui/horizontal-bar'
 import type { MonthlyProcess, Wholesaler } from '@/types/database'
 import {
   type MappingConfidence,
@@ -213,6 +214,37 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
         .eq('monthly_process_id', process.id)
       return data?.length ?? 0
     },
+  })
+
+  const { data: stockSummary } = useQuery({
+    queryKey: ['collected_stock', process.id, 'summary'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('collected_stock')
+        .select('wholesaler_id, quantity, wholesaler:wholesalers(code, name)')
+        .eq('monthly_process_id', process.id)
+      if (!data || data.length === 0) return null
+
+      const byWholesaler = new Map<string, { code: string; name: string; totalQty: number; lotCount: number }>()
+      for (const s of data) {
+        const ws = s.wholesaler as unknown as { code: string; name: string } | null
+        const code = ws?.code ?? 'N/A'
+        const name = ws?.name ?? code
+        const existing = byWholesaler.get(code) ?? { code, name, totalQty: 0, lotCount: 0 }
+        existing.totalQty += s.quantity ?? 0
+        existing.lotCount += 1
+        byWholesaler.set(code, existing)
+      }
+
+      const entries = [...byWholesaler.values()].sort((a, b) => b.totalQty - a.totalQty)
+      return {
+        totalLots: data.length,
+        totalQty: entries.reduce((s, e) => s + e.totalQty, 0),
+        wholesalerCount: entries.length,
+        entries,
+      }
+    },
+    enabled: (existingStock ?? 0) > 0,
   })
 
   const { data: wholesalers } = useQuery({
@@ -1077,6 +1109,44 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {stockSummary && queue.length === 0 && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold">{stockSummary.wholesalerCount}</p>
+                <p className="text-xs text-muted-foreground">Grossistes</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold">{stockSummary.totalLots.toLocaleString('fr-FR')}</p>
+                <p className="text-xs text-muted-foreground">Lots recus</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold">{stockSummary.totalQty.toLocaleString('fr-FR')}</p>
+                <p className="text-xs text-muted-foreground">Unites en stock</p>
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold mb-3">Stock par grossiste</p>
+              <HorizontalBarChart
+                items={stockSummary.entries.map(e => ({
+                  label: e.name,
+                  code: e.code,
+                  value: e.totalQty,
+                }))}
+                formatValue={(v) => `${v.toLocaleString('fr-FR')} u.`}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* File queue (Excel mode) */}

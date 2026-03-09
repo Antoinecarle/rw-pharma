@@ -18,6 +18,7 @@ import { CheckCircle, ArrowRight, Package, Users, AlertTriangle, ShieldAlert, Co
 import { toast } from 'sonner'
 import { useState, useMemo } from 'react'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import HorizontalBarChart from '@/components/ui/horizontal-bar'
 import type { MonthlyProcess, Order } from '@/types/database'
 
 interface OrderReviewStepProps {
@@ -350,6 +351,25 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
             ))}
           </div>
         </div>
+      )}
+
+      {/* Horizontal bar chart */}
+      {customerSummary.size > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm font-semibold mb-3">Volume par client</p>
+            <HorizontalBarChart
+              items={[...customerSummary.values()]
+                .sort((a, b) => b.totalQty - a.totalQty)
+                .map(c => ({
+                  label: `${c.name}${c.isTop ? ' ★' : ''}`,
+                  code: c.code,
+                  value: c.totalQty,
+                }))}
+              formatValue={(v) => `${v.toLocaleString('fr-FR')} u.`}
+            />
+          </CardContent>
+        </Card>
       )}
 
       {/* Filter bar */}

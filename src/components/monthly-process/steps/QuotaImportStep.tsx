@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/table'
 import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X, RotateCcw, Hand } from 'lucide-react'
 import { toast } from 'sonner'
+import HorizontalBarChart from '@/components/ui/horizontal-bar'
 import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
 import type { MonthlyProcess, Wholesaler } from '@/types/database'
 import {
@@ -165,6 +166,39 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
         .eq('month', monthStr)
       return data?.length ?? 0
     },
+  })
+
+  const { data: quotaSummary } = useQuery({
+    queryKey: ['wholesaler_quotas', process.id, 'summary'],
+    queryFn: async () => {
+      const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}-01`
+      const { data } = await supabase
+        .from('wholesaler_quotas')
+        .select('wholesaler_id, quota_quantity, extra_available, wholesaler:wholesalers(code, name)')
+        .eq('month', monthStr)
+      if (!data || data.length === 0) return null
+
+      // Group by wholesaler
+      const byWholesaler = new Map<string, { code: string; name: string; totalQty: number; productCount: number }>()
+      for (const q of data) {
+        const ws = q.wholesaler as unknown as { code: string; name: string } | null
+        const code = ws?.code ?? 'N/A'
+        const name = ws?.name ?? code
+        const existing = byWholesaler.get(code) ?? { code, name, totalQty: 0, productCount: 0 }
+        existing.totalQty += (q.quota_quantity ?? 0) + (q.extra_available ?? 0)
+        existing.productCount += 1
+        byWholesaler.set(code, existing)
+      }
+
+      const entries = [...byWholesaler.values()].sort((a, b) => b.totalQty - a.totalQty)
+      return {
+        totalQuotas: data.length,
+        totalQty: entries.reduce((s, e) => s + e.totalQty, 0),
+        wholesalerCount: entries.length,
+        entries,
+      }
+    },
+    enabled: (existingQuotas ?? 0) > 0,
   })
 
   const { data: wholesalers } = useQuery({
@@ -867,6 +901,44 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {quotaSummary && queue.length === 0 && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold">{quotaSummary.wholesalerCount}</p>
+                <p className="text-xs text-muted-foreground">Grossistes</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold">{quotaSummary.totalQuotas.toLocaleString('fr-FR')}</p>
+                <p className="text-xs text-muted-foreground">Lignes de quotas</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold">{quotaSummary.totalQty.toLocaleString('fr-FR')}</p>
+                <p className="text-xs text-muted-foreground">Unites totales</p>
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold mb-3">Repartition par grossiste</p>
+              <HorizontalBarChart
+                items={quotaSummary.entries.map(e => ({
+                  label: e.name,
+                  code: e.code,
+                  value: e.totalQty,
+                }))}
+                formatValue={(v) => `${v.toLocaleString('fr-FR')} u.`}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* File queue */}
