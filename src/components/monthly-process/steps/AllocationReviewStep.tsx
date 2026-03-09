@@ -147,7 +147,8 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
   const totalRequested = useMemo(() => {
     const byOrder = new Map<string, number>()
     for (const a of allocations ?? []) {
-      if (!byOrder.has(a.order_id)) byOrder.set(a.order_id, a.requested_quantity)
+      const oid = a.order_id ?? ''
+      if (oid && !byOrder.has(oid)) byOrder.set(oid, a.requested_quantity)
     }
     return [...byOrder.values()].reduce((s, v) => s + v, 0)
   }, [allocations])
@@ -174,17 +175,18 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
     const map = new Map<string, { name: string; code: string; count: number; totalQty: number; totalReq: number; seenOrders: Set<string> }>()
     for (const a of allocations ?? []) {
       const key = a.customer_id
+      const oid = a.order_id ?? ''
       const c = a.customer as unknown as { name: string; code: string } | undefined
       const existing = map.get(key)
       if (existing) {
         existing.count++
         existing.totalQty += a.allocated_quantity
-        if (!existing.seenOrders.has(a.order_id)) {
+        if (oid && !existing.seenOrders.has(oid)) {
           existing.totalReq += a.requested_quantity
-          existing.seenOrders.add(a.order_id)
+          existing.seenOrders.add(oid)
         }
       } else {
-        map.set(key, { name: c?.name ?? '', code: c?.code ?? '?', count: 1, totalQty: a.allocated_quantity, totalReq: a.requested_quantity, seenOrders: new Set([a.order_id]) })
+        map.set(key, { name: c?.name ?? '', code: c?.code ?? '?', count: 1, totalQty: a.allocated_quantity, totalReq: a.requested_quantity, seenOrders: new Set(oid ? [oid] : []) })
       }
     }
     // Strip seenOrders from result
