@@ -12,6 +12,7 @@
  */
 
 import { supabase } from '@/lib/supabase'
+import { fetchPendingDebts, resolveDebt, type PendingDebt } from '@/lib/debt-engine'
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ export interface AllocationResult {
   requested_quantity: number
   allocated_quantity: number
   prix_applique: number | null
+  debt_resolution_id: string | null
   status: 'proposed'
   metadata: {
     strategy: AllocationStrategy
@@ -81,6 +83,7 @@ export interface AllocationResult {
     expiry_date?: string
     priority_score: number
     quota_used: boolean
+    is_debt_resolution?: boolean
   }
 }
 
@@ -518,6 +521,7 @@ export async function runAllocation(
             requested_quantity: order.quantity,
             allocated_quantity: consumed,
             prix_applique: order.unit_price ?? null,
+            debt_resolution_id: null,
             status: 'proposed',
             metadata: {
               strategy,
@@ -674,6 +678,7 @@ export async function runAllocation(
             requested_quantity: order.quantity,
             allocated_quantity: remainingToAllocate,
             prix_applique: order.unit_price ?? null,
+            debt_resolution_id: null,
             status: 'proposed',
             metadata: { strategy, priority_score: priorityScore, quota_used: false },
           })
@@ -687,6 +692,94 @@ export async function runAllocation(
         }
       }
     }
+  }
+
+  // ── Debt Resolution: boost under-served clients from previous months ──
+  // After initial allocation, check if any clients have pending debts.
+  // If there is remaining stock/quota, try to allocate extra to resolve debts.
+  try {
+    const pendingDebts = await fetchPendingDebts()
+    if (pendingDebts.length > 0) {
+      // Group debts by customer+product
+      const debtsByKey = new Map<string, PendingDebt[]>()
+      for (const debt of pendingDebts) {
+        const key = `${debt.customerId}|${debt.productId}`
+        const existing = debtsByKey.get(key) ?? []
+        existing.push(debt)
+        debtsByKey.set(key, existing)
+      }
+
+      for (const [key, debts] of debtsByKey) {
+        const [debtCustomerId, debtProductId] = key.split('|')
+        const totalDebtOwed = debts.reduce((s, d) => s + d.remainingOwed, 0)
+        if (totalDebtOwed <= 0) continue
+
+        // Check if there's remaining quota for this product
+        const available = quotaTracker.getAvailable(debtProductId)
+        if (available.length === 0) continue
+
+        let debtToResolve = totalDebtOwed
+
+        for (const ws of available) {
+          if (debtToResolve <= 0) break
+
+          const consumed = quotaTracker.consume(debtProductId, ws.wholesalerId, debtToResolve)
+          if (consumed > 0) {
+            // Attribute to oldest debts first
+            let remaining = consumed
+            for (const debt of debts) {
+              if (remaining <= 0) break
+              const toResolve = Math.min(remaining, debt.remainingOwed)
+              if (toResolve > 0) {
+                allocations.push({
+                  monthly_process_id: processId,
+                  order_id: '', // No specific order — debt resolution
+                  customer_id: debtCustomerId,
+                  product_id: debtProductId,
+                  wholesaler_id: ws.wholesalerId,
+                  stock_id: null,
+                  requested_quantity: toResolve,
+                  allocated_quantity: toResolve,
+                  prix_applique: null,
+                  debt_resolution_id: debt.id,
+                  status: 'proposed',
+                  metadata: {
+                    strategy,
+                    priority_score: 200, // High priority for debt resolution
+                    quota_used: true,
+                    is_debt_resolution: true,
+                  },
+                })
+
+                debt.remainingOwed -= toResolve
+                remaining -= toResolve
+
+                pushLog(
+                  { id: '', customer_id: debtCustomerId, product_id: debtProductId, quantity: toResolve, unit_price: null, customer: customerCodeMap.has(debtCustomerId) ? { id: debtCustomerId, code: customerCodeMap.get(debtCustomerId)!.code, name: customerCodeMap.get(debtCustomerId)!.name, is_top_client: false, min_lot_acceptable: null, allocation_preferences: {} } : null } as OrderRow,
+                  ws.wholesalerId, toResolve, 0, 'quota',
+                  `Resolution dette (${debt.month}) : ${toResolve} u.`
+                )
+              }
+            }
+
+            debtToResolve -= consumed
+          }
+        }
+      }
+
+      // Persist debt resolutions to DB
+      for (const alloc of allocations) {
+        if (alloc.debt_resolution_id) {
+          const totalResolved = allocations
+            .filter(a => a.debt_resolution_id === alloc.debt_resolution_id)
+            .reduce((s, a) => s + a.allocated_quantity, 0)
+          await resolveDebt(alloc.debt_resolution_id, totalResolved)
+        }
+      }
+    }
+  } catch (debtErr) {
+    // Non-blocking: debt resolution failure shouldn't break allocation
+    console.warn('Debt resolution skipped:', debtErr)
   }
 
   // Persist quota_used back to DB — batched in parallel

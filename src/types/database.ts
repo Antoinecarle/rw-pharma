@@ -156,9 +156,14 @@ export interface Allocation {
   stock_id: string | null
   requested_quantity: number
   allocated_quantity: number
+  client_sold_quantity: number
   prix_applique: number | null
   refusal_reason: string | null
   status: AllocationStatus
+  confirmation_status: 'pending' | 'confirmed' | 'refused'
+  confirmation_note: string | null
+  confirmed_at: string | null
+  debt_resolution_id: string | null
   metadata: Record<string, unknown>
   created_at: string
   // Joined fields
@@ -169,6 +174,32 @@ export interface Allocation {
 
 export type AllocationInsert = Omit<Allocation, 'id' | 'created_at' | 'customer' | 'product' | 'wholesaler'>
 export type AllocationUpdate = Partial<AllocationInsert>
+
+// ── Client Debts ─────────────────────────────────────────────────
+
+export type ClientDebtStatus = 'pending' | 'partially_resolved' | 'resolved'
+
+export interface ClientDebt {
+  id: string
+  customer_id: string
+  product_id: string
+  monthly_process_id: string | null
+  month: string
+  quantity_requested: number
+  quantity_allocated: number
+  quantity_owed: number
+  resolved_quantity: number
+  status: ClientDebtStatus
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+  // Joined
+  customer?: Customer
+  product?: Product
+}
+
+export type ClientDebtInsert = Omit<ClientDebt, 'id' | 'created_at' | 'updated_at' | 'customer' | 'product'>
+export type ClientDebtUpdate = Partial<ClientDebtInsert>
 
 // ── Lots ─────────────────────────────────────────────────────────
 

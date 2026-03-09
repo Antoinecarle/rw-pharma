@@ -25,6 +25,7 @@ import {
   BarChart3,
   Shield,
   Warehouse,
+  Scale,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import CommandPalette from '@/components/CommandPalette'
@@ -34,6 +35,7 @@ const mainNavigation = [
   { name: 'Allocations', href: '/monthly-processes', icon: CalendarRange, description: 'Processus mensuels' },
   { name: 'Stock', href: '/stock', icon: Warehouse, description: 'Stock collecte par lot' },
   { name: 'Metriques', href: '/allocation-dashboard', icon: BarChart3, description: 'Dashboard allocation' },
+  { name: 'Dettes', href: '/debts', icon: Scale, description: 'Sous-allocations clients' },
   { name: 'ANSM', href: '/ansm', icon: Shield, description: 'Produits interdits a l\'export' },
 ]
 
