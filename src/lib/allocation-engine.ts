@@ -157,15 +157,25 @@ async function fetchQuotas(month: number, year: number): Promise<QuotaRow[]> {
   return data ?? []
 }
 
-async function fetchStock(_processId: string): Promise<StockRow[]> {
-  // Load all stock with status 'received' or 'partially_allocated'
-  const { data, error } = await supabase
-    .from('collected_stock')
-    .select('id, wholesaler_id, product_id, lot_number, expiry_date, quantity, status')
-    .in('status', ['received', 'partially_allocated'])
-    .order('expiry_date', { ascending: true }) // FEFO
-  if (error) throw error
-  return data ?? []
+async function fetchStock(processId: string): Promise<StockRow[]> {
+  const all: StockRow[] = []
+  let from = 0
+  const pageSize = 500
+  while (true) {
+    const { data, error } = await supabase
+      .from('collected_stock')
+      .select('id, wholesaler_id, product_id, lot_number, expiry_date, quantity, status')
+      .eq('monthly_process_id', processId)
+      .in('status', ['received', 'partially_allocated'])
+      .order('expiry_date', { ascending: true }) // FEFO
+      .range(from, from + pageSize - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...data)
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  return all
 }
 
 async function fetchWholesalers(): Promise<WholesalerRow[]> {
@@ -407,7 +417,7 @@ export async function runAllocation(
   const totalQuota = quotaRows
     .filter(q => !excludedWholesalers.has(q.wholesaler_id))
     .reduce((sum, q) => sum + q.quota_quantity + (q.extra_available ?? 0), 0)
-  const maxAllocTracker = new MaxAllocationTracker(Math.max(totalStock, totalQuota, 1))
+  const maxAllocTracker = new MaxAllocationTracker(Math.max(totalStock + totalQuota, 1))
 
   const wsMap = new Map(availableWholesalers.map(w => [w.id, w]))
   const productMap = new Map(products.map(p => [p.id, p]))
@@ -711,6 +721,26 @@ export async function runAllocation(
   // Execute in parallel batches of 20
   for (let i = 0; i < orderPromises.length; i += 20) {
     await Promise.all(orderPromises.slice(i, i + 20))
+  }
+
+  // Update collected_stock status based on remaining quantity
+  const stockUsage = new Map<string, number>() // stockId → total consumed
+  for (const a of allocations) {
+    if (a.stock_id) {
+      stockUsage.set(a.stock_id, (stockUsage.get(a.stock_id) ?? 0) + a.allocated_quantity)
+    }
+  }
+  if (stockUsage.size > 0) {
+    // Compare consumed vs original quantity to determine status
+    const stockOriginal = new Map(stockRows.map(s => [s.id, s.quantity]))
+    const stockStatusPromises = [...stockUsage.entries()].map(([stockId, consumed]) => {
+      const original = stockOriginal.get(stockId) ?? 0
+      const newStatus = consumed >= original ? 'allocated' : 'partially_allocated'
+      return supabase.from('collected_stock').update({ status: newStatus }).eq('id', stockId)
+    })
+    for (let i = 0; i < stockStatusPromises.length; i += 20) {
+      await Promise.all(stockStatusPromises.slice(i, i + 20))
+    }
   }
 
   return { allocations, logs }

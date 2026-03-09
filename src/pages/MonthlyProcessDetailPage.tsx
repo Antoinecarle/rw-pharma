@@ -118,9 +118,25 @@ export default function MonthlyProcessDetailPage() {
     prevStepRef.current = targetStep
     setActiveStep(targetStep)
     if (process) {
+      // Map step → status + phase for the state machine
+      const stepStateMap: Record<number, { status: string; phase: string }> = {
+        1: { status: 'importing_quotas', phase: 'commandes' },
+        2: { status: 'importing_orders', phase: 'commandes' },
+        3: { status: 'reviewing_orders', phase: 'commandes' },
+        4: { status: 'exporting_wholesalers', phase: 'commandes' },
+        5: { status: 'collecting_stock', phase: 'collecte' },
+        6: { status: 'aggregating_stock', phase: 'collecte' },
+        7: { status: 'allocating_lots', phase: 'allocation' },
+        8: { status: 'reviewing_allocations', phase: 'allocation' },
+        9: { status: 'finalizing', phase: 'cloture' },
+      }
+      const stepState = stepStateMap[targetStep] ?? {}
       supabase
         .from('monthly_processes')
-        .update({ current_step: Math.max(targetStep, process.current_step) })
+        .update({
+          current_step: Math.max(targetStep, process.current_step),
+          ...stepState,
+        })
         .eq('id', process.id)
         .then(() => {
           queryClient.invalidateQueries({ queryKey: ['monthly-processes', id] })

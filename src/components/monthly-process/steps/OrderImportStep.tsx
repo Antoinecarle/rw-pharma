@@ -444,7 +444,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
               cip13,
               quantity: qty,
               unitPrice: price,
-              reason: 'unknown_product' as SkippedItem['reason'],
+              reason: 'unknown_customer' as SkippedItem['reason'],
             })
             return null
           }

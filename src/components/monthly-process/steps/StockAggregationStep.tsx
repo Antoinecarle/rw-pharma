@@ -52,13 +52,23 @@ export default function StockAggregationStep({ process, onNext, onBack }: StockA
   const { data: stocks, isLoading } = useQuery({
     queryKey: ['collected-stock', process.id, 'aggregation'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('collected_stock')
-        .select('*, wholesaler:wholesalers(id, name, code), product:products(id, cip13, name)')
-        .eq('monthly_process_id', process.id)
-        .order('expiry_date', { ascending: true })
-      if (error) throw error
-      return data as unknown as CollectedStock[]
+      const all: CollectedStock[] = []
+      let from = 0
+      const pageSize = 500
+      while (true) {
+        const { data, error } = await supabase
+          .from('collected_stock')
+          .select('*, wholesaler:wholesalers(id, name, code), product:products(id, cip13, name)')
+          .eq('monthly_process_id', process.id)
+          .order('expiry_date', { ascending: true })
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        all.push(...(data as unknown as CollectedStock[]))
+        if (data.length < pageSize) break
+        from += pageSize
+      }
+      return all
     },
   })
 

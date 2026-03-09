@@ -87,7 +87,7 @@ interface SkippedQuotaItem {
   rowIndex: number
   cip13: string
   quantity: number
-  reason: 'unknown_product' | 'invalid_quantity' | 'ansm_blocked'
+  reason: 'unknown_product' | 'invalid_quantity' | 'ansm_blocked' | 'unknown_wholesaler'
 }
 
 interface QueuedQuotaFile {
@@ -430,7 +430,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
             rowWholesalerId = wholesalerIdMap.get(wsCode)
           }
           if (!rowWholesalerId) {
-            skippedDetails.push({ rowIndex, cip13, quantity: qty, reason: 'unknown_product' })
+            skippedDetails.push({ rowIndex, cip13, quantity: qty, reason: 'unknown_wholesaler' })
             return null
           }
 
@@ -818,6 +818,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                           <TableCell>
                             <Badge variant="outline" className="text-[9px]">
                               {item.reason === 'unknown_product' ? 'Produit inconnu' :
+                               item.reason === 'unknown_wholesaler' ? 'Grossiste inconnu' :
                                item.reason === 'invalid_quantity' ? 'Quantite invalide' : 'Bloque ANSM'}
                             </Badge>
                           </TableCell>

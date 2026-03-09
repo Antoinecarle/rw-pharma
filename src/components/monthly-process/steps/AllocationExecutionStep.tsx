@@ -41,11 +41,12 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
   const { data: existingAllocations } = useQuery({
     queryKey: ['allocations', process.id, 'count'],
     queryFn: async () => {
-      const { count } = await supabase
+      const { data } = await supabase
         .from('allocations')
-        .select('*', { count: 'exact', head: true })
+        .select('id')
         .eq('monthly_process_id', process.id)
-      return count ?? 0
+        .limit(1)
+      return data?.length ?? 0
     },
   })
 
