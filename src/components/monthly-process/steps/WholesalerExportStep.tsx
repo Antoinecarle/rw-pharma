@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Download, Send, ArrowRight, Package, Warehouse, FileSpreadsheet, Check } from 'lucide-react'
+import { Download, Send, ArrowRight, Package, Warehouse, FileSpreadsheet, Check, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import type { MonthlyProcess } from '@/types/database'
 
@@ -22,10 +22,13 @@ interface WholesalerNeed {
     productId: string
     productName: string
     cip13: string
-    totalQuantity: number
+    quotaQuantity: number
+    extraAvailable: number
+    totalDemand: number
+    toCollect: number
     customerCount: number
   }[]
-  totalQuantity: number
+  totalToCollect: number
   totalProducts: number
 }
 
@@ -37,40 +40,60 @@ interface WholesalerExportStepProps {
 export default function WholesalerExportStep({ process, onNext }: WholesalerExportStepProps) {
   const [exportedWholesalers, setExportedWholesalers] = useState<Set<string>>(new Set())
 
-  // Fetch allocations with joins
   const { data: needs, isLoading } = useQuery({
     queryKey: ['wholesaler-needs', process.id],
     queryFn: async () => {
-      // Fetch all allocations for this process
-      const allAllocations: {
-        wholesaler_id: string
+      // 1. Fetch validated orders for this process (paginated)
+      const allOrders: {
         product_id: string
         customer_id: string
-        allocated_quantity: number
+        quantity: number
       }[] = []
       let from = 0
       const pageSize = 500
       while (true) {
         const { data, error } = await supabase
-          .from('allocations')
-          .select('wholesaler_id, product_id, customer_id, allocated_quantity')
+          .from('orders')
+          .select('product_id, customer_id, quantity')
           .eq('monthly_process_id', process.id)
-          .in('status', ['proposed', 'confirmed'])
+          .in('status', ['validated', 'pending'])
           .range(from, from + pageSize - 1)
         if (error) throw error
         if (!data || data.length === 0) break
-        allAllocations.push(...data)
+        allOrders.push(...data)
         if (data.length < pageSize) break
         from += pageSize
       }
 
-      if (allAllocations.length === 0) return []
+      if (allOrders.length === 0) return []
 
-      // Fetch wholesalers
+      // 2. Aggregate demand per product
+      const demandByProduct = new Map<string, { totalQty: number; customers: Set<string> }>()
+      for (const o of allOrders) {
+        const existing = demandByProduct.get(o.product_id)
+        if (existing) {
+          existing.totalQty += o.quantity
+          existing.customers.add(o.customer_id)
+        } else {
+          demandByProduct.set(o.product_id, { totalQty: o.quantity, customers: new Set([o.customer_id]) })
+        }
+      }
+
+      // 3. Fetch wholesaler quotas for this month
+      const monthDate = `${process.year}-${String(process.month).padStart(2, '0')}-01`
+      const { data: quotas, error: qErr } = await supabase
+        .from('wholesaler_quotas')
+        .select('wholesaler_id, product_id, quota_quantity, extra_available')
+        .eq('month', monthDate)
+      if (qErr) throw qErr
+
+      if (!quotas || quotas.length === 0) return []
+
+      // 4. Fetch wholesalers
       const { data: wholesalers } = await supabase.from('wholesalers').select('id, code, name')
       const wsMap = new Map((wholesalers ?? []).map(w => [w.id, w]))
 
-      // Fetch products (paginated)
+      // 5. Fetch products (paginated)
       let allProducts: { id: string; name: string; cip13: string }[] = []
       from = 0
       while (true) {
@@ -82,54 +105,52 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
       }
       const prodMap = new Map(allProducts.map(p => [p.id, p]))
 
-      // Group by wholesaler -> product
-      const byWholesaler = new Map<string, Map<string, { totalQty: number; customers: Set<string> }>>()
+      // 6. Build needs per wholesaler: quota capped by demand
+      const byWholesaler = new Map<string, WholesalerNeed['items']>()
 
-      for (const alloc of allAllocations) {
-        if (!byWholesaler.has(alloc.wholesaler_id)) {
-          byWholesaler.set(alloc.wholesaler_id, new Map())
+      for (const q of quotas) {
+        const demand = demandByProduct.get(q.product_id)
+        if (!demand) continue // No orders for this product, skip
+
+        const quotaTotal = (q.quota_quantity ?? 0) + (q.extra_available ?? 0)
+        if (quotaTotal <= 0) continue
+
+        // Amount to collect = min(quota, total demand for this product)
+        const toCollect = Math.min(quotaTotal, demand.totalQty)
+
+        if (!byWholesaler.has(q.wholesaler_id)) {
+          byWholesaler.set(q.wholesaler_id, [])
         }
-        const prodMap2 = byWholesaler.get(alloc.wholesaler_id)!
-        if (!prodMap2.has(alloc.product_id)) {
-          prodMap2.set(alloc.product_id, { totalQty: 0, customers: new Set() })
-        }
-        const entry = prodMap2.get(alloc.product_id)!
-        entry.totalQty += alloc.allocated_quantity
-        entry.customers.add(alloc.customer_id)
+
+        const prod = prodMap.get(q.product_id)
+        byWholesaler.get(q.wholesaler_id)!.push({
+          productId: q.product_id,
+          productName: prod?.name ?? '?',
+          cip13: prod?.cip13 ?? '?',
+          quotaQuantity: q.quota_quantity ?? 0,
+          extraAvailable: q.extra_available ?? 0,
+          totalDemand: demand.totalQty,
+          toCollect,
+          customerCount: demand.customers.size,
+        })
       }
 
-      // Build result
+      // 7. Build result
       const result: WholesalerNeed[] = []
-      for (const [wsId, products] of byWholesaler.entries()) {
+      for (const [wsId, items] of byWholesaler.entries()) {
         const ws = wsMap.get(wsId)
-        const items: WholesalerNeed['items'] = []
-        let totalQty = 0
-
-        for (const [prodId, { totalQty: qty, customers }] of products.entries()) {
-          const prod = prodMap.get(prodId)
-          items.push({
-            productId: prodId,
-            productName: prod?.name ?? '?',
-            cip13: prod?.cip13 ?? '?',
-            totalQuantity: qty,
-            customerCount: customers.size,
-          })
-          totalQty += qty
-        }
-
-        items.sort((a, b) => b.totalQuantity - a.totalQuantity)
-
+        items.sort((a, b) => b.toCollect - a.toCollect)
         result.push({
           wholesalerId: wsId,
           wholesalerCode: ws?.code ?? '?',
           wholesalerName: ws?.name ?? '?',
           items,
-          totalQuantity: totalQty,
+          totalToCollect: items.reduce((s, i) => s + i.toCollect, 0),
           totalProducts: items.length,
         })
       }
 
-      return result.sort((a, b) => b.totalQuantity - a.totalQuantity)
+      return result.sort((a, b) => b.totalToCollect - a.totalToCollect)
     },
   })
 
@@ -137,7 +158,10 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
     const rows = ws.items.map(item => ({
       'CIP13': item.cip13,
       'Produit': item.productName,
-      'Quantite demandee': item.totalQuantity,
+      'Quota': item.quotaQuantity,
+      'Extra dispo': item.extraAvailable,
+      'Demande totale': item.totalDemand,
+      'A collecter': item.toCollect,
       'Nb clients': item.customerCount,
     }))
 
@@ -145,14 +169,15 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Besoins')
 
-    // Auto-size columns
-    const colWidths = [
+    worksheet['!cols'] = [
       { wch: 16 }, // CIP13
       { wch: 40 }, // Produit
-      { wch: 18 }, // Quantite
+      { wch: 10 }, // Quota
+      { wch: 12 }, // Extra
+      { wch: 14 }, // Demande
+      { wch: 12 }, // A collecter
       { wch: 12 }, // Nb clients
     ]
-    worksheet['!cols'] = colWidths
 
     const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}`
     const filename = `besoins_${ws.wholesalerCode}_${monthStr}.xlsx`
@@ -188,7 +213,8 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
         <div>
           <h3 className="text-lg font-semibold">Export vers Grossistes</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Aucune allocation trouvee. Lancez d'abord l'allocation macro (etape 4).
+            Aucun quota trouve pour ce mois, ou aucune commande validee ne correspond aux quotas disponibles.
+            Verifiez que les quotas (etape 1) et les commandes (etape 2) ont ete importes.
           </p>
         </div>
         <div className="flex justify-end">
@@ -201,14 +227,24 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
   }
 
   const totalProducts = new Set(needs.flatMap(ws => ws.items.map(i => i.productId))).size
-  const totalQty = needs.reduce((s, ws) => s + ws.totalQuantity, 0)
+  const totalToCollect = needs.reduce((s, ws) => s + ws.totalToCollect, 0)
+  const totalDemand = new Map<string, number>()
+  for (const ws of needs) {
+    for (const item of ws.items) {
+      if (!totalDemand.has(item.productId)) {
+        totalDemand.set(item.productId, item.totalDemand)
+      }
+    }
+  }
+  const sumDemand = [...totalDemand.values()].reduce((s, v) => s + v, 0)
+  const coverageRate = sumDemand > 0 ? Math.round((totalToCollect / sumDemand) * 100) : 0
 
   return (
     <div className="space-y-5">
       <div>
         <h3 className="text-lg font-semibold">Export vers Grossistes</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Generez les fichiers de besoins consolides a envoyer a chaque grossiste pour qu'il collecte les produits.
+          Fichiers de besoins consolides a envoyer a chaque grossiste pour la collecte, bases sur les quotas et la demande client.
         </p>
       </div>
 
@@ -224,8 +260,14 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
             <span className="text-sm"><strong>{totalProducts}</strong> produits</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm"><strong>{totalQty.toLocaleString('fr-FR')}</strong> unites total</span>
+            <span className="text-sm"><strong>{totalToCollect.toLocaleString('fr-FR')}</strong> u. a collecter</span>
           </div>
+          {coverageRate < 100 && (
+            <div className="flex items-center gap-1.5 text-amber-600">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Couverture quotas : {coverageRate}% de la demande</span>
+            </div>
+          )}
           <div className="ml-auto">
             <Button variant="outline" size="sm" onClick={handleExportAll} className="gap-1.5">
               <Download className="h-3.5 w-3.5" /> Tout exporter
@@ -257,7 +299,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                       <span>{ws.totalProducts} produits</span>
-                      <span>{ws.totalQuantity.toLocaleString('fr-FR')} unites</span>
+                      <span>{ws.totalToCollect.toLocaleString('fr-FR')} u. a collecter</span>
                     </div>
                   </div>
                   <Button
@@ -271,15 +313,16 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
                   </Button>
                 </div>
 
-                {/* Top 5 products preview */}
+                {/* Products preview */}
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="text-xs">CIP13</TableHead>
                         <TableHead className="text-xs">Produit</TableHead>
-                        <TableHead className="text-xs text-right">Quantite</TableHead>
-                        <TableHead className="text-xs text-right">Clients</TableHead>
+                        <TableHead className="text-xs text-right">Quota</TableHead>
+                        <TableHead className="text-xs text-right">Demande</TableHead>
+                        <TableHead className="text-xs text-right">A collecter</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -287,13 +330,19 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
                         <TableRow key={item.productId}>
                           <TableCell className="font-mono text-xs">{item.cip13}</TableCell>
                           <TableCell className="text-xs truncate max-w-[200px]">{item.productName}</TableCell>
-                          <TableCell className="text-xs text-right font-medium">{item.totalQuantity}</TableCell>
-                          <TableCell className="text-xs text-right">{item.customerCount}</TableCell>
+                          <TableCell className="text-xs text-right tabular-nums">
+                            {item.quotaQuantity.toLocaleString('fr-FR')}
+                            {item.extraAvailable > 0 && (
+                              <span className="text-muted-foreground"> +{item.extraAvailable}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-right tabular-nums">{item.totalDemand.toLocaleString('fr-FR')}</TableCell>
+                          <TableCell className="text-xs text-right font-medium tabular-nums">{item.toCollect.toLocaleString('fr-FR')}</TableCell>
                         </TableRow>
                       ))}
                       {ws.items.length > 5 && (
                         <TableRow>
-                          <TableCell colSpan={4} className="text-xs text-muted-foreground text-center py-2">
+                          <TableCell colSpan={5} className="text-xs text-muted-foreground text-center py-2">
                             + {ws.items.length - 5} autres produits
                           </TableCell>
                         </TableRow>
