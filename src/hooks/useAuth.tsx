@@ -59,17 +59,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null)
 
       if (session?.user) {
+        // Block routing guards while resolving role
+        setLoading(true)
         await resolveRole(session.user.id)
+        setLoading(false)
       } else {
         setRole('admin')
         setCustomerId(null)
         setCustomerName(null)
+        if (!initialDone) {
+          initialDone = true
+          clearTimeout(timeout)
+          setLoading(false)
+        }
       }
 
       if (!initialDone) {
         initialDone = true
         clearTimeout(timeout)
-        setLoading(false)
       }
     })
 

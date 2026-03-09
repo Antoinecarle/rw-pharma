@@ -94,7 +94,9 @@ export default function AcceptInvitationPage() {
         .eq('id', invitation.id)
 
       toast.success('Compte cree avec succes !')
-      navigate('/portal')
+      // Full page reload to re-initialize AuthProvider with fresh session
+      // This avoids race condition between signUp event and resolveRole
+      window.location.href = '/portal'
     } catch (err: any) {
       toast.error(err.message || 'Erreur lors de la creation du compte')
     } finally {
