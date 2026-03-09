@@ -68,34 +68,26 @@ export default function AcceptInvitationPage() {
 
     setSubmitting(true)
     try {
-      // 1. Create Supabase auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      // 1. Create user via Edge Function (admin API = auto-confirmed email)
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-portal-user', {
+        body: {
+          email: invitation.email,
+          password,
+          invitation_token: token,
+        },
+      })
+      if (fnError) throw fnError
+      if (fnData?.error) throw new Error(fnData.error)
+
+      // 2. Sign in immediately (email is confirmed by admin API)
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: invitation.email,
         password,
       })
-      if (authError) throw authError
-      if (!authData.user) throw new Error('Erreur creation compte')
-
-      // 2. Link to customer (store email for admin display)
-      const { error: linkError } = await supabase
-        .from('customer_users')
-        .insert({
-          auth_user_id: authData.user.id,
-          customer_id: invitation.customer_id,
-          role: invitation.role,
-          email: invitation.email,
-        })
-      if (linkError) throw linkError
-
-      // 3. Mark invitation as accepted
-      await supabase
-        .from('customer_invitations')
-        .update({ status: 'accepted', accepted_at: new Date().toISOString() })
-        .eq('id', invitation.id)
+      if (signInError) throw signInError
 
       toast.success('Compte cree avec succes !')
       // Full page reload to re-initialize AuthProvider with fresh session
-      // This avoids race condition between signUp event and resolveRole
       window.location.href = '/portal'
     } catch (err: any) {
       toast.error(err.message || 'Erreur lors de la creation du compte')
