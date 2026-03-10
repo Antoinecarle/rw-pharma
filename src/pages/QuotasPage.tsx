@@ -104,7 +104,7 @@ export default function QuotasPage() {
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); upsert.mutate(editing ? { ...form, id: editing.id } : form) }
 
   const totalPages = Math.ceil((quotas?.count ?? 0) / PAGE_SIZE)
-  const monthOptions = Array.from({ length: 12 }, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() - i + 1); d.setDate(1); return d.toISOString().slice(0, 10) })
+  const monthOptions = Array.from({ length: 24 }, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() + 12 - i); d.setDate(1); return d.toISOString().slice(0, 10) })
   const currentMonthLabel = new Date(monthFilter).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
   const wholesalerColorMap = useMemo(() => { const map: Record<string, string> = {}; wholesalers?.forEach((w, i) => { map[w.id] = WHOLESALER_COLORS[i % WHOLESALER_COLORS.length] }); return map }, [wholesalers])
   const totalQuota = quotas?.data.reduce((s, q) => s + q.quota_quantity, 0) ?? 0
