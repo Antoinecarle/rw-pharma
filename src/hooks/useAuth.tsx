@@ -59,24 +59,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null)
 
       if (session?.user) {
-        // Block routing guards while resolving role
-        setLoading(true)
+        // Only block routing during initial auth resolution, not on token refresh
+        if (!initialDone) {
+          setLoading(true)
+        }
         await resolveRole(session.user.id)
-        setLoading(false)
       } else {
         setRole('admin')
         setCustomerId(null)
         setCustomerName(null)
-        // Always set loading=false on sign out (not just initial)
-        setLoading(false)
-        if (!initialDone) {
-          initialDone = true
-          clearTimeout(timeout)
-        }
       }
 
       if (!initialDone) {
         initialDone = true
+        setLoading(false)
         clearTimeout(timeout)
       }
     })
