@@ -61,13 +61,10 @@ export default function HorizontalBarChart({
           : (item.color ?? hashColor(item.code))
         return (
           <div key={item.code} className="flex items-center gap-2 sm:gap-3 group min-w-0">
-            <div className="w-10 sm:w-12 text-right shrink-0">
+            <div className="w-14 sm:w-16 text-right shrink-0" title={item.label}>
               <span className="text-xs font-bold text-foreground">{item.code}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <span className="text-[11px] text-muted-foreground truncate">{item.label}</span>
-              </div>
               <div className="h-5 bg-muted/50 rounded-md overflow-hidden relative">
                 <motion.div
                   className="h-full rounded-md"

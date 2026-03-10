@@ -345,12 +345,16 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
     }
   }
 
-  // Build bar chart data
-  const wholesalerBarData = [...wholesalerSummary.values()].map(w => ({
-    label: w.name,
-    code: w.code,
-    value: w.totalQty,
-  }))
+  // Build bar chart data — assign consistent colors by rank
+  const RANK_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#ef4444']
+  const wholesalerBarData = [...wholesalerSummary.values()]
+    .sort((a, b) => b.totalQty - a.totalQty)
+    .map((w, i) => ({
+      label: w.name,
+      code: w.code,
+      value: w.totalQty,
+      color: RANK_COLORS[i % RANK_COLORS.length],
+    }))
 
   return (
     <div className="space-y-6">

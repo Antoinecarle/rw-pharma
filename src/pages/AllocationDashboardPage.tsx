@@ -15,7 +15,7 @@ import GaugeChart from '@/components/ui/gauge-chart'
 import HorizontalBarChart from '@/components/ui/horizontal-bar'
 import StockLotView from '@/components/stock/StockLotView'
 import { BarChart3, Users, Truck, Package, Boxes, CalendarRange, ArrowRight, AlertTriangle, ShieldCheck, Warehouse } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 const MONTH_NAMES = [
   'Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun',
@@ -71,8 +71,12 @@ export default function AllocationDashboardPage() {
     },
   })
 
-  // Fetch all allocations for the most recent completed/active process
-  const activeProcess = processes?.find(p => p.status !== 'draft') ?? processes?.[0]
+  const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null)
+
+  // Selected process, or most recent non-draft
+  const activeProcess = selectedProcessId
+    ? processes?.find(p => p.id === selectedProcessId)
+    : (processes?.find(p => p.status !== 'draft') ?? processes?.[0])
 
   const { data: allocations } = useQuery({
     queryKey: ['allocations', 'dashboard', activeProcess?.id],
@@ -624,26 +628,28 @@ export default function AllocationDashboardPage() {
               </h4>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 {processHistory.map(p => {
-                  const isActive = p.status !== 'completed' && p.status !== 'draft'
+                  const isRunning = p.status !== 'completed' && p.status !== 'draft'
                   const isCompleted = p.status === 'completed'
+                  const isSelected = activeProcess?.id === p.id
                   return (
-                    <Link
+                    <button
                       key={p.id}
-                      to={`/monthly-processes/${p.id}`}
+                      type="button"
+                      onClick={() => setSelectedProcessId(p.id)}
                       className={`p-3 rounded-lg border text-center transition-all hover:border-primary/30 ${
-                        isActive ? 'border-primary/40 bg-primary/5' : isCompleted ? 'border-green-200/60 bg-green-50/30' : 'border-border'
+                        isSelected ? 'ring-2 ring-primary border-primary/40 bg-primary/5' : isCompleted ? 'border-green-200/60 bg-green-50/30' : isRunning ? 'border-amber-200/60 bg-amber-50/30' : 'border-border'
                       }`}
                     >
                       <p className="text-xs font-semibold">{p.label}</p>
                       <p className="text-lg font-bold tabular-nums mt-0.5">{p.allocations_count}</p>
                       <p className="text-[10px] text-muted-foreground">allocations</p>
                       <Badge
-                        variant={isCompleted ? 'default' : isActive ? 'secondary' : 'outline'}
+                        variant={isCompleted ? 'default' : isRunning ? 'secondary' : 'outline'}
                         className="text-[9px] mt-1"
                       >
-                        {isCompleted ? 'Termine' : isActive ? 'En cours' : 'Brouillon'}
+                        {isCompleted ? 'Termine' : isRunning ? 'En cours' : 'Brouillon'}
                       </Badge>
-                    </Link>
+                    </button>
                   )
                 })}
               </div>
