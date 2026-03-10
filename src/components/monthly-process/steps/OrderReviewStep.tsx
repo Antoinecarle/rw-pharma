@@ -50,6 +50,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
   const [filter, setFilter] = useState<FilterMode>('all')
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set())
   const [rejectOpen, setRejectOpen] = useState(false)
+  const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ['orders', process.id, 'review'],
@@ -328,10 +329,12 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
                 <Filter className="h-3.5 w-3.5" />
                 Filtrer les anomalies
               </Button>
-              <Button variant="outline" size="sm" className="gap-1.5 text-destructive" onClick={selectAllAnomalies}>
-                <XCircle className="h-3.5 w-3.5" />
-                Selectionner pour rejet
-              </Button>
+              {!isProcessLocked && (
+                <Button variant="outline" size="sm" className="gap-1.5 text-destructive" onClick={selectAllAnomalies}>
+                  <XCircle className="h-3.5 w-3.5" />
+                  Selectionner pour rejet
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -438,7 +441,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
                     className={`${hasAnomaly ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''} ${isRejected ? 'opacity-40 line-through' : ''}`}
                   >
                     <TableCell>
-                      {!isRejected && (
+                      {!isRejected && !isProcessLocked && (
                         <Checkbox
                           checked={isSelected}
                           onCheckedChange={() => toggleSelect(order.id)}
@@ -513,7 +516,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
         </Card>
       )}
 
-      {orders && orders.length > 0 && (
+      {orders && orders.length > 0 && !isProcessLocked && (
         <div className="flex justify-end gap-3">
           <Button
             onClick={() => setConfirmOpen(true)}

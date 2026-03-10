@@ -194,6 +194,7 @@ type StockImportSource = 'excel' | 'manual'
 export default function StockImportStep({ process, onNext }: StockImportStepProps) {
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
+  const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
   const [importSource, setImportSource] = useState<StockImportSource>('excel')
   const [queue, setQueue] = useState<QueuedStockFile[]>([])
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
@@ -1010,29 +1011,31 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
       </div>
 
       {/* Source toggle */}
-      <div className="flex gap-1.5">
-        {([
-          { value: 'excel' as StockImportSource, label: 'Fichier Excel', icon: FileSpreadsheet },
-          { value: 'manual' as StockImportSource, label: 'Saisie directe', icon: Keyboard },
-        ]).map(opt => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => setImportSource(opt.value)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1.5 ${
-              importSource === opt.value
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'border-border hover:bg-muted text-muted-foreground'
-            }`}
-          >
-            <opt.icon className="h-3 w-3" />
-            {opt.label}
-          </button>
-        ))}
-      </div>
+      {!isProcessLocked && (
+        <div className="flex gap-1.5">
+          {([
+            { value: 'excel' as StockImportSource, label: 'Fichier Excel', icon: FileSpreadsheet },
+            { value: 'manual' as StockImportSource, label: 'Saisie directe', icon: Keyboard },
+          ]).map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setImportSource(opt.value)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1.5 ${
+                importSource === opt.value
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border hover:bg-muted text-muted-foreground'
+              }`}
+            >
+              <opt.icon className="h-3 w-3" />
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Manual stock entry */}
-      {importSource === 'manual' && (
+      {importSource === 'manual' && !isProcessLocked && (
         <Card>
           <CardContent className="p-4 space-y-4">
             <div className="space-y-1.5">
@@ -1173,17 +1176,19 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
 
       {/* Drop zone (Excel mode) */}
       {importSource === 'excel' && <div
-        className={`border-2 border-dashed rounded-xl text-center cursor-pointer transition-all duration-200 ${
-          queue.length > 0 ? 'p-6' : 'p-10'
+        className={`border-2 border-dashed rounded-xl text-center transition-all duration-200 ${
+          isProcessLocked ? 'opacity-50 cursor-not-allowed p-10' : 'cursor-pointer'
+        } ${
+          !isProcessLocked && (queue.length > 0 ? 'p-6' : 'p-10')
         } ${
           isDragOver
             ? 'border-primary bg-primary/5 scale-[1.01]'
             : 'hover:border-primary/50 hover:bg-muted/30'
         }`}
-        onClick={() => fileRef.current?.click()}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
+        onClick={() => !isProcessLocked && fileRef.current?.click()}
+        onDrop={!isProcessLocked ? handleDrop : undefined}
+        onDragOver={!isProcessLocked ? handleDragOver : undefined}
+        onDragLeave={!isProcessLocked ? handleDragLeave : undefined}
       >
         <div className={`mx-auto mb-3 flex items-center justify-center transition-all ${
           queue.length > 0 ? 'h-10 w-10 rounded-xl' : 'h-14 w-14 rounded-2xl'
