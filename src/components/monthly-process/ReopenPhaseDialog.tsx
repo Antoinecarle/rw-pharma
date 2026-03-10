@@ -161,6 +161,7 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
     onSuccess: (newStep) => {
       queryClient.invalidateQueries({ queryKey: ['monthly-processes', process.id] })
       queryClient.invalidateQueries({ queryKey: ['allocations', process.id] })
+      queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
       toast.success(`Phase ${targetPhaseId} reouverte — retour a l'etape ${newStep}`)
       setReason('')
       onOpenChange(false)

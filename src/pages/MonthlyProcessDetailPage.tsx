@@ -326,7 +326,7 @@ export default function MonthlyProcessDetailPage() {
                 stepStats={stepStats}
               />
               {/* Reopen button for completed phases */}
-              {getPhaseStatus(currentPhaseId, processStep, process.status) === 'completed' && process.status !== 'completed' && (
+              {getPhaseStatus(currentPhaseId, processStep, process.status) === 'completed' && (
                 <Button
                   variant="ghost"
                   size="sm"
