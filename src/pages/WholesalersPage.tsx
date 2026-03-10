@@ -156,7 +156,7 @@ export default function WholesalersPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base">
               <div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(59,130,246,0.08)' }}><Truck className="h-4 w-4 text-blue-500" /></div>

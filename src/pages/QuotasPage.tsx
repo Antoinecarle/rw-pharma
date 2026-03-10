@@ -211,7 +211,7 @@ export default function QuotasPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base"><div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.08)' }}><ClipboardList className="h-4 w-4 text-amber-500" /></div>{editing ? 'Modifier le quota' : 'Nouveau quota'}</DialogTitle>
             <DialogDescription className="text-[13px]">{editing ? 'Modifiez la quantite' : 'Definissez un quota mensuel'}</DialogDescription>

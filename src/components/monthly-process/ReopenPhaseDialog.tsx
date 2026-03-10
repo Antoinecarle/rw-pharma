@@ -161,7 +161,7 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-amber-50 dark:bg-amber-950">
