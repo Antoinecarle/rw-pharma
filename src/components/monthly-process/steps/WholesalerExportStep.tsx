@@ -56,7 +56,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
           .from('orders')
           .select('product_id, customer_id, quantity')
           .eq('monthly_process_id', process.id)
-          .in('status', ['validated', 'pending'])
+          .neq('status', 'rejected')
           .range(from, from + pageSize - 1)
         if (error) throw error
         if (!data || data.length === 0) break

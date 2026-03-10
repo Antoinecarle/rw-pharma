@@ -56,9 +56,9 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
-        .select('id, customer_id, product_id, quantity')
+        .select('id, customer_id, product_id, quantity, status')
         .eq('monthly_process_id', process.id)
-        .in('status', ['validated', 'pending'])
+        .neq('status', 'rejected')
       if (error) throw error
       return data ?? []
     },
@@ -155,6 +155,8 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
   })
 
   const orderCount = orderStats?.length ?? 0
+  const pendingOrders = orderStats?.filter(o => o.status === 'validated' || o.status === 'pending') ?? []
+  const allocatableCount = pendingOrders.length
   const uniqueProducts = new Set(orderStats?.map(o => o.product_id)).size
   const fulfillmentNum = dryRunResult ? parseFloat(dryRunResult.fulfillmentRate) : 0
   const fulfillmentColor = fulfillmentNum >= 90 ? 'text-green-600' : fulfillmentNum >= 70 ? 'text-amber-600' : 'text-red-600'
@@ -169,12 +171,23 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       </div>
 
       {existingAllocations != null && existingAllocations > 0 && (
-        <Card className="border-amber-200/60 bg-amber-50/30">
+        <Card className={allocatableCount === 0 ? 'border-green-200/60 bg-green-50/30' : 'border-amber-200/60 bg-amber-50/30'}>
           <CardContent className="p-4 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-            <p className="text-sm">
-              <strong>{existingAllocations}</strong> allocations existantes. Relancer ajoutera de nouvelles entrees.
-            </p>
+            {allocatableCount === 0 ? (
+              <>
+                <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />
+                <p className="text-sm">
+                  Allocation terminee — <strong>{orderCount}</strong> commandes traitees. Passez a la revue pour verifier les resultats.
+                </p>
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                <p className="text-sm">
+                  <strong>{existingAllocations}</strong> allocations existantes. Relancer ajoutera de nouvelles entrees.
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
@@ -321,7 +334,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
             <Button
               variant="outline"
               onClick={() => dryRunMut.mutate()}
-              disabled={dryRunMut.isPending || orderCount === 0}
+              disabled={dryRunMut.isPending || allocatableCount === 0}
               className="gap-2"
             >
               <Eye className="h-4 w-4" />
@@ -459,7 +472,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
               <Button
                 size="lg"
                 onClick={() => allocateMut.mutate()}
-                disabled={orderCount === 0}
+                disabled={allocatableCount === 0}
                 className="gap-2"
               >
                 <Cpu className="h-4 w-4" />
