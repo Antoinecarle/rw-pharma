@@ -264,7 +264,6 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
         type: 'info',
         title: 'Processus finalise',
         message: `Le processus ${MONTH_NAMES[process.month - 1]} ${process.year} a ete cloture avec succes.`,
-        monthly_order_id: process.id,
       })
     },
     onError: (err: Error) => toast.error(err.message),

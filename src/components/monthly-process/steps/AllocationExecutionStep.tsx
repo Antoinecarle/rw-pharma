@@ -145,7 +145,6 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
         type: 'info',
         title: 'Allocation terminee',
         message: `${count} allocations generees pour le processus ${process.month}/${process.year}.`,
-        monthly_order_id: process.id,
       })
     },
     onError: (err: Error) => {
