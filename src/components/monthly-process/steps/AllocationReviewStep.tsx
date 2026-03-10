@@ -315,11 +315,26 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
 
   const cancelEdit = () => setEditState(null)
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editState) return
     if (editState.field === 'quantity') {
       const newQty = parseInt(editState.value, 10)
       if (isNaN(newQty) || newQty <= 0) { toast.error('Quantite invalide (doit etre > 0)'); return }
+
+      // Validate against stock quantity if allocation is linked to a lot
+      const alloc = allocations?.find((a: any) => a.id === editState.allocId)
+      if (alloc && (alloc as any).stock_id) {
+        const { data: stock } = await supabase
+          .from('collected_stock')
+          .select('quantity')
+          .eq('id', (alloc as any).stock_id)
+          .single()
+        if (stock && newQty > stock.quantity) {
+          toast.error(`Quantite depasse le stock du lot (max ${stock.quantity})`)
+          return
+        }
+      }
+
       editQtyMut.mutate({ allocId: editState.allocId, newQty })
     } else {
       editWsMut.mutate({ allocId: editState.allocId, newWsId: editState.value })
