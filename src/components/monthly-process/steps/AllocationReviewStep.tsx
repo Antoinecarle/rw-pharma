@@ -91,11 +91,13 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
 
   const editQtyMut = useMutation({
     mutationFn: async ({ allocId, newQty }: { allocId: string; newQty: number }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('allocations')
         .update({ allocated_quantity: newQty })
         .eq('id', allocId)
+        .select('id')
       if (error) throw error
+      if (!data || data.length === 0) throw new Error('Echec de la mise a jour — verifiez vos permissions')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allocations', process.id] })
@@ -108,11 +110,13 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
 
   const editWsMut = useMutation({
     mutationFn: async ({ allocId, newWsId }: { allocId: string; newWsId: string }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('allocations')
         .update({ wholesaler_id: newWsId })
         .eq('id', allocId)
+        .select('id')
       if (error) throw error
+      if (!data || data.length === 0) throw new Error('Echec de la mise a jour — verifiez vos permissions')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allocations', process.id] })
