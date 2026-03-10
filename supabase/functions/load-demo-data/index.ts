@@ -191,7 +191,7 @@ Deno.serve(async (req: Request) => {
       if (custCode && cip) orderLookup.set(`${custCode}::${cip}`, o.id)
     }
 
-    // Step 6: Insert lots
+    // Step 6: Insert lots (upsert to handle existing lots from other processes)
     const lotInserts = scenario.lots.map((l) => ({
       product_id: refs.products[l.product_cip13] ?? null,
       cip13: l.product_cip13,
@@ -204,7 +204,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: lotData, error: lotError } = await supabase
       .from('lots')
-      .insert(lotInserts)
+      .upsert(lotInserts, { onConflict: 'cip13,lot_number', ignoreDuplicates: false })
       .select('id, cip13, lot_number')
 
     if (lotError) throw new Error(`Failed to insert lots: ${lotError.message}`)
