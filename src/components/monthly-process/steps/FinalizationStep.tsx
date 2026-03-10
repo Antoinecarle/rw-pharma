@@ -261,7 +261,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
       setShowConfetti(true)
       fireConfetti()
       createNotification({
-        type: 'process_completed',
+        type: 'info',
         title: 'Processus finalise',
         message: `Le processus ${MONTH_NAMES[process.month - 1]} ${process.year} a ete cloture avec succes.`,
         monthly_order_id: process.id,

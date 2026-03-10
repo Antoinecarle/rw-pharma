@@ -142,7 +142,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
       toast.success(`${count} allocations generees`)
       createNotification({
-        type: 'allocation_completed',
+        type: 'info',
         title: 'Allocation terminee',
         message: `${count} allocations generees pour le processus ${process.month}/${process.year}.`,
         monthly_order_id: process.id,

@@ -179,7 +179,7 @@ export default function MonthlyProcessesPage() {
         toast.success('Processus mensuel cree')
       }
       createNotification({
-        type: 'process_created',
+        type: 'info',
         title: 'Nouveau processus cree',
         message: `Le processus d'allocation pour ${monthLabel} a ete cree.`,
       })
