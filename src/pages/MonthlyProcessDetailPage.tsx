@@ -20,6 +20,7 @@ import StockImportStep from '@/components/monthly-process/steps/StockImportStep'
 import StockAggregationStep from '@/components/monthly-process/steps/StockAggregationStep'
 import AllocationExecutionStep from '@/components/monthly-process/steps/AllocationExecutionStep'
 import AllocationReviewStep from '@/components/monthly-process/steps/AllocationReviewStep'
+import MacroAttributionStep from '@/components/monthly-process/steps/MacroAttributionStep'
 import FinalizationStep from '@/components/monthly-process/steps/FinalizationStep'
 import DemoDataLoader from '@/components/monthly-process/DemoDataLoader'
 import ReopenPhaseDialog from '@/components/monthly-process/ReopenPhaseDialog'
@@ -37,6 +38,7 @@ const STATUS_LABELS: Record<string, string> = {
   importing_quotas: 'Import quotas',
   importing_orders: 'Import commandes',
   reviewing_orders: 'Revue commandes',
+  macro_attributing: 'Attribution macro',
   exporting_wholesalers: 'Export grossistes',
   attente_stock: 'Attente stock grossistes',
   collecting_stock: 'Reception stocks',
@@ -67,17 +69,18 @@ function fireConfetti() {
   })
 }
 
-// Step → status + phase mapping for DB updates
+// Step → status + phase mapping for DB updates (10 steps)
 const STEP_STATE_MAP: Record<number, { status: string; phase: string }> = {
   1: { status: 'importing_quotas', phase: 'commandes' },
   2: { status: 'importing_orders', phase: 'commandes' },
   3: { status: 'reviewing_orders', phase: 'commandes' },
-  4: { status: 'exporting_wholesalers', phase: 'commandes' },
-  5: { status: 'collecting_stock', phase: 'collecte' },
-  6: { status: 'aggregating_stock', phase: 'collecte' },
-  7: { status: 'allocating_lots', phase: 'allocation' },
-  8: { status: 'reviewing_allocations', phase: 'allocation' },
-  9: { status: 'finalizing', phase: 'cloture' },
+  4: { status: 'macro_attributing', phase: 'commandes' },
+  5: { status: 'exporting_wholesalers', phase: 'commandes' },
+  6: { status: 'collecting_stock', phase: 'collecte' },
+  7: { status: 'aggregating_stock', phase: 'collecte' },
+  8: { status: 'allocating_lots', phase: 'allocation' },
+  9: { status: 'reviewing_allocations', phase: 'allocation' },
+  10: { status: 'finalizing', phase: 'cloture' },
 }
 
 export default function MonthlyProcessDetailPage() {
@@ -148,9 +151,10 @@ export default function MonthlyProcessDetailPage() {
     if ((process.quotas_count ?? 0) > 0) stats[1] = { value: process.quotas_count ?? 0, label: 'quotas' }
     if (process.orders_count > 0) stats[2] = { value: process.orders_count, label: 'commandes' }
     if (process.orders_count > 0 && processStep > 3) stats[3] = { value: 'validees', label: '' }
-    if (process.orders_count > 0 && processStep > 4) stats[4] = { value: 'envoye', label: '' }
-    if (process.allocations_count > 0) stats[7] = { value: process.allocations_count, label: 'allocations' }
-    if (process.allocations_count > 0 && processStep > 8) stats[8] = { value: 'confirmees', label: '' }
+    if (process.orders_count > 0 && processStep > 4) stats[4] = { value: 'attribue', label: '' }
+    if (process.orders_count > 0 && processStep > 5) stats[5] = { value: 'envoye', label: '' }
+    if (process.allocations_count > 0) stats[8] = { value: process.allocations_count, label: 'allocations' }
+    if (process.allocations_count > 0 && processStep > 9) stats[9] = { value: 'confirmees', label: '' }
     return stats
   })()
 
@@ -207,7 +211,7 @@ export default function MonthlyProcessDetailPage() {
   // Check if we should show the waiting banner
   const showWaitingBanner = process && (
     process.status === 'attente_stock' ||
-    (processStep === 4 && currentPhaseId === 1 && process.status === 'exporting_wholesalers')
+    (processStep === 5 && currentPhaseId === 1 && process.status === 'exporting_wholesalers')
   )
 
   if (isLoading) {
@@ -266,7 +270,7 @@ export default function MonthlyProcessDetailPage() {
                   {STATUS_LABELS[process.status] ?? process.status}
                 </Badge>
                 <span className="text-[11px] sm:text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
-                  Etape {processStep}/9
+                  Etape {processStep}/10
                   {' '}&middot;{' '}
                   {process.orders_count} cmd / {process.allocations_count} alloc
                   {process.date_ouverture && (
@@ -313,7 +317,7 @@ export default function MonthlyProcessDetailPage() {
           processYear={process.year}
           ordersCount={process.orders_count}
           onSkipToStock={() => {
-            advanceStep(5)
+            advanceStep(6)
             setActivePhaseOverride(2)
           }}
         />
@@ -373,21 +377,24 @@ export default function MonthlyProcessDetailPage() {
             <OrderReviewStep process={process} onNext={() => advanceStep(4)} onBack={() => handleSubStepClick(2)} />
           )}
           {currentStep === 4 && (
-            <WholesalerExportStep process={process} onNext={() => advanceStep(5)} />
+            <MacroAttributionStep process={process} onNext={() => advanceStep(5)} onBack={() => handleSubStepClick(3)} />
           )}
           {currentStep === 5 && (
-            <StockImportStep process={process} onNext={() => advanceStep(6)} />
+            <WholesalerExportStep process={process} onNext={() => advanceStep(6)} />
           )}
           {currentStep === 6 && (
-            <StockAggregationStep process={process} onNext={() => advanceStep(7)} onBack={() => handleSubStepClick(5)} />
+            <StockImportStep process={process} onNext={() => advanceStep(7)} />
           )}
           {currentStep === 7 && (
-            <AllocationExecutionStep process={process} onNext={() => advanceStep(8)} />
+            <StockAggregationStep process={process} onNext={() => advanceStep(8)} onBack={() => handleSubStepClick(6)} />
           )}
           {currentStep === 8 && (
-            <AllocationReviewStep process={process} onNext={() => advanceStep(9)} onBack={() => handleSubStepClick(7)} />
+            <AllocationExecutionStep process={process} onNext={() => advanceStep(9)} />
           )}
           {currentStep === 9 && (
+            <AllocationReviewStep process={process} onNext={() => advanceStep(10)} onBack={() => handleSubStepClick(8)} />
+          )}
+          {currentStep === 10 && (
             <FinalizationStep process={process} />
           )}
         </motion.div>

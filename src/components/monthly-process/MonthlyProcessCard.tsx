@@ -13,7 +13,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   importing_quotas: { label: 'Import quotas', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
   importing_orders: { label: 'Import commandes', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
   reviewing_orders: { label: 'Revue commandes', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
-  macro_allocating: { label: 'Allocation macro', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
+  macro_attributing: { label: 'Attribution macro', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
   exporting_wholesalers: { label: 'Export grossistes', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.15)' },
   collecting_stock: { label: 'Reception stocks', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.15)' },
   allocating_lots: { label: 'Allocation lots', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
@@ -22,8 +22,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   completed: { label: 'Termine', color: 'var(--ivory-teal)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
 }
 
-const TOTAL_STEPS = 9
-const STEP_LABELS = ['', 'Import quotas', 'Import commandes', 'Revue commandes', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
+const TOTAL_STEPS = 10
+const STEP_LABELS = ['', 'Import quotas', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
 interface MonthlyProcessCardProps {
   process: MonthlyProcess

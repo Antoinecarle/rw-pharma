@@ -42,7 +42,7 @@ const ANOMALY_LABELS: Record<AnomalyType, { label: string; color: string; icon: 
   no_documents: { label: 'Documents manquants', color: 'text-amber-600 bg-amber-50 border-amber-200', icon: ShieldAlert },
 }
 
-type FilterMode = 'all' | 'anomalies' | 'pending' | 'validated'
+type FilterMode = 'all' | 'anomalies' | 'pending' | 'validated' | 'customer'
 
 export default function OrderReviewStep({ process, onNext, onBack }: OrderReviewStepProps) {
   const queryClient = useQueryClient()
@@ -50,6 +50,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
   const [filter, setFilter] = useState<FilterMode>('all')
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set())
   const [rejectOpen, setRejectOpen] = useState(false)
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
 
   const { data: orders, isLoading } = useQuery({
@@ -210,36 +211,45 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
   const pendingCount = orders?.filter((o) => o.status === 'pending').length ?? 0
   const totalQty = orders?.reduce((sum, o) => sum + o.quantity, 0) ?? 0
 
-  // Group by customer for summary
-  const customerSummary = new Map<string, { name: string; code: string; count: number; totalQty: number; isTop: boolean }>()
-  for (const o of orders ?? []) {
-    const key = o.customer_id
-    const existing = customerSummary.get(key)
-    const cust = o.customer as unknown as { name: string; code: string; is_top_client?: boolean } | undefined
-    if (existing) {
-      existing.count++
-      existing.totalQty += o.quantity
-    } else {
-      customerSummary.set(key, {
-        name: cust?.name ?? 'Inconnu',
-        code: cust?.code ?? '?',
-        count: 1,
-        totalQty: o.quantity,
-        isTop: cust?.is_top_client ?? false,
-      })
+  // Group by customer for summary (keyed by customer_id)
+  const customerSummary = useMemo(() => {
+    const map = new Map<string, { name: string; code: string; count: number; totalQty: number; isTop: boolean }>()
+    for (const o of orders ?? []) {
+      const key = o.customer_id
+      const existing = map.get(key)
+      const cust = o.customer as unknown as { name: string; code: string; is_top_client?: boolean } | undefined
+      if (existing) {
+        existing.count++
+        existing.totalQty += o.quantity
+      } else {
+        map.set(key, {
+          name: cust?.name ?? 'Inconnu',
+          code: cust?.code ?? '?',
+          count: 1,
+          totalQty: o.quantity,
+          isTop: cust?.is_top_client ?? false,
+        })
+      }
     }
-  }
+    return map
+  }, [orders])
 
   // Filter orders
   const filteredOrders = useMemo(() => {
     if (!orders) return []
-    switch (filter) {
-      case 'anomalies': return orders.filter(o => anomalyOrders.has(o.id))
-      case 'pending': return orders.filter(o => o.status === 'pending')
-      case 'validated': return orders.filter(o => o.status === 'validated')
-      default: return orders
+    let result = orders
+    // Apply customer filter first
+    if (filter === 'customer' && selectedCustomerId) {
+      result = result.filter(o => o.customer_id === selectedCustomerId)
+    } else {
+      switch (filter) {
+        case 'anomalies': result = result.filter(o => anomalyOrders.has(o.id)); break
+        case 'pending': result = result.filter(o => o.status === 'pending'); break
+        case 'validated': result = result.filter(o => o.status === 'validated'); break
+      }
     }
-  }, [orders, filter, anomalyOrders])
+    return result
+  }, [orders, filter, anomalyOrders, selectedCustomerId])
 
   const toggleSelect = (id: string) => {
     setSelectedOrders(prev => {
@@ -343,15 +353,35 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
       {/* Customer summary */}
       {customerSummary.size > 0 && (
         <div>
-          <h4 className="text-sm font-semibold mb-2">Resume par client</h4>
+          <h4 className="text-sm font-semibold mb-2">Resume par client <span className="text-xs font-normal text-muted-foreground">(cliquer pour filtrer)</span></h4>
           <div className="flex flex-wrap gap-2">
-            {[...customerSummary.values()].map((c) => (
-              <Badge key={c.code} variant="outline" className="gap-1.5 py-1.5 px-3">
-                <span className="font-bold">{c.code}</span>
-                {c.isTop && <span className="text-primary text-[9px]">TOP</span>}
-                <span className="text-muted-foreground">{c.count} cmd / {c.totalQty.toLocaleString('fr-FR')} u.</span>
-              </Badge>
-            ))}
+            {[...customerSummary.entries()].map(([custId, c]) => {
+              const isActive = filter === 'customer' && selectedCustomerId === custId
+              return (
+                <button
+                  key={c.code}
+                  type="button"
+                  onClick={() => {
+                    if (isActive) {
+                      setFilter('all')
+                      setSelectedCustomerId(null)
+                    } else {
+                      setFilter('customer')
+                      setSelectedCustomerId(custId)
+                    }
+                  }}
+                >
+                  <Badge
+                    variant={isActive ? 'default' : 'outline'}
+                    className={`gap-1.5 py-1.5 px-3 cursor-pointer transition-all ${isActive ? 'ring-2 ring-primary/30' : 'hover:bg-muted'}`}
+                  >
+                    <span className="font-bold">{c.code}</span>
+                    {c.isTop && <span className="text-primary text-[9px]">TOP</span>}
+                    <span className={isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'}>{c.count} cmd / {c.totalQty.toLocaleString('fr-FR')} u.</span>
+                  </Badge>
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -377,7 +407,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
 
       {/* Filter bar */}
       <div className="flex items-center gap-3 flex-wrap">
-        <Select value={filter} onValueChange={(v) => setFilter(v as FilterMode)}>
+        <Select value={filter === 'customer' ? 'all' : filter} onValueChange={(v) => { setFilter(v as FilterMode); setSelectedCustomerId(null) }}>
           <SelectTrigger className="w-[200px] h-8">
             <Filter className="h-3.5 w-3.5 mr-1.5" />
             <SelectValue />
@@ -389,6 +419,14 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
             <SelectItem value="validated">Validees ({(orders?.length ?? 0) - pendingCount})</SelectItem>
           </SelectContent>
         </Select>
+        {filter === 'customer' && selectedCustomerId && (
+          <Badge variant="secondary" className="gap-1">
+            Client : {customerSummary.get(selectedCustomerId)?.code ?? '?'}
+            <button type="button" onClick={() => { setFilter('all'); setSelectedCustomerId(null) }} className="ml-1 hover:text-foreground">
+              <XCircle className="h-3 w-3" />
+            </button>
+          </Badge>
+        )}
         {selectedOrders.size > 0 && (
           <div className="flex items-center gap-2">
             <Badge variant="secondary">{selectedOrders.size} selectionnees</Badge>

@@ -72,7 +72,7 @@ export default function CommandPalette() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('monthly_processes')
-        .select('id, month, year, current_step, status')
+        .select('id, month, year, current_step, status, orders_count, allocations_count')
         .neq('status', 'completed')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -124,7 +124,7 @@ export default function CommandPalette() {
   })
 
   const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
-  const STEP_LABELS = ['Import quotas', 'Import commandes', 'Revue commandes', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
+  const STEP_LABELS = ['Import quotas', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
   const isOnProcess = location.pathname.startsWith('/monthly-processes/')
 
@@ -165,7 +165,7 @@ export default function CommandPalette() {
               <span>
                 Continuer {MONTH_NAMES[activeProcess.month - 1]} {activeProcess.year}
               </span>
-              <CommandShortcut>Etape {activeProcess.current_step}/9</CommandShortcut>
+              <CommandShortcut>Etape {activeProcess.current_step}/10</CommandShortcut>
             </CommandItem>
             {isOnProcess && activeProcess.current_step <= 3 && (
               <CommandItem onSelect={() => go(`/monthly-processes/${activeProcess.id}`)}>

@@ -29,7 +29,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
       if (error) throw error
       return data ?? []
     },
-    enabled: step >= 2 && step <= 4,
+    enabled: step >= 2 && step <= 5,
   })
 
   // Steps 4-7: Allocation quality
@@ -43,7 +43,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
       if (error) throw error
       return data ?? []
     },
-    enabled: step >= 7,
+    enabled: step >= 8,
   })
 
   return useMemo(() => {
@@ -51,7 +51,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
     let score = 0
 
     // When process is completed, all steps that were passed are implicitly done
-    if (process.status === 'completed' && step <= (process.current_step ?? 9)) {
+    if (process.status === 'completed' && step <= (process.current_step ?? 10)) {
       return { score: 100, label: 'Excellent', details: ['Etape completee'] }
     }
 
@@ -112,6 +112,22 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         break
       }
       case 4: {
+        // Macro attribution: score based on having attribution data
+        const validatedForAttrib = orders?.filter(o => o.status === 'validated').length ?? 0
+        const hasMacro = process.metadata && (process.metadata as Record<string, unknown>).macro_attributions
+        if (validatedForAttrib === 0) {
+          score = 0
+          details.push('Aucune commande validee')
+        } else if (hasMacro) {
+          score = 80
+          details.push('Attribution macro effectuee')
+        } else {
+          score = 30
+          details.push(`${validatedForAttrib} commandes a attribuer`)
+        }
+        break
+      }
+      case 5: {
         // Export wholesalers: score based on having validated orders
         const validatedOrders = orders?.filter(o => o.status === 'validated').length ?? 0
         if (validatedOrders === 0) {
@@ -123,19 +139,19 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         }
         break
       }
-      case 5: {
+      case 6: {
         // Stock collection
         score = 50
         details.push('Import stocks en cours')
         break
       }
-      case 6: {
+      case 7: {
         // Stock aggregation
         score = 50
         details.push('Verification du stock collecte')
         break
       }
-      case 7: {
+      case 8: {
         // Allocation: fulfillment rate
         if (!allocations || allocations.length === 0) {
           score = 0
@@ -151,7 +167,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         if (zeros > 0) details.push(`${zeros} produits a 0`)
         break
       }
-      case 8: {
+      case 9: {
         // Allocation review: confirmed vs total
         if (!allocations || allocations.length === 0) {
           score = 0
@@ -170,7 +186,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         if (partial > 0) details.push(`${partial} allocations partielles`)
         break
       }
-      case 9: {
+      case 10: {
         // Finalization: process completed
         if (process.status === 'completed') {
           score = 100

@@ -19,7 +19,7 @@ export const PHASES: PhaseDefinition[] = [
     shortLabel: 'Cmd',
     icon: ShoppingCart,
     phase: 'commandes',
-    steps: [1, 2, 3, 4],
+    steps: [1, 2, 3, 4, 5],
   },
   {
     id: 2,
@@ -27,7 +27,7 @@ export const PHASES: PhaseDefinition[] = [
     shortLabel: 'Alloc',
     icon: Warehouse,
     phase: 'collecte', // covers collecte + allocation DB phases
-    steps: [5, 6, 7],
+    steps: [6, 7, 8],
   },
   {
     id: 3,
@@ -35,7 +35,7 @@ export const PHASES: PhaseDefinition[] = [
     shortLabel: 'Export',
     icon: Flag,
     phase: 'cloture',
-    steps: [8, 9],
+    steps: [9, 10],
   },
 ]
 

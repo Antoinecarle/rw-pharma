@@ -40,7 +40,7 @@ const PHASE_IMPACTS: Record<number, { deletions: string[]; preserved: string[] }
   2: {
     deletions: [
       'Toutes les allocations seront supprimees',
-      'Le processus reviendra a l\'etape 5 (Reception Stock)',
+      'Le processus reviendra a l\'etape 6 (Reception Stock)',
     ],
     preserved: [
       'Les commandes validees sont conservees',
@@ -51,7 +51,7 @@ const PHASE_IMPACTS: Record<number, { deletions: string[]; preserved: string[] }
   3: {
     deletions: [
       'La date de cloture sera annulee',
-      'Le processus reviendra a l\'etape 8 (Revue Allocations)',
+      'Le processus reviendra a l\'etape 9 (Revue Allocations)',
     ],
     preserved: [
       'Toutes les allocations sont conservees (mode edition)',
@@ -80,11 +80,12 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
           .eq('monthly_process_id', process.id)
         if (delErr) throw delErr
         // Reset order statuses back to validated (so they can be re-allocated)
-        await supabase
+        const { error: ordErr1 } = await supabase
           .from('orders')
           .update({ status: 'validated', allocated_quantity: 0 })
           .eq('monthly_process_id', process.id)
           .in('status', ['allocated', 'partially_allocated'])
+        if (ordErr1) throw ordErr1
         // Reset process
         const { error: updErr } = await supabase
           .from('monthly_processes')
@@ -98,7 +99,7 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
           .eq('id', process.id)
         if (updErr) throw updErr
       } else if (targetPhaseId === 2) {
-        toStep = 5
+        toStep = 6
         // Delete all allocations
         const { error: delErr } = await supabase
           .from('allocations')
@@ -106,11 +107,12 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
           .eq('monthly_process_id', process.id)
         if (delErr) throw delErr
         // Reset order statuses back to validated (so they can be re-allocated)
-        await supabase
+        const { error: ordErr2 } = await supabase
           .from('orders')
           .update({ status: 'validated', allocated_quantity: 0 })
           .eq('monthly_process_id', process.id)
           .in('status', ['allocated', 'partially_allocated'])
+        if (ordErr2) throw ordErr2
         // Reset process
         const { error: updErr } = await supabase
           .from('monthly_processes')
@@ -124,7 +126,7 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
           .eq('id', process.id)
         if (updErr) throw updErr
       } else {
-        toStep = 8
+        toStep = 9
         // Just reopen — keep allocations but unlock for editing
         const { error: updErr } = await supabase
           .from('monthly_processes')

@@ -334,8 +334,8 @@ export default function StockLotView({
                     <span className="font-semibold text-sm truncate">{group.productName}</span>
                     {group.isAnsmBlocked && (
                       <Tooltip>
-                        <TooltipTrigger>
-                          <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex"><AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" /></span>
                         </TooltipTrigger>
                         <TooltipContent>Produit bloque ANSM</TooltipContent>
                       </Tooltip>

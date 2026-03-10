@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { Check, BarChart3, FileUp, ClipboardCheck, Send, PackageCheck, Layers, Cpu, SearchCheck, Flag } from 'lucide-react'
+import { Check, BarChart3, FileUp, ClipboardCheck, GitMerge, Send, PackageCheck, Layers, Cpu, SearchCheck, Flag } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export interface StepDefinition {
@@ -10,17 +10,18 @@ export interface StepDefinition {
   icon: typeof BarChart3
 }
 
-/** All 9 steps with their metadata */
+/** All 10 steps with their metadata */
 export const ALL_STEPS: StepDefinition[] = [
   { stepNum: 1, label: 'Import Quotas', shortLabel: 'Quotas', icon: BarChart3 },
   { stepNum: 2, label: 'Import Commandes', shortLabel: 'Commandes', icon: FileUp },
   { stepNum: 3, label: 'Revue Commandes', shortLabel: 'Revue', icon: ClipboardCheck },
-  { stepNum: 4, label: 'Export Grossistes', shortLabel: 'Export', icon: Send },
-  { stepNum: 5, label: 'Reception Stocks', shortLabel: 'Stocks', icon: PackageCheck },
-  { stepNum: 6, label: 'Aggregation Stock', shortLabel: 'Agregation', icon: Layers },
-  { stepNum: 7, label: 'Allocation', shortLabel: 'Allocation', icon: Cpu },
-  { stepNum: 8, label: 'Revue Allocations', shortLabel: 'Revue Alloc', icon: SearchCheck },
-  { stepNum: 9, label: 'Finalisation', shortLabel: 'Final', icon: Flag },
+  { stepNum: 4, label: 'Attribution Macro', shortLabel: 'Attribution', icon: GitMerge },
+  { stepNum: 5, label: 'Export Grossistes', shortLabel: 'Export', icon: Send },
+  { stepNum: 6, label: 'Reception Stocks', shortLabel: 'Stocks', icon: PackageCheck },
+  { stepNum: 7, label: 'Aggregation Stock', shortLabel: 'Agregation', icon: Layers },
+  { stepNum: 8, label: 'Allocation', shortLabel: 'Allocation', icon: Cpu },
+  { stepNum: 9, label: 'Revue Allocations', shortLabel: 'Revue Alloc', icon: SearchCheck },
+  { stepNum: 10, label: 'Finalisation', shortLabel: 'Final', icon: Flag },
 ]
 
 interface PhaseSubStepsProps {

@@ -138,7 +138,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
 
       const { error: stepError } = await supabase
         .from('monthly_processes')
-        .update({ status: 'finalizing', current_step: 9, phase: 'cloture' })
+        .update({ status: 'finalizing', current_step: 10, phase: 'cloture' })
         .eq('id', process.id)
       if (stepError) throw stepError
     },
@@ -483,19 +483,25 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         {customerSummary.size > 0 && (
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
             <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-              <Users className="h-4 w-4" /> Par client
+              <Users className="h-4 w-4" /> Completion par client
             </h4>
             <HorizontalBarChart
-              items={[...customerSummary.values()].map(c => ({
-                label: c.name,
-                code: c.code,
-                value: c.totalQty,
-              }))}
-              formatValue={(v: number, item?: { label: string; code?: string; value: number }) => {
-                const cust = [...customerSummary.values()].find(c => c.name === item?.label)
-                const pct = cust && cust.totalReq > 0 ? Math.round((cust.totalQty / cust.totalReq) * 100) : 0
-                return `${v.toLocaleString('fr-FR')} u. (${pct}%)`
-              }}
+              completionMode
+              items={[...customerSummary.values()]
+                .sort((a, b) => {
+                  const pctA = a.totalReq > 0 ? (a.totalQty / a.totalReq) * 100 : 0
+                  const pctB = b.totalReq > 0 ? (b.totalQty / b.totalReq) * 100 : 0
+                  return pctB - pctA
+                })
+                .map(c => {
+                  const pct = c.totalReq > 0 ? Math.round((c.totalQty / c.totalReq) * 100) : 0
+                  return {
+                    label: c.name,
+                    code: c.code,
+                    value: pct,
+                  }
+                })}
+              formatValue={(v) => `${v}%`}
             />
           </motion.div>
         )}
