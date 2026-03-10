@@ -132,14 +132,16 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         .eq('status', 'proposed')
       if (error) throw error
 
-      await supabase
+      const { error: stepError } = await supabase
         .from('monthly_processes')
         .update({ status: 'finalizing', current_step: 9, phase: 'cloture' })
         .eq('id', process.id)
+      if (stepError) throw stepError
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allocations', process.id] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
+      queryClient.invalidateQueries({ queryKey: ['monthly-processes', process.id] })
       toast.success('Allocations confirmees')
       onNext()
     },

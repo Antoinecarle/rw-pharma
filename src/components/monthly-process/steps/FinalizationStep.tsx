@@ -257,6 +257,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
+      queryClient.invalidateQueries({ queryKey: ['monthly-processes', process.id] })
       toast.success('Processus termine avec succes !')
       setShowConfetti(true)
       fireConfetti()
