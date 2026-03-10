@@ -161,6 +161,11 @@ export default function MonthlyProcessDetailPage() {
     setActiveStep(targetStep)
     setActivePhaseOverride(null) // Reset phase override, auto-follow
     if (process) {
+      // Never regress a completed/finalizing process
+      if (process.status === 'completed' || process.status === 'finalizing') {
+        queryClient.invalidateQueries({ queryKey: ['monthly-processes', id] })
+        return
+      }
       const stepState = STEP_STATE_MAP[targetStep] ?? {}
       supabase
         .from('monthly_processes')

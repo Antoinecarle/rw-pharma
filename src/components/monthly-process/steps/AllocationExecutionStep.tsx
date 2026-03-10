@@ -108,8 +108,14 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     onError: (err: Error) => toast.error(err.message),
   })
 
+  // Guard: prevent re-allocation on completed/finalizing processes
+  const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
+
   const allocateMut = useMutation({
     mutationFn: async () => {
+      if (isProcessLocked) {
+        throw new Error('Ce processus est deja termine. Impossible de relancer l\'allocation.')
+      }
       setPhase('running')
       setShowLogs(true)
 
@@ -129,9 +135,15 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       }
 
       // Update process (orders already updated by runAllocation)
+      // Use Math.max to never regress current_step (e.g. if process is already at step 9)
       await supabase
         .from('monthly_processes')
-        .update({ allocations_count: totalInserted, status: 'allocating_lots', current_step: 7, phase: 'allocation' })
+        .update({
+          allocations_count: totalInserted,
+          status: process.current_step > 7 ? process.status : 'allocating_lots',
+          current_step: Math.max(7, process.current_step),
+          phase: process.current_step > 7 ? process.phase : 'allocation',
+        })
         .eq('id', process.id)
 
       return totalInserted
@@ -333,7 +345,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
             <Button
               variant="outline"
               onClick={() => dryRunMut.mutate()}
-              disabled={dryRunMut.isPending || allocatableCount === 0}
+              disabled={dryRunMut.isPending || allocatableCount === 0 || isProcessLocked}
               className="gap-2"
             >
               <Eye className="h-4 w-4" />
@@ -471,11 +483,11 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
               <Button
                 size="lg"
                 onClick={() => allocateMut.mutate()}
-                disabled={allocatableCount === 0}
+                disabled={allocatableCount === 0 || isProcessLocked}
                 className="gap-2"
               >
                 <Cpu className="h-4 w-4" />
-                Lancer l'Allocation
+                {isProcessLocked ? 'Processus termine' : 'Lancer l\'Allocation'}
               </Button>
             </CardContent>
           </Card>
