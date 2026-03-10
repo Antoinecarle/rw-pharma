@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -20,7 +20,6 @@ import {
   ClipboardList,
   CalendarRange,
   FileSpreadsheet,
-  Search,
   Play,
   ArrowRight,
   Scale,
@@ -29,12 +28,34 @@ import {
   BarChart3,
 } from 'lucide-react'
 
+const NAV_ITEMS = [
+  { path: '/', label: 'Dashboard', keywords: 'dashboard accueil home', icon: LayoutDashboard },
+  { path: '/monthly-processes', label: 'Allocations mensuelles', keywords: 'allocations processus mensuel', icon: CalendarRange },
+  { path: '/products', label: 'Produits', keywords: 'produits catalogue medicaments cip13', icon: Pill, shortcut: 'catalogue' },
+  { path: '/wholesalers', label: 'Grossistes', keywords: 'grossistes fournisseurs alliance cerp ocp', icon: Truck },
+  { path: '/customers', label: 'Clients importateurs', keywords: 'clients importateurs orifarm mpa axicorp', icon: Users },
+  { path: '/quotas', label: 'Quotas mensuels', keywords: 'quotas mensuels quotas grossistes', icon: ClipboardList },
+  { path: '/debts', label: 'Dettes clients', keywords: 'dettes sous-allocation compensation', icon: Scale },
+  { path: '/stock', label: 'Stock', keywords: 'stock lots collecte inventaire', icon: Boxes },
+  { path: '/ansm', label: 'ANSM', keywords: 'ansm bloques export interdit', icon: ShieldAlert },
+  { path: '/allocation-dashboard', label: 'Metriques', keywords: 'metriques dashboard kpi statistiques couverture', icon: BarChart3 },
+]
+
+const ACTION_ITEMS = [
+  { path: '/products', label: 'Import Excel produits', keywords: 'import excel produits catalogue', icon: FileSpreadsheet },
+  { path: '/monthly-processes', label: 'Nouveau processus mensuel', keywords: 'nouveau processus mensuel creer', icon: CalendarRange },
+]
+
+function matchesSearch(keywords: string, label: string, query: string): boolean {
+  const q = query.toLowerCase()
+  return label.toLowerCase().includes(q) || keywords.toLowerCase().includes(q)
+}
+
 export default function CommandPalette() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Listen for Cmd+K / Ctrl+K
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -46,7 +67,6 @@ export default function CommandPalette() {
     return () => document.removeEventListener('keydown', down)
   }, [])
 
-  // Fetch active process for contextual actions
   const { data: activeProcess } = useQuery({
     queryKey: ['monthly-processes', 'active'],
     queryFn: async () => {
@@ -62,12 +82,11 @@ export default function CommandPalette() {
     },
   })
 
-  // Quick entity search
   const [search, setSearch] = useState('')
+
   const { data: productResults } = useQuery({
     queryKey: ['products', 'cmd-search', search],
     queryFn: async () => {
-      if (search.length < 2) return []
       const { data } = await supabase
         .from('products')
         .select('id, cip13, name')
@@ -81,7 +100,6 @@ export default function CommandPalette() {
   const { data: customerResults } = useQuery({
     queryKey: ['customers', 'cmd-search', search],
     queryFn: async () => {
-      if (search.length < 2) return []
       const { data } = await supabase
         .from('customers')
         .select('id, code, name, country')
@@ -95,7 +113,6 @@ export default function CommandPalette() {
   const { data: wholesalerResults } = useQuery({
     queryKey: ['wholesalers', 'cmd-search', search],
     queryFn: async () => {
-      if (search.length < 2) return []
       const { data } = await supabase
         .from('wholesalers')
         .select('id, code, name')
@@ -116,18 +133,32 @@ export default function CommandPalette() {
     setOpen(false)
   }
 
+  // Filter static items when there's a search query
+  const filteredNav = useMemo(() => {
+    if (!search) return NAV_ITEMS
+    return NAV_ITEMS.filter(item => matchesSearch(item.keywords, item.label, search))
+  }, [search])
+
+  const filteredActions = useMemo(() => {
+    if (!search) return ACTION_ITEMS
+    return ACTION_ITEMS.filter(item => matchesSearch(item.keywords, item.label, search))
+  }, [search])
+
+  const hasEntityResults = (productResults?.length ?? 0) > 0 || (customerResults?.length ?? 0) > 0 || (wholesalerResults?.length ?? 0) > 0
+  const hasAnyResults = filteredNav.length > 0 || filteredActions.length > 0 || hasEntityResults || (activeProcess && !search)
+
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
+    <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
       <CommandInput
-        placeholder="Rechercher une action, une page, un produit..."
+        placeholder="Rechercher une action, une page, un produit, un client..."
         value={search}
         onValueChange={setSearch}
       />
       <CommandList>
-        <CommandEmpty>Aucun resultat.</CommandEmpty>
+        {!hasAnyResults && <CommandEmpty>Aucun resultat.</CommandEmpty>}
 
         {/* Contextual actions */}
-        {activeProcess && (
+        {activeProcess && !search && (
           <CommandGroup heading="Processus en cours">
             <CommandItem onSelect={() => go(`/monthly-processes/${activeProcess.id}`)}>
               <Play className="mr-2 h-4 w-4 text-primary" />
@@ -145,52 +176,20 @@ export default function CommandPalette() {
           </CommandGroup>
         )}
 
-        <CommandSeparator />
-
-        {/* Navigation */}
-        <CommandGroup heading="Navigation">
-          <CommandItem onSelect={() => go('/')}>
-            <LayoutDashboard className="mr-2 h-4 w-4" />
-            Dashboard
-          </CommandItem>
-          <CommandItem onSelect={() => go('/monthly-processes')}>
-            <CalendarRange className="mr-2 h-4 w-4" />
-            Allocations mensuelles
-          </CommandItem>
-          <CommandItem onSelect={() => go('/products')}>
-            <Pill className="mr-2 h-4 w-4" />
-            Produits
-            <CommandShortcut>catalogue</CommandShortcut>
-          </CommandItem>
-          <CommandItem onSelect={() => go('/wholesalers')}>
-            <Truck className="mr-2 h-4 w-4" />
-            Grossistes
-          </CommandItem>
-          <CommandItem onSelect={() => go('/customers')}>
-            <Users className="mr-2 h-4 w-4" />
-            Clients importateurs
-          </CommandItem>
-          <CommandItem onSelect={() => go('/quotas')}>
-            <ClipboardList className="mr-2 h-4 w-4" />
-            Quotas mensuels
-          </CommandItem>
-          <CommandItem onSelect={() => go('/debts')}>
-            <Scale className="mr-2 h-4 w-4" />
-            Dettes clients
-          </CommandItem>
-          <CommandItem onSelect={() => go('/stock')}>
-            <Boxes className="mr-2 h-4 w-4" />
-            Stock
-          </CommandItem>
-          <CommandItem onSelect={() => go('/ansm')}>
-            <ShieldAlert className="mr-2 h-4 w-4" />
-            ANSM
-          </CommandItem>
-          <CommandItem onSelect={() => go('/metrics')}>
-            <BarChart3 className="mr-2 h-4 w-4" />
-            Metriques
-          </CommandItem>
-        </CommandGroup>
+        {filteredNav.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Navigation">
+              {filteredNav.map(item => (
+                <CommandItem key={item.path} onSelect={() => go(item.path)}>
+                  <item.icon className="mr-2 h-4 w-4" />
+                  {item.label}
+                  {item.shortcut && <CommandShortcut>{item.shortcut}</CommandShortcut>}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
 
         {/* Entity search results */}
         {productResults && productResults.length > 0 && (
@@ -237,19 +236,19 @@ export default function CommandPalette() {
           </>
         )}
 
-        <CommandSeparator />
-
-        {/* Quick actions */}
-        <CommandGroup heading="Actions rapides">
-          <CommandItem onSelect={() => go('/products')}>
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Import Excel produits
-          </CommandItem>
-          <CommandItem onSelect={() => go('/monthly-processes')}>
-            <CalendarRange className="mr-2 h-4 w-4" />
-            Nouveau processus mensuel
-          </CommandItem>
-        </CommandGroup>
+        {filteredActions.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Actions rapides">
+              {filteredActions.map(item => (
+                <CommandItem key={item.label} onSelect={() => go(item.path)}>
+                  <item.icon className="mr-2 h-4 w-4" />
+                  {item.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
       </CommandList>
     </CommandDialog>
   )
