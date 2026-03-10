@@ -174,7 +174,11 @@ export default function MonthlyProcessDetailPage() {
           ...stepState,
         })
         .eq('id', process.id)
-        .then(() => {
+        .then(({ error }) => {
+          if (error) {
+            console.error('advanceStep DB error:', error)
+            toast.error(`Erreur avancement etape: ${error.message}`)
+          }
           queryClient.invalidateQueries({ queryKey: ['monthly-processes', id] })
         })
     }
