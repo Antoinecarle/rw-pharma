@@ -358,7 +358,21 @@ export default function PortalOrdersPage() {
           <span style={{ color: 'var(--ivory-text-heading)' }}>
             Mois en cours : <strong>{new Date(currentProcess.year, currentProcess.month - 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</strong>
           </span>
-          <Badge variant="outline" className="ml-2 text-[10px]">{currentProcess.status}</Badge>
+          <Badge variant="outline" className="ml-2 text-[10px]">
+            {({
+              draft: 'Brouillon',
+              importing_quotas: 'Import quotas',
+              importing_orders: 'Import commandes',
+              reviewing_orders: 'Revue commandes',
+              exporting_wholesalers: 'Export grossistes',
+              collecting_stock: 'Reception stocks',
+              aggregating_stock: 'Agregation stock',
+              allocating: 'Allocation',
+              reviewing_allocations: 'Revue allocations',
+              finalizing: 'Finalisation',
+              completed: 'Termine',
+            } as Record<string, string>)[currentProcess.status] ?? currentProcess.status}
+          </Badge>
         </div>
       )}
 
