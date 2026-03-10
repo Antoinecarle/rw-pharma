@@ -106,6 +106,16 @@ export default function MonthlyProcessDetailPage() {
 
   const deleteMut = useMutation({
     mutationFn: async () => {
+      if (process) {
+        const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}-01`
+        // Clean up data with SET NULL FK (would become orphaned after process deletion)
+        await Promise.all([
+          supabase.from('wholesaler_quotas').delete().eq('month', monthStr),
+          supabase.from('collected_stock').delete().eq('monthly_process_id', id!),
+          supabase.from('lots').delete().eq('monthly_process_id', id!),
+        ])
+      }
+      // allocations, orders, phase_reopenings cascade-delete automatically
       const { error } = await supabase
         .from('monthly_processes')
         .delete()
