@@ -328,7 +328,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
           .from('collected_stock')
           .select('quantity')
           .eq('id', (alloc as any).stock_id)
-          .single()
+          .maybeSingle()
         if (stock && newQty > stock.quantity) {
           toast.error(`Quantite depasse le stock du lot (max ${stock.quantity})`)
           return

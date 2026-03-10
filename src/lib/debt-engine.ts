@@ -53,7 +53,7 @@ export async function calculateMonthlyDebts(processId: string): Promise<DebtCalc
     .from('monthly_processes')
     .select('id, month, year')
     .eq('id', processId)
-    .single()
+    .maybeSingle()
   if (pErr || !process) throw new Error('Process not found')
 
   const monthDate = `${process.year}-${String(process.month).padStart(2, '0')}-01`
@@ -207,7 +207,7 @@ export async function resolveDebt(debtId: string, resolvedQty: number): Promise<
     .from('client_debts')
     .select('quantity_owed, resolved_quantity')
     .eq('id', debtId)
-    .single()
+    .maybeSingle()
 
   if (error || !debt) throw new Error('Debt not found')
 
