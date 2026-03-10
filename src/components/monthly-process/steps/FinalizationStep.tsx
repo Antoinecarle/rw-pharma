@@ -326,7 +326,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
     setExporting(true)
     try {
       const allocs = await fetchAllocations(process.id)
-      if (allocs.length === 0) { toast.error('Aucune donnee a exporter'); return }
+      if (allocs.length === 0) { toast.error('Aucune donnee a exporter'); setExporting(false); return }
 
       switch (exportMode) {
         case 'global_csv': {
