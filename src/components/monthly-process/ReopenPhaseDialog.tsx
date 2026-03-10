@@ -79,6 +79,12 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
           .delete()
           .eq('monthly_process_id', process.id)
         if (delErr) throw delErr
+        // Reset order statuses back to validated (so they can be re-allocated)
+        await supabase
+          .from('orders')
+          .update({ status: 'validated', allocated_quantity: 0 })
+          .eq('monthly_process_id', process.id)
+          .in('status', ['allocated', 'partially_allocated'])
         // Reset process
         const { error: updErr } = await supabase
           .from('monthly_processes')
@@ -99,6 +105,12 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
           .delete()
           .eq('monthly_process_id', process.id)
         if (delErr) throw delErr
+        // Reset order statuses back to validated (so they can be re-allocated)
+        await supabase
+          .from('orders')
+          .update({ status: 'validated', allocated_quantity: 0 })
+          .eq('monthly_process_id', process.id)
+          .in('status', ['allocated', 'partially_allocated'])
         // Reset process
         const { error: updErr } = await supabase
           .from('monthly_processes')
