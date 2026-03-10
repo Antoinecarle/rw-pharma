@@ -23,6 +23,10 @@ import {
   Search,
   Play,
   ArrowRight,
+  Scale,
+  Boxes,
+  ShieldAlert,
+  BarChart3,
 } from 'lucide-react'
 
 export default function CommandPalette() {
@@ -58,7 +62,7 @@ export default function CommandPalette() {
     },
   })
 
-  // Quick product search
+  // Quick entity search
   const [search, setSearch] = useState('')
   const { data: productResults } = useQuery({
     queryKey: ['products', 'cmd-search', search],
@@ -68,6 +72,34 @@ export default function CommandPalette() {
         .from('products')
         .select('id, cip13, name')
         .or(`cip13.ilike.%${search}%,name.ilike.%${search}%`)
+        .limit(5)
+      return data ?? []
+    },
+    enabled: search.length >= 2,
+  })
+
+  const { data: customerResults } = useQuery({
+    queryKey: ['customers', 'cmd-search', search],
+    queryFn: async () => {
+      if (search.length < 2) return []
+      const { data } = await supabase
+        .from('customers')
+        .select('id, code, name, country')
+        .or(`code.ilike.%${search}%,name.ilike.%${search}%`)
+        .limit(5)
+      return data ?? []
+    },
+    enabled: search.length >= 2,
+  })
+
+  const { data: wholesalerResults } = useQuery({
+    queryKey: ['wholesalers', 'cmd-search', search],
+    queryFn: async () => {
+      if (search.length < 2) return []
+      const { data } = await supabase
+        .from('wholesalers')
+        .select('id, code, name')
+        .or(`code.ilike.%${search}%,name.ilike.%${search}%`)
         .limit(5)
       return data ?? []
     },
@@ -102,7 +134,7 @@ export default function CommandPalette() {
               <span>
                 Continuer {MONTH_NAMES[activeProcess.month - 1]} {activeProcess.year}
               </span>
-              <CommandShortcut>Etape {activeProcess.current_step}/5</CommandShortcut>
+              <CommandShortcut>Etape {activeProcess.current_step}/9</CommandShortcut>
             </CommandItem>
             {isOnProcess && activeProcess.current_step <= 3 && (
               <CommandItem onSelect={() => go(`/monthly-processes/${activeProcess.id}`)}>
@@ -142,18 +174,63 @@ export default function CommandPalette() {
             <ClipboardList className="mr-2 h-4 w-4" />
             Quotas mensuels
           </CommandItem>
+          <CommandItem onSelect={() => go('/debts')}>
+            <Scale className="mr-2 h-4 w-4" />
+            Dettes clients
+          </CommandItem>
+          <CommandItem onSelect={() => go('/stock')}>
+            <Boxes className="mr-2 h-4 w-4" />
+            Stock
+          </CommandItem>
+          <CommandItem onSelect={() => go('/ansm')}>
+            <ShieldAlert className="mr-2 h-4 w-4" />
+            ANSM
+          </CommandItem>
+          <CommandItem onSelect={() => go('/metrics')}>
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Metriques
+          </CommandItem>
         </CommandGroup>
 
-        {/* Product search results */}
+        {/* Entity search results */}
         {productResults && productResults.length > 0 && (
           <>
             <CommandSeparator />
             <CommandGroup heading="Produits trouves">
               {productResults.map((p) => (
                 <CommandItem key={p.id} onSelect={() => go('/products')}>
-                  <Search className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <Pill className="mr-2 h-4 w-4 text-muted-foreground" />
                   <span className="font-mono text-xs mr-2">{p.cip13}</span>
                   <span className="truncate">{p.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+        {customerResults && customerResults.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Clients trouves">
+              {customerResults.map((c) => (
+                <CommandItem key={c.id} onSelect={() => go('/customers')}>
+                  <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <span className="font-mono text-xs mr-2">{c.code}</span>
+                  <span className="truncate">{c.name}</span>
+                  {c.country && <CommandShortcut>{c.country}</CommandShortcut>}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+        {wholesalerResults && wholesalerResults.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Grossistes trouves">
+              {wholesalerResults.map((w) => (
+                <CommandItem key={w.id} onSelect={() => go('/wholesalers')}>
+                  <Truck className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <span className="font-mono text-xs mr-2">{w.code}</span>
+                  <span className="truncate">{w.name}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
