@@ -98,16 +98,15 @@ export default function MonthlyProcessesPage() {
     mutationFn: async () => {
       const opt = selectedOption
       if (!opt) throw new Error('Aucun mois selectionne')
-      // date_ouverture = 1er jour du mois, date_cloture = dernier jour du mois
+      // date_ouverture = 1er jour du mois, date_cloture = null (set on finalization)
       const dateOuverture = new Date(opt.year, opt.month - 1, 1)
-      const dateCloture = new Date(opt.year, opt.month, 0, 23, 59, 59)
       const { data, error } = await supabase.from('monthly_processes').insert({
         month: opt.month,
         year: opt.year,
         status: 'draft',
         current_step: 1,
         date_ouverture: dateOuverture.toISOString(),
-        date_cloture: dateCloture.toISOString(),
+        date_cloture: null,
         metadata: {},
       }).select().single()
       if (error) throw error
