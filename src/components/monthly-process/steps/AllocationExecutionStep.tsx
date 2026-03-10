@@ -14,6 +14,7 @@ import {
 import { Cpu, ArrowRight, CheckCircle, AlertTriangle, Package, Truck, Zap, Users, BarChart3, Eye, Settings2, Boxes, ShieldCheck, TrendingUp, Play } from 'lucide-react'
 import AllocationVisualizer from '@/components/allocations/AllocationVisualizer'
 import { toast } from 'sonner'
+import { createNotification } from '@/lib/notifications'
 import type { MonthlyProcess } from '@/types/database'
 
 const STRATEGIES: { value: AllocationStrategy; label: string; description: string; icon: typeof Zap }[] = [
@@ -140,6 +141,12 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       queryClient.invalidateQueries({ queryKey: ['allocations', process.id] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
       toast.success(`${count} allocations generees`)
+      createNotification({
+        type: 'allocation_completed',
+        title: 'Allocation terminee',
+        message: `${count} allocations generees pour le processus ${process.month}/${process.year}.`,
+        monthly_order_id: process.id,
+      })
     },
     onError: (err: Error) => {
       setPhase('config')

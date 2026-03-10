@@ -18,6 +18,7 @@ import {
 import HorizontalBarChart from '@/components/ui/horizontal-bar'
 import { Flag, CheckCircle, Download, Package, BarChart3, Users, Truck, ArrowLeft, FileSpreadsheet, PartyPopper, Eye } from 'lucide-react'
 import { toast } from 'sonner'
+import { createNotification } from '@/lib/notifications'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import type { MonthlyProcess } from '@/types/database'
@@ -259,6 +260,12 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
       toast.success('Processus termine avec succes !')
       setShowConfetti(true)
       fireConfetti()
+      createNotification({
+        type: 'process_completed',
+        title: 'Processus finalise',
+        message: `Le processus ${MONTH_NAMES[process.month - 1]} ${process.year} a ete cloture avec succes.`,
+        monthly_order_id: process.id,
+      })
     },
     onError: (err: Error) => toast.error(err.message),
   })

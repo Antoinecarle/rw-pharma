@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import CommandPalette from '@/components/CommandPalette'
+import NotificationBell from '@/components/NotificationBell'
 
 const mainNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, description: 'Vue d\'ensemble' },
@@ -227,6 +228,7 @@ export default function Layout() {
                 <span className="text-xs">&#8984;</span>K
               </kbd>
             </button>
+            <NotificationBell />
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold"
               style={{ background: 'rgba(13,148,136,0.06)', color: 'var(--ivory-teal)' }}>
               <div className="h-1.5 w-1.5 rounded-full animate-subtle-pulse" style={{ background: 'var(--ivory-teal)' }} />

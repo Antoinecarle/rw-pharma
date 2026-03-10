@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent } from '@/components/ui/card'
@@ -16,7 +17,7 @@ import {
 } from '@/components/ui/tooltip'
 import {
   FileCheck, Search, CheckCircle2, XCircle, Package, BarChart3, ThumbsUp,
-  ChevronDown, AlertTriangle, Save, Boxes,
+  ChevronDown, AlertTriangle, Save, Boxes, Download,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -234,6 +235,23 @@ export default function PortalAllocationsPage() {
   const confirmedCount = allocations?.filter(a => a.confirmation_status === 'confirmed').length ?? 0
   const pendingCount = allocations?.filter(a => a.confirmation_status === 'pending').length ?? 0
 
+  const handleExportAllocations = () => {
+    if (!allocations?.length) return
+    const rows = allocations.map(a => ({
+      'CIP13': a.products?.cip13 ?? '',
+      'Produit': a.products?.name ?? '',
+      'Grossiste': a.wholesalers?.name ?? '',
+      'Qte allouee': a.allocated_quantity,
+      'Statut': confirmationLabels[a.confirmation_status]?.label ?? a.confirmation_status,
+      'N° lot': (a.metadata?.lot_number as string) ?? '',
+      'Expiration': (a.metadata?.expiry_date as string) ? new Date(a.metadata!.expiry_date as string).toLocaleDateString('fr-FR') : '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Allocations')
+    XLSX.writeFile(wb, `allocations_export_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
   const toggleProduct = (productId: string) => {
     setExpandedProducts(prev => {
       const next = new Set(prev)
@@ -269,15 +287,27 @@ export default function PortalAllocationsPage() {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher par produit, CIP13, grossiste..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-9 h-9"
-        />
+      {/* Search + Export */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher par produit, CIP13, grossiste..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-9 text-[12px] gap-1.5 shrink-0"
+          onClick={handleExportAllocations}
+          disabled={!allocations?.length}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export Excel
+        </Button>
       </div>
 
       {/* Product accordion */}

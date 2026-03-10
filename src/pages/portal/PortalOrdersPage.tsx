@@ -19,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ShoppingCart, Search, Upload, Package, TrendingUp, Clock, FileSpreadsheet, CheckCircle, AlertTriangle, X, Pencil, Check } from 'lucide-react'
+import { ShoppingCart, Search, Upload, Package, TrendingUp, Clock, FileSpreadsheet, CheckCircle, AlertTriangle, X, Pencil, Check, Download } from 'lucide-react'
 import { toast } from 'sonner'
 
 const statusLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -271,6 +271,22 @@ export default function PortalOrdersPage() {
     return order.status === 'pending' && currentProcess && order.monthly_process_id === currentProcess.id
   }
 
+  const handleExportOrders = () => {
+    if (!filteredOrders.length) return
+    const rows = filteredOrders.map((o: any) => ({
+      'CIP13': o.products?.cip13 ?? '',
+      'Produit': o.products?.name ?? '',
+      'Quantite': o.quantity ?? 0,
+      'Prix unitaire': o.unit_price != null ? Number(o.unit_price) : '',
+      'Statut': statusLabels[o.status]?.label ?? o.status,
+      'Date': new Date(o.created_at).toLocaleDateString('fr-FR'),
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Commandes')
+    XLSX.writeFile(wb, `commandes_export_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
   const filteredOrders = (orders ?? []).filter((o: any) => {
     if (!search) return true
     const s = search.toLowerCase()
@@ -361,6 +377,16 @@ export default function PortalOrdersPage() {
                   className="pl-8 h-8 text-[12px] w-[200px]"
                 />
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-[12px] gap-1.5"
+                onClick={handleExportOrders}
+                disabled={filteredOrders.length === 0}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export Excel
+              </Button>
               <Button
                 size="sm"
                 className="h-8 text-[12px] gap-1.5"

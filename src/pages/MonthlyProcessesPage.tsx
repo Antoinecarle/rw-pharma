@@ -10,8 +10,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { motion } from 'framer-motion'
-import { Plus, Calendar, CalendarRange, Check } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Plus, Calendar, CalendarRange, Check, Copy } from 'lucide-react'
 import { toast } from 'sonner'
+import { createNotification } from '@/lib/notifications'
 import MonthlyProcessCard from '@/components/monthly-process/MonthlyProcessCard'
 import type { MonthlyProcess } from '@/types/database'
 
@@ -45,6 +47,7 @@ export default function MonthlyProcessesPage() {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedMonthKey, setSelectedMonthKey] = useState('')
+  const [cloneQuotas, setCloneQuotas] = useState(true)
 
   const { data: processes, isLoading } = useQuery({
     queryKey: ['monthly-processes'],
@@ -65,6 +68,32 @@ export default function MonthlyProcessesPage() {
 
   const selectedOption = monthOptions.find(o => o.value === (selectedMonthKey || defaultMonthKey))
 
+  // Find the most recent completed process for clone feature
+  const lastCompletedProcess = useMemo(() => {
+    if (!processes) return null
+    const completed = processes
+      .filter(p => p.status === 'completed' || p.status === 'in_progress')
+      .sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year
+        return b.month - a.month
+      })
+    return completed[0] ?? null
+  }, [processes])
+
+  const { data: lastProcessQuotaCount } = useQuery({
+    queryKey: ['wholesaler_quotas', lastCompletedProcess?.id, 'clone-count'],
+    enabled: !!lastCompletedProcess,
+    queryFn: async () => {
+      if (!lastCompletedProcess) return 0
+      const monthStr = `${lastCompletedProcess.year}-${String(lastCompletedProcess.month).padStart(2, '0')}-01`
+      const { data } = await supabase
+        .from('wholesaler_quotas')
+        .select('id')
+        .eq('month', monthStr)
+      return data?.length ?? 0
+    },
+  })
+
   const createMut = useMutation({
     mutationFn: async () => {
       const opt = selectedOption
@@ -82,13 +111,78 @@ export default function MonthlyProcessesPage() {
         metadata: {},
       }).select().single()
       if (error) throw error
-      return data
+
+      // Clone quotas from last process if requested
+      let clonedCount = 0
+      if (cloneQuotas && lastCompletedProcess) {
+        const srcMonthStr = `${lastCompletedProcess.year}-${String(lastCompletedProcess.month).padStart(2, '0')}-01`
+        const newMonthStr = `${opt.year}-${String(opt.month).padStart(2, '0')}-01`
+
+        // Fetch all quotas from the previous process (paginated to avoid 1000-row limit)
+        let allQuotas: Array<{
+          wholesaler_id: string
+          product_id: string
+          quota_quantity: number
+          extra_available: number
+        }> = []
+        let from = 0
+        const pageSize = 1000
+        while (true) {
+          const { data: batch } = await supabase
+            .from('wholesaler_quotas')
+            .select('wholesaler_id, product_id, quota_quantity, extra_available')
+            .eq('month', srcMonthStr)
+            .range(from, from + pageSize - 1)
+          if (!batch || batch.length === 0) break
+          allQuotas = allQuotas.concat(batch)
+          if (batch.length < pageSize) break
+          from += pageSize
+        }
+
+        if (allQuotas.length > 0) {
+          // Insert in batches of 500
+          const batchSize = 500
+          for (let i = 0; i < allQuotas.length; i += batchSize) {
+            const chunk = allQuotas.slice(i, i + batchSize).map(q => ({
+              wholesaler_id: q.wholesaler_id,
+              product_id: q.product_id,
+              monthly_process_id: data.id,
+              month: newMonthStr,
+              quota_quantity: q.quota_quantity,
+              extra_available: q.extra_available,
+              quota_used: 0,
+              import_file_name: null,
+              metadata: { cloned_from: lastCompletedProcess.id },
+            }))
+            const { error: insertErr, data: inserted } = await supabase
+              .from('wholesaler_quotas')
+              .upsert(chunk, { onConflict: 'wholesaler_id,product_id,month', ignoreDuplicates: false })
+              .select('id')
+            if (!insertErr) {
+              clonedCount += inserted?.length ?? chunk.length
+            }
+          }
+        }
+      }
+
+      return { process: data, clonedCount }
     },
-    onSuccess: () => {
+    onSuccess: ({ clonedCount }) => {
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
+      queryClient.invalidateQueries({ queryKey: ['wholesaler_quotas'] })
+      const monthLabel = selectedOption ? `${MONTH_NAMES[selectedOption.month - 1]} ${selectedOption.year}` : ''
       setDialogOpen(false)
       setSelectedMonthKey('')
-      toast.success('Processus mensuel cree')
+      if (clonedCount > 0) {
+        toast.success(`Processus cree avec ${clonedCount} quotas dupliques`)
+      } else {
+        toast.success('Processus mensuel cree')
+      }
+      createNotification({
+        type: 'process_created',
+        title: 'Nouveau processus cree',
+        message: `Le processus d'allocation pour ${monthLabel} a ete cree.`,
+      })
     },
     onError: (err: Error) => {
       if (err.message.includes('unique') || err.message.includes('duplicate'))
@@ -152,7 +246,7 @@ export default function MonthlyProcessesPage() {
       )}
 
       {/* Create dialog */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setSelectedMonthKey('') }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setSelectedMonthKey(''); setCloneQuotas(true) } }}>
         <DialogContent className="max-w-sm rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base">
@@ -206,6 +300,36 @@ export default function MonthlyProcessesPage() {
                 </div>
               </div>
             )}
+
+            {/* Clone quotas option */}
+            {lastCompletedProcess && (lastProcessQuotaCount ?? 0) > 0 && (
+              <div
+                className="rounded-xl p-3 text-[12px] cursor-pointer transition-all"
+                style={{
+                  background: cloneQuotas ? 'rgba(13,148,136,0.06)' : 'rgba(0,0,0,0.02)',
+                  border: cloneQuotas ? '1px solid rgba(13,148,136,0.2)' : '1px solid rgba(0,0,0,0.06)',
+                }}
+                onClick={() => setCloneQuotas(!cloneQuotas)}
+              >
+                <div className="flex items-start gap-2.5">
+                  <Checkbox
+                    checked={cloneQuotas}
+                    onCheckedChange={(v) => setCloneQuotas(!!v)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-1.5 font-medium" style={{ color: cloneQuotas ? 'var(--ivory-accent)' : 'var(--ivory-text)' }}>
+                      <Copy className="h-3 w-3" />
+                      Dupliquer quotas du mois precedent
+                    </div>
+                    <p style={{ color: 'var(--ivory-text-muted)' }}>
+                      {lastProcessQuotaCount} quotas de {MONTH_NAMES[lastCompletedProcess.month - 1]} {lastCompletedProcess.year} seront copies.
+                      Les quantites restent identiques, vous pourrez les ajuster ensuite.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">Annuler</Button>
@@ -216,7 +340,7 @@ export default function MonthlyProcessesPage() {
               className="text-[13px] rounded-xl"
               style={{ background: 'var(--ivory-accent)', color: 'white' }}
             >
-              {createMut.isPending ? 'Creation...' : 'Creer'}
+              {createMut.isPending ? (cloneQuotas && lastCompletedProcess ? 'Creation & duplication...' : 'Creation...') : 'Creer'}
             </Button>
           </DialogFooter>
         </DialogContent>
