@@ -72,7 +72,7 @@ export default function MonthlyProcessesPage() {
   const lastCompletedProcess = useMemo(() => {
     if (!processes) return null
     const completed = processes
-      .filter(p => p.status === 'completed' || p.status === 'in_progress')
+      .filter(p => p.status === 'completed' || p.status === 'finalizing')
       .sort((a, b) => {
         if (a.year !== b.year) return b.year - a.year
         return b.month - a.month

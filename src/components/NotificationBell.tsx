@@ -17,13 +17,6 @@ export interface Notification {
   created_at: string
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  process_created: 'rgba(59,130,246,0.12)',
-  allocation_completed: 'rgba(16,185,129,0.12)',
-  process_completed: 'rgba(139,92,246,0.12)',
-  info: 'rgba(13,148,136,0.08)',
-}
-
 const TYPE_DOT_COLORS: Record<string, string> = {
   process_created: '#3b82f6',
   allocation_completed: '#10b981',
