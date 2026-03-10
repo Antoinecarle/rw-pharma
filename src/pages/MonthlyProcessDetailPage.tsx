@@ -113,7 +113,12 @@ export default function MonthlyProcessDetailPage() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
+      // Cancel and remove the detail query BEFORE navigating to prevent
+      // a stale refetch of the deleted resource (406 from Supabase)
+      queryClient.cancelQueries({ queryKey: ['monthly-processes', id] })
+      queryClient.removeQueries({ queryKey: ['monthly-processes', id] })
+      // Invalidate the list query so the listing page refreshes
+      queryClient.invalidateQueries({ queryKey: ['monthly-processes'], exact: true })
       toast.success('Processus supprime')
       navigate('/monthly-processes')
     },

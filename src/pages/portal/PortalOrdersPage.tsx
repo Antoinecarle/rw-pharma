@@ -19,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ShoppingCart, Search, Upload, Package, TrendingUp, Clock, FileSpreadsheet, CheckCircle, AlertTriangle, X } from 'lucide-react'
+import { ShoppingCart, Search, Upload, Package, TrendingUp, Clock, FileSpreadsheet, CheckCircle, AlertTriangle, X, Pencil, Check } from 'lucide-react'
 import { toast } from 'sonner'
 
 const statusLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -220,6 +220,57 @@ export default function PortalOrdersPage() {
     onError: (err: Error) => toast.error(err.message),
   })
 
+  // Inline editing state
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
+  const [editQty, setEditQty] = useState<number>(0)
+  const [editPrice, setEditPrice] = useState<string>('')
+
+  const startEditing = (order: any) => {
+    setEditingOrderId(order.id)
+    setEditQty(order.quantity)
+    setEditPrice(order.unit_price != null ? String(order.unit_price) : '')
+  }
+
+  const cancelEditing = () => {
+    setEditingOrderId(null)
+    setEditQty(0)
+    setEditPrice('')
+  }
+
+  const updateOrderMut = useMutation({
+    mutationFn: async ({ orderId, quantity, unit_price }: { orderId: string; quantity: number; unit_price: number | null }) => {
+      const { error } = await supabase
+        .from('orders')
+        .update({ quantity, unit_price })
+        .eq('id', orderId)
+        .eq('customer_id', customerId!)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portal-orders'] })
+      toast.success('Commande mise a jour')
+      cancelEditing()
+    },
+    onError: (err: Error) => toast.error(`Erreur: ${err.message}`),
+  })
+
+  const handleSaveEdit = () => {
+    if (!editingOrderId || editQty <= 0) {
+      toast.error('La quantite doit etre superieure a 0')
+      return
+    }
+    const parsedPrice = editPrice.trim() ? parseFloat(editPrice.replace(',', '.')) : null
+    if (parsedPrice !== null && isNaN(parsedPrice)) {
+      toast.error('Prix unitaire invalide')
+      return
+    }
+    updateOrderMut.mutate({ orderId: editingOrderId, quantity: editQty, unit_price: parsedPrice })
+  }
+
+  const canEditOrder = (order: any) => {
+    return order.status === 'pending' && currentProcess && order.monthly_process_id === currentProcess.id
+  }
+
   const filteredOrders = (orders ?? []).filter((o: any) => {
     if (!search) return true
     const s = search.toLowerCase()
@@ -346,26 +397,85 @@ export default function PortalOrdersPage() {
                     <TableHead className="text-[11px] text-right">Prix unitaire</TableHead>
                     <TableHead className="text-[11px]">Statut</TableHead>
                     <TableHead className="text-[11px]">Date</TableHead>
+                    <TableHead className="text-[11px] w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredOrders.map((order: any) => {
                     const status = statusLabels[order.status] ?? statusLabels.pending
+                    const isEditing = editingOrderId === order.id
+                    const editable = canEditOrder(order)
                     return (
                       <TableRow key={order.id}>
                         <TableCell className="text-[12px] font-medium max-w-[250px] truncate">
                           {order.products?.name ?? '-'}
                         </TableCell>
                         <TableCell className="text-[12px] font-mono">{order.products?.cip13 ?? '-'}</TableCell>
-                        <TableCell className="text-[12px] text-right font-medium">{order.quantity?.toLocaleString('fr-FR')}</TableCell>
+                        <TableCell className="text-[12px] text-right font-medium">
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              min={1}
+                              value={editQty}
+                              onChange={(e) => setEditQty(parseInt(e.target.value, 10) || 0)}
+                              className="h-7 w-[90px] text-[12px] text-right ml-auto"
+                            />
+                          ) : (
+                            order.quantity?.toLocaleString('fr-FR')
+                          )}
+                        </TableCell>
                         <TableCell className="text-[12px] text-right">
-                          {order.unit_price ? `${Number(order.unit_price).toFixed(2)} EUR` : '-'}
+                          {isEditing ? (
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              placeholder="0.00"
+                              className="h-7 w-[90px] text-[12px] text-right ml-auto"
+                            />
+                          ) : (
+                            order.unit_price ? `${Number(order.unit_price).toFixed(2)} EUR` : '-'
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={status.variant} className="text-[10px]">{status.label}</Badge>
                         </TableCell>
                         <TableCell className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
                           {new Date(order.created_at).toLocaleDateString('fr-FR')}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={handleSaveEdit}
+                                disabled={updateOrderMut.isPending}
+                              >
+                                <Check className="h-3.5 w-3.5 text-green-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={cancelEditing}
+                                disabled={updateOrderMut.isPending}
+                              >
+                                <X className="h-3.5 w-3.5 text-red-500" />
+                              </Button>
+                            </div>
+                          ) : editable ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => startEditing(order)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ivory-text-muted)' }} />
+                            </Button>
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     )
