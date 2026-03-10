@@ -110,7 +110,17 @@ export async function calculateMonthlyDebts(processId: string): Promise<DebtCalc
     const allocated = allocMap.get(key) ?? 0
     const owed = Math.max(0, orderInfo.requested - allocated)
 
-    if (owed === 0) continue
+    if (owed === 0) {
+      // Clean up any stale debt for this customer+product+month (e.g. after re-allocation)
+      await supabase
+        .from('client_debts')
+        .delete()
+        .eq('customer_id', customerId)
+        .eq('product_id', productId)
+        .eq('month', monthDate)
+        .in('status', ['pending', 'partially_resolved'])
+      continue
+    }
 
     result.totalOwed += owed
     result.details.push({
