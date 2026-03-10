@@ -55,6 +55,9 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
   const [editState, setEditState] = useState<EditState | null>(null)
   const [pendingEdits, setPendingEdits] = useState(0)
 
+  // Anti-regression: prevent edits on completed/finalized processes
+  const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
+
   const { data: allocations, isLoading } = useQuery({
     queryKey: ['allocations', process.id, 'review'],
     queryFn: async () => {
@@ -304,6 +307,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
   }, [allocations, viewMode])
 
   const startEdit = (allocId: string, field: 'quantity' | 'wholesaler', currentValue: string) => {
+    if (isProcessLocked) return
     setEditState({ allocId, field, value: currentValue })
   }
 
@@ -498,9 +502,11 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
             </button>
           ))}
         </div>
-        <span className="text-xs text-muted-foreground sm:ml-auto flex items-center gap-1.5">
-          <Pencil className="h-3 w-3" /> Cliquez sur une cellule pour modifier
-        </span>
+        {!isProcessLocked && (
+          <span className="text-xs text-muted-foreground sm:ml-auto flex items-center gap-1.5">
+            <Pencil className="h-3 w-3" /> Cliquez sur une cellule pour modifier
+          </span>
+        )}
       </div>
 
       {/* Consolidated lot view */}
@@ -642,11 +648,12 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
                       ) : (
                         <button
                           type="button"
-                          className="font-medium text-sm hover:text-primary transition-colors flex items-center gap-1 group"
+                          className={`font-medium text-sm transition-colors flex items-center gap-1 group ${isProcessLocked ? 'cursor-default' : 'hover:text-primary'}`}
                           onClick={() => startEdit(alloc.id, 'wholesaler', alloc.wholesaler_id)}
+                          disabled={isProcessLocked}
                         >
                           {ws?.code ?? '-'}
-                          <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+                          {!isProcessLocked && <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />}
                         </button>
                       )}
                     </TableCell>
@@ -706,11 +713,12 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
                       ) : (
                         <button
                           type="button"
-                          className={`tabular-nums font-medium hover:text-primary transition-colors group inline-flex items-center gap-1 ${isFull ? '' : 'text-amber-600'}`}
+                          className={`tabular-nums font-medium transition-colors group inline-flex items-center gap-1 ${isProcessLocked ? 'cursor-default' : 'hover:text-primary'} ${isFull ? '' : 'text-amber-600'}`}
                           onClick={() => startEdit(alloc.id, 'quantity', String(alloc.allocated_quantity))}
+                          disabled={isProcessLocked}
                         >
                           {alloc.allocated_quantity.toLocaleString('fr-FR')}
-                          <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+                          {!isProcessLocked && <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />}
                         </button>
                       )}
                     </TableCell>
@@ -745,7 +753,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         </Card>
       ) : null}
 
-      {allocations && allocations.length > 0 ? (
+      {allocations && allocations.length > 0 && !isProcessLocked ? (
         <div className="flex justify-end gap-3">
           <Button
             onClick={() => setConfirmOpen(true)}
