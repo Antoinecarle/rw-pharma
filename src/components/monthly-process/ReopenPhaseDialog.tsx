@@ -173,7 +173,7 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
   if (!targetPhase || !impacts) return null
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) setReason(''); onOpenChange(v) }}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">

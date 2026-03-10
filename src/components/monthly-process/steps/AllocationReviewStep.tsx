@@ -317,7 +317,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
     if (!editState) return
     if (editState.field === 'quantity') {
       const newQty = parseInt(editState.value, 10)
-      if (isNaN(newQty) || newQty < 0) { toast.error('Quantite invalide'); return }
+      if (isNaN(newQty) || newQty <= 0) { toast.error('Quantite invalide (doit etre > 0)'); return }
       editQtyMut.mutate({ allocId: editState.allocId, newQty })
     } else {
       editWsMut.mutate({ allocId: editState.allocId, newWsId: editState.value })

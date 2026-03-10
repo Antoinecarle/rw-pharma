@@ -73,11 +73,12 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
   })
 
   const { data: stockCount } = useQuery({
-    queryKey: ['collected_stock', 'count'],
+    queryKey: ['collected_stock', process.id, 'count'],
     queryFn: async () => {
       const { count } = await supabase
         .from('collected_stock')
         .select('*', { count: 'exact', head: true })
+        .eq('monthly_process_id', process.id)
         .in('status', ['received', 'partially_allocated'])
       return count ?? 0
     },
@@ -483,11 +484,11 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
               <Button
                 size="lg"
                 onClick={() => allocateMut.mutate()}
-                disabled={allocatableCount === 0 || isProcessLocked}
+                disabled={allocatableCount === 0 || isProcessLocked || allocateMut.isPending}
                 className="gap-2"
               >
                 <Cpu className="h-4 w-4" />
-                {isProcessLocked ? 'Processus termine' : 'Lancer l\'Allocation'}
+                {isProcessLocked ? 'Processus termine' : allocateMut.isPending ? 'Allocation...' : 'Lancer l\'Allocation'}
               </Button>
             </CardContent>
           </Card>
@@ -520,7 +521,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 <div ref={logRef} className="overflow-y-auto max-h-48 p-3 space-y-0.5 font-mono text-[11px]">
                   {allocationLogs.slice(-30).map((log, i) => (
                     <div key={i} className={`flex gap-2 ${log.full ? 'text-green-600' : 'text-amber-600'}`}>
-                      <span className="text-muted-foreground w-6 text-right shrink-0">{allocationLogs.length - 30 + i + 1}</span>
+                      <span className="text-muted-foreground w-6 text-right shrink-0">{Math.max(0, allocationLogs.length - 30) + i + 1}</span>
                       <span>[{log.customer}]</span>
                       <span className="truncate flex-1">{log.product}...</span>
                       <span>→ {log.wholesaler}</span>
