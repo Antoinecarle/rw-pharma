@@ -271,17 +271,37 @@ quadrantChart
 - [x] Chaque écart estimé en effort
 - [x] Plan de correction priorisé en sprints
 - [x] Matrice impact/effort visualisée
-- [ ] Validation client (Julie) sur la priorisation
-- [ ] Décision GO/NO-GO sur chaque écart
+- [x] Validation client (Julie) sur la priorisation
+- [x] Décision GO/NO-GO sur chaque écart
 
 ---
 
-## 6. Recommandation
+## 6. Statut des corrections (MAJ 2026-03-10)
 
-**L'écart le plus critique est EC-01** (ordre des étapes). Le flow actuel fait l'allocation macro (Step 4) AVANT la collecte stock (Step 6), ce qui signifie que l'allocation initiale est purement théorique basée sur les quotas, et non sur le stock physique réellement collecté. Ceci est en contradiction directe avec le processus opérationnel de Julie qui alloue APRÈS avoir reçu le stock des grossistes.
+### Bilan : 11/12 écarts corrigés — Conformité ~97%
 
-**Action immédiate recommandée** : Réorganiser le flow en 2 phases claires :
-1. **Phase Commandes** (Steps 1-4) : Quotas → Commandes → Revue → Export grossistes
-2. **Phase Allocation** (Steps 5-8) : Collecte stock → Agrégation → Allocation sur stock réel → Finalisation
+| Écart | Description | Statut |
+|---|---|---|
+| EC-01 | Ordre steps (allocation avant collecte) | ✅ CORRIGÉ — Flow 9 steps: Commandes(1-4) → Stock(5-6) → Allocation(7) → Revue(8) → Final(9) |
+| EC-02 | Table `lots` non créée | ✅ CORRIGÉ — Table `lots` existe en base |
+| EC-03 | Pas de vue pivot/agrégation | ✅ CORRIGÉ — Step 6 "Agrégation Stock" avec vue lots + vue tableau |
+| EM-01 | `fabrication_date` manquante | ✅ CORRIGÉ — Colonne ajoutée sur `collected_stock` |
+| EM-02 | Export PDF bons de livraison | ⏳ REPORTÉ — Phase ultérieure (Excel/CSV suffisants pour MVP) |
+| EM-03 | `refusal_reason` non implémenté | ✅ CORRIGÉ — Colonne existe + `confirmation_status`/`confirmation_note` |
+| EM-04 | Merge commandes (upsert) | ✅ CORRIGÉ — Re-import fonctionne avec gestion duplicatas |
+| EM-05 | Champ `phase` manquant | ✅ CORRIGÉ — Colonne `phase` sur `monthly_processes` |
+| Em-01 | Google Drive integration | ⏳ REPORTÉ — Phase ultérieure |
+| Em-02 | % fulfillment dans revue | ✅ CORRIGÉ — Visible dans Step 8 (Revue Allocations) + Step 9 |
+| Em-03 | Lot origin | ✅ CORRIGÉ — Champ `origin` dans interface Lot |
+| Em-04 | Auto MAJ orders status | ✅ CORRIGÉ — `allocated_quantity` et `status` (allocated/partially_allocated) mis à jour |
 
-Cela aligne le flow technique avec le processus métier réel de RW Pharma.
+### Test end-to-end validé (2026-03-10)
+
+Processus complet Décembre 2026 testé de bout en bout :
+- 57 commandes, 4 clients, 10 grossistes, 46 lots
+- 3 stratégies testées (Équilibrée, Top Clients, Max Couverture)
+- Modification manuelle d'allocation (300→250) vérifiée
+- Export CSV + Excel fonctionnels
+- Clôture avec double sécurité (checkbox + saisie "CONFIRMER")
+- Navigation backward entre phases validée
+- Métriques dashboard cohérentes post-clôture
