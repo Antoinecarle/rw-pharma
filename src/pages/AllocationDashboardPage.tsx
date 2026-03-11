@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -14,7 +14,8 @@ import AnimatedCounter from '@/components/ui/animated-counter'
 import GaugeChart from '@/components/ui/gauge-chart'
 import HorizontalBarChart from '@/components/ui/horizontal-bar'
 import StockLotView from '@/components/stock/StockLotView'
-import { BarChart3, Users, Truck, Package, Boxes, CalendarRange, ArrowRight, AlertTriangle, ShieldCheck, Warehouse } from 'lucide-react'
+import MonthSelector, { type MonthValue, type MonthOption } from '@/components/ui/month-selector'
+import { BarChart3, Users, Truck, Package, Boxes, ArrowRight, AlertTriangle, ShieldCheck, Warehouse } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 const MONTH_NAMES = [
@@ -71,12 +72,42 @@ export default function AllocationDashboardPage() {
     },
   })
 
-  const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedProcessId, setSelectedProcessId] = useState<string | null>(
+    searchParams.get('process')
+  )
+
+  const handleSelectProcess = (processId: string) => {
+    setSelectedProcessId(processId)
+    setSearchParams({ process: processId }, { replace: true })
+  }
 
   // Selected process, or most recent non-draft
   const activeProcess = selectedProcessId
     ? processes?.find(p => p.id === selectedProcessId)
     : (processes?.find(p => p.status !== 'draft') ?? processes?.[0])
+
+  // Month selector options built from processes
+  const monthOptions: MonthOption[] = useMemo(() => {
+    if (!processes) return []
+    return processes.map(p => ({
+      month: p.month,
+      year: p.year,
+      id: p.id,
+      status: p.status === 'completed' ? 'completed' as const : p.status === 'draft' ? 'draft' as const : 'active' as const,
+    }))
+  }, [processes])
+
+  // Current MonthValue derived from activeProcess
+  const currentMonthValue: MonthValue | null = activeProcess
+    ? { month: activeProcess.month, year: activeProcess.year }
+    : null
+
+  function handleMonthChange(v: MonthValue | null, opt?: MonthOption) {
+    if (!v) return // no "all" option on this page
+    const proc = processes?.find(p => p.month === v.month && p.year === v.year)
+    if (proc) handleSelectProcess(proc.id)
+  }
 
   const { data: allocations } = useQuery({
     queryKey: ['allocations', 'dashboard', activeProcess?.id],
@@ -291,15 +322,6 @@ export default function AllocationDashboardPage() {
     }
   }, [stock])
 
-  // Process history
-  const processHistory = useMemo(() => {
-    if (!processes) return []
-    return processes.slice(0, 6).map(p => ({
-      ...p,
-      label: `${MONTH_NAMES[p.month - 1]} ${p.year}`,
-    }))
-  }, [processes])
-
   const monthLabel = activeProcess
     ? `${MONTH_NAMES[activeProcess.month - 1]} ${activeProcess.year}`
     : '-'
@@ -326,14 +348,25 @@ export default function AllocationDashboardPage() {
               </p>
             </div>
           </div>
-          {activeProcess && (
-            <Link
-              to={`/monthly-processes/${activeProcess.id}`}
-              className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-            >
-              Voir le processus <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          )}
+
+          <div className="flex items-center gap-3">
+            {monthOptions.length > 0 && (
+              <MonthSelector
+                value={currentMonthValue}
+                onChange={handleMonthChange}
+                options={monthOptions}
+                compact
+              />
+            )}
+            {activeProcess && (
+              <Link
+                to={`/monthly-processes/${activeProcess.id}`}
+                className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline shrink-0"
+              >
+                Voir le processus <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
+          </div>
         </div>
       </motion.div>
 
@@ -618,45 +651,6 @@ export default function AllocationDashboardPage() {
         </Card>
       </motion.div>
 
-      {/* Process history */}
-      {processHistory.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 }}>
-          <Card>
-            <CardContent className="p-5 space-y-3">
-              <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <CalendarRange className="h-4 w-4" /> Historique des processus
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                {processHistory.map(p => {
-                  const isRunning = p.status !== 'completed' && p.status !== 'draft'
-                  const isCompleted = p.status === 'completed'
-                  const isSelected = activeProcess?.id === p.id
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setSelectedProcessId(p.id)}
-                      className={`p-3 rounded-lg border text-center transition-all hover:border-primary/30 ${
-                        isSelected ? 'ring-2 ring-primary border-primary/40 bg-primary/5' : isCompleted ? 'border-green-200/60 bg-green-50/30' : isRunning ? 'border-amber-200/60 bg-amber-50/30' : 'border-border'
-                      }`}
-                    >
-                      <p className="text-xs font-semibold">{p.label}</p>
-                      <p className="text-lg font-bold tabular-nums mt-0.5">{p.allocations_count}</p>
-                      <p className="text-[10px] text-muted-foreground">allocations</p>
-                      <Badge
-                        variant={isCompleted ? 'default' : isRunning ? 'secondary' : 'outline'}
-                        className="text-[9px] mt-1"
-                      >
-                        {isCompleted ? 'Termine' : isRunning ? 'En cours' : 'Brouillon'}
-                      </Badge>
-                    </button>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
     </div>
   )
 }

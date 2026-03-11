@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Trash2, CalendarRange } from 'lucide-react'
+import { ArrowLeft, Trash2, CalendarRange, BarChart3 } from 'lucide-react'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 import confetti from 'canvas-confetti'
@@ -283,6 +283,11 @@ export default function MonthlyProcessDetailPage() {
 
           <div className="flex items-center gap-2 shrink-0">
             <StepQualityScore process={process} step={currentStep} />
+            <Link to={`/allocation-dashboard?process=${process.id}`}>
+              <Button variant="ghost" size="icon" className="rounded-xl" title="Dashboard metriques">
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+            </Link>
             {process.status !== 'completed' && (
               <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive rounded-xl" onClick={() => setDeleteOpen(true)}>
                 <Trash2 className="h-4 w-4" />

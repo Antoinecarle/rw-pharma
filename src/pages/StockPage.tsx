@@ -1,14 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { motion } from 'framer-motion'
 import { Warehouse } from 'lucide-react'
 import StockLotView from '@/components/stock/StockLotView'
-
-const MONTH_NAMES = [
-  'Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre',
-]
+import MonthSelector, { type MonthValue, type MonthOption, MONTH_NAMES_FULL } from '@/components/ui/month-selector'
 
 interface ProcessOption {
   id: string
@@ -18,7 +14,7 @@ interface ProcessOption {
 }
 
 export default function StockPage() {
-  const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null)
+  const [selectedMonth, setSelectedMonth] = useState<MonthValue | null>(null)
 
   const { data: processes } = useQuery({
     queryKey: ['monthly-processes', 'stock-page'],
@@ -33,11 +29,25 @@ export default function StockPage() {
     },
   })
 
-  const subtitle = selectedProcessId
-    ? (() => {
-        const p = processes?.find(pr => pr.id === selectedProcessId)
-        return p ? `${MONTH_NAMES[p.month - 1]} ${p.year}` : 'Filtre par mois'
-      })()
+  const monthOptions: MonthOption[] = useMemo(() => {
+    if (!processes) return []
+    return processes.map(p => ({
+      month: p.month,
+      year: p.year,
+      id: p.id,
+      status: p.status === 'completed' ? 'completed' as const : p.status === 'draft' ? 'draft' as const : 'active' as const,
+    }))
+  }, [processes])
+
+  // Resolve selected process ID from month
+  const selectedProcessId = useMemo(() => {
+    if (!selectedMonth || !processes) return null
+    const p = processes.find(pr => pr.month === selectedMonth.month && pr.year === selectedMonth.year)
+    return p?.id ?? null
+  }, [selectedMonth, processes])
+
+  const subtitle = selectedMonth
+    ? `${MONTH_NAMES_FULL[selectedMonth.month - 1]} ${selectedMonth.year}`
     : 'Tous les mois'
 
   return (
@@ -65,33 +75,15 @@ export default function StockPage() {
             </div>
           </div>
 
-          {/* Month selector */}
-          {processes && processes.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 items-center">
-              <button
-                onClick={() => setSelectedProcessId(null)}
-                className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
-                  !selectedProcessId
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-background border-border hover:border-primary/30'
-                }`}
-              >
-                Tous
-              </button>
-              {processes.slice(0, 8).map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => setSelectedProcessId(p.id)}
-                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
-                    selectedProcessId === p.id
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background border-border hover:border-primary/30'
-                  }`}
-                >
-                  {MONTH_NAMES[p.month - 1].slice(0, 3)} {p.year.toString().slice(2)}
-                </button>
-              ))}
-            </div>
+          {monthOptions.length > 0 && (
+            <MonthSelector
+              value={selectedMonth}
+              onChange={(v) => setSelectedMonth(v)}
+              options={monthOptions}
+              allowAll
+              allLabel="Tous les mois"
+              compact
+            />
           )}
         </div>
       </motion.div>

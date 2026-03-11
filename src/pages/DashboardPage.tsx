@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -6,14 +7,18 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { motion } from 'framer-motion'
 import AnimatedCounter from '@/components/ui/animated-counter'
 import GaugeChart from '@/components/ui/gauge-chart'
-import HorizontalBarChart from '@/components/ui/horizontal-bar'
+import MonthSelector, { type MonthValue, type MonthOption } from '@/components/ui/month-selector'
 import {
-  Pill, Truck, Users, AlertTriangle, ClipboardList,
-  ArrowRight, CalendarRange, Play, TrendingUp, TrendingDown,
-  Package, BarChart3, Boxes,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  ResponsiveContainer, Legend,
+} from 'recharts'
+import {
+  Play, ArrowRight, CalendarRange, TrendingUp, TrendingDown,
+  Package, Euro, BarChart3, Pill, Truck, ClipboardList,
 } from 'lucide-react'
 
 const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
+const MONTH_SHORT = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec']
 const STEP_LABELS = ['Import quotas', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
 function StatSkeleton() {
@@ -40,32 +45,42 @@ function TrendBadge({ current, previous }: { current: number; previous: number }
   )
 }
 
+function formatEur(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M €`
+  if (v >= 1_000) return `${(v / 1_000).toFixed(0)}k €`
+  return `${v.toLocaleString('fr-FR')} €`
+}
+
+interface ProcessFinancials {
+  processId: string
+  month: number
+  year: number
+  label: string
+  shortLabel: string
+  ordersCount: number
+  volumeAffaires: number
+  chiffreAffaires: number
+  margeBrute: number
+}
+
+async function fetchAllPaginated<T>(
+  query: () => ReturnType<ReturnType<typeof supabase.from>['select']>,
+  pageSize = 500,
+): Promise<T[]> {
+  const all: T[] = []
+  let from = 0
+  while (true) {
+    const { data, error } = await (query() as any).range(from, from + pageSize - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...(data as T[]))
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  return all
+}
+
 export default function DashboardPage() {
-  // Base counts
-  const { data: productCount, isLoading: loadingProducts } = useQuery({
-    queryKey: ['products', 'count'],
-    staleTime: 1000 * 60 * 30,
-    queryFn: async () => { const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }); return count ?? 0 },
-  })
-
-  const { data: wholesalerCount, isLoading: loadingWholesalers } = useQuery({
-    queryKey: ['wholesalers', 'count'],
-    staleTime: 1000 * 60 * 30,
-    queryFn: async () => { const { count } = await supabase.from('wholesalers').select('*', { count: 'exact', head: true }); return count ?? 0 },
-  })
-
-  const { data: customerCount, isLoading: loadingCustomers } = useQuery({
-    queryKey: ['customers', 'count'],
-    staleTime: 1000 * 60 * 30,
-    queryFn: async () => { const { count } = await supabase.from('customers').select('*', { count: 'exact', head: true }); return count ?? 0 },
-  })
-
-  const { data: blockedCount, isLoading: loadingBlocked } = useQuery({
-    queryKey: ['products', 'blocked', 'count'],
-    staleTime: 1000 * 60 * 30,
-    queryFn: async () => { const { data } = await supabase.from('products').select('id').eq('is_ansm_blocked', true); return data?.length ?? 0 },
-  })
-
   // Active process
   const { data: activeProcess } = useQuery({
     queryKey: ['monthly-processes', 'active'],
@@ -81,7 +96,7 @@ export default function DashboardPage() {
     },
   })
 
-  // All processes for evolution metrics
+  // All processes
   const { data: allProcesses } = useQuery({
     queryKey: ['monthly-processes', 'dashboard-all'],
     staleTime: 1000 * 60 * 10,
@@ -96,62 +111,151 @@ export default function DashboardPage() {
     },
   })
 
-  // Allocation summary for active process
+  // Month selector state
+  const [selectedMonth, setSelectedMonth] = useState<MonthValue | null>(null)
+
+  const monthOptions: MonthOption[] = useMemo(() => {
+    if (!allProcesses) return []
+    return allProcesses.map(p => ({
+      month: p.month,
+      year: p.year,
+      id: p.id,
+      status: p.status === 'completed' ? 'completed' as const : p.status === 'draft' ? 'draft' as const : 'active' as const,
+    }))
+  }, [allProcesses])
+
+  // All orders — for volume d'affaires (qty * unit_price)
+  const { data: allOrders, isLoading: loadingOrders } = useQuery({
+    queryKey: ['orders', 'dashboard-financials'],
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      return fetchAllPaginated<{ monthly_process_id: string; quantity: number; unit_price: number | null }>(() =>
+        supabase.from('orders').select('monthly_process_id, quantity, unit_price')
+      )
+    },
+  })
+
+  // All allocations — for CA (allocated_qty * prix_applique) and marge (- pfht)
+  const { data: allAllocations, isLoading: loadingAllocs } = useQuery({
+    queryKey: ['allocations', 'dashboard-financials'],
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      return fetchAllPaginated<{ monthly_process_id: string; allocated_quantity: number; prix_applique: number | null; product: { pfht: number | null } | null }>(() =>
+        supabase.from('allocations').select('monthly_process_id, allocated_quantity, prix_applique, product:products(pfht)')
+      )
+    },
+  })
+
+  // Active process allocation summary
   const { data: activeAllocStats } = useQuery({
     queryKey: ['allocations', activeProcess?.id, 'dashboard'],
     enabled: !!activeProcess && (activeProcess.allocations_count ?? 0) > 0,
     staleTime: 1000 * 60 * 5,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('allocations')
-        .select('requested_quantity, allocated_quantity, customer:customers(code, name)')
-        .eq('monthly_process_id', activeProcess!.id)
-      if (error) throw error
-      const totalReq = data?.reduce((s, a) => s + (a.requested_quantity ?? 0), 0) ?? 0
-      const totalAlloc = data?.reduce((s, a) => s + (a.allocated_quantity ?? 0), 0) ?? 0
-      // Group by customer — deduplicate requested per unique order
-      const byCustomer = new Map<string, { code: string; name: string; alloc: number; req: number; seenOrders: Set<string> }>()
-      for (const a of data ?? []) {
-        const c = a.customer as unknown as { code: string; name: string } | undefined
-        const key = c?.code ?? '?'
-        if (!byCustomer.has(key)) byCustomer.set(key, { code: key, name: c?.name ?? '?', alloc: 0, req: 0, seenOrders: new Set() })
-        const entry = byCustomer.get(key)!
-        entry.alloc += a.allocated_quantity ?? 0
-        entry.req += a.requested_quantity ?? 0
-      }
-      return { totalReq, totalAlloc, byCustomer: [...byCustomer.values()] }
+      const data = await fetchAllPaginated<{ requested_quantity: number; allocated_quantity: number }>(() =>
+        supabase.from('allocations').select('requested_quantity, allocated_quantity').eq('monthly_process_id', activeProcess!.id)
+      )
+      const totalReq = data.reduce((s, a) => s + (a.requested_quantity ?? 0), 0)
+      const totalAlloc = data.reduce((s, a) => s + (a.allocated_quantity ?? 0), 0)
+      return { totalReq, totalAlloc }
     },
   })
 
-  // Monthly orders evolution from processes (skip ones with 0 orders for trend calc)
-  const completedProcesses = (allProcesses ?? []).filter(p => p.status === 'completed')
-  const completedWithOrders = completedProcesses.filter(p => (p.orders_count ?? 0) > 0)
-  const lastCompleted = completedWithOrders[completedWithOrders.length - 1]
-  const prevCompleted = completedWithOrders[completedWithOrders.length - 2]
+  // ── Compute financials per process ──────────────────────────────
+  const processFinancials: ProcessFinancials[] = (() => {
+    if (!allProcesses || !allOrders || !allAllocations) return []
 
-  const totalOrdersAllTime = (allProcesses ?? []).reduce((s, p) => s + (p.orders_count ?? 0), 0)
-  const totalAllocsAllTime = (allProcesses ?? []).reduce((s, p) => s + (p.allocations_count ?? 0), 0)
+    const ordersByProcess = new Map<string, { qty: number; volume: number }>()
+    for (const o of allOrders) {
+      const pid = o.monthly_process_id
+      if (!ordersByProcess.has(pid)) ordersByProcess.set(pid, { qty: 0, volume: 0 })
+      const entry = ordersByProcess.get(pid)!
+      entry.qty += 1
+      entry.volume += (o.quantity ?? 0) * (o.unit_price ?? 0)
+    }
+
+    const allocsByProcess = new Map<string, { ca: number; cost: number }>()
+    for (const a of allAllocations) {
+      const pid = a.monthly_process_id
+      if (!allocsByProcess.has(pid)) allocsByProcess.set(pid, { ca: 0, cost: 0 })
+      const entry = allocsByProcess.get(pid)!
+      const allocQty = a.allocated_quantity ?? 0
+      entry.ca += allocQty * (a.prix_applique ?? 0)
+      const pfht = (a.product as { pfht: number | null } | null)?.pfht ?? 0
+      entry.cost += allocQty * pfht
+    }
+
+    return allProcesses.map(p => {
+      const orders = ordersByProcess.get(p.id) ?? { qty: 0, volume: 0 }
+      const allocs = allocsByProcess.get(p.id) ?? { ca: 0, cost: 0 }
+      return {
+        processId: p.id,
+        month: p.month,
+        year: p.year,
+        label: `${MONTH_NAMES[p.month - 1]} ${p.year}`,
+        shortLabel: `${MONTH_SHORT[p.month - 1]} ${String(p.year).slice(2)}`,
+        ordersCount: p.orders_count ?? orders.qty,
+        volumeAffaires: orders.volume,
+        chiffreAffaires: allocs.ca,
+        margeBrute: allocs.ca - allocs.cost,
+      }
+    })
+  })()
+
+  const completedFinancials = processFinancials.filter(p => {
+    const proc = allProcesses?.find(ap => ap.id === p.processId)
+    return proc?.status === 'completed'
+  })
+  const last6 = completedFinancials.slice(-6)
+  const lastMonth = last6[last6.length - 1]
+  const prevMonth = last6[last6.length - 2]
+
+  const activeFinancials = activeProcess
+    ? processFinancials.find(p => p.processId === activeProcess.id)
+    : undefined
 
   const fulfillmentRate = activeAllocStats
     ? (activeAllocStats.totalReq > 0 ? (activeAllocStats.totalAlloc / activeAllocStats.totalReq) * 100 : 0)
     : 0
 
-  const stats = [
-    { name: 'Produits', value: productCount, loading: loadingProducts, icon: Pill, gradient: 'linear-gradient(135deg, rgba(13,148,136,0.12), rgba(13,148,136,0.04))', iconColor: '#0D9488', href: '/products' },
-    { name: 'Grossistes', value: wholesalerCount, loading: loadingWholesalers, icon: Truck, gradient: 'linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.04))', iconColor: '#3B82F6', href: '/wholesalers' },
-    { name: 'Clients', value: customerCount, loading: loadingCustomers, icon: Users, gradient: 'linear-gradient(135deg, rgba(5,150,105,0.12), rgba(5,150,105,0.04))', iconColor: '#059669', href: '/customers' },
-    { name: 'ANSM bloques', value: blockedCount, loading: loadingBlocked, icon: AlertTriangle, gradient: 'linear-gradient(135deg, rgba(220,74,74,0.10), rgba(220,74,74,0.03))', iconColor: '#DC4A4A', href: '/ansm', danger: true },
-  ]
+  const isLoading = loadingOrders || loadingAllocs
+
+  const chartData = last6.map(p => ({
+    name: p.shortLabel,
+    commandes: p.ordersCount,
+    volume: Math.round(p.volumeAffaires),
+    ca: Math.round(p.chiffreAffaires),
+    marge: Math.round(p.margeBrute),
+  }))
+
+  const tooltipFormatter = (value: number, name: string) => {
+    if (name === 'commandes') return [value.toLocaleString('fr-FR'), 'Commandes']
+    return [formatEur(value), name === 'volume' ? "Volume d'affaires" : name === 'ca' ? "Chiffre d'affaires" : 'Marge brute']
+  }
 
   return (
     <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1200px] mx-auto ivory-page-glow">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="relative z-10">
-        <h2 className="ivory-display text-2xl md:text-3xl">Tableau de bord</h2>
-        <p className="text-[13px] mt-1" style={{ color: 'var(--ivory-text-muted)' }}>Vue operationnelle RW Pharma</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="ivory-display text-2xl md:text-3xl">Tableau de bord</h2>
+            <p className="text-[13px] mt-1" style={{ color: 'var(--ivory-text-muted)' }}>Vue operationnelle RW Pharma</p>
+          </div>
+          {monthOptions.length > 0 && (
+            <MonthSelector
+              value={selectedMonth}
+              onChange={(v) => setSelectedMonth(v)}
+              options={monthOptions}
+              allowAll
+              allLabel="Mois actif"
+              compact
+            />
+          )}
+        </div>
       </motion.div>
 
-      {/* Active process banner — PROMINENT */}
+      {/* Active process banner */}
       {activeProcess && (
         <Link to={`/monthly-processes/${activeProcess.id}`}>
           <motion.div initial={{ opacity: 0, scale: 0.99 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.05 }} className="relative z-10">
@@ -217,77 +321,102 @@ export default function DashboardPage() {
         </Link>
       )}
 
-      {/* KPI row: operational metrics */}
+      {/* KPI Cards — Business metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Commandes du mois */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Commandes totales</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Commandes</span>
                 <Package className="h-4 w-4 text-muted-foreground" />
               </div>
-              <p className="text-2xl font-bold tabular-nums">{totalOrdersAllTime.toLocaleString('fr-FR')}</p>
-              {lastCompleted && prevCompleted && (
-                <TrendBadge current={lastCompleted.orders_count} previous={prevCompleted.orders_count} />
+              {isLoading ? <Skeleton className="h-8 w-20" /> : (
+                <>
+                  <p className="text-2xl font-bold tabular-nums">
+                    {(activeFinancials?.ordersCount ?? lastMonth?.ordersCount ?? 0).toLocaleString('fr-FR')}
+                  </p>
+                  {lastMonth && prevMonth && !activeFinancials && (
+                    <TrendBadge current={lastMonth.ordersCount} previous={prevMonth.ordersCount} />
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {activeFinancials ? 'Mois en cours' : lastMonth ? lastMonth.label : '—'}
+                  </p>
+                </>
               )}
-              <p className="text-[10px] text-muted-foreground mt-1">Sur {(allProcesses ?? []).length} processus</p>
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Volume d'affaires */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Allocations totales</span>
-                <Boxes className="h-4 w-4 text-muted-foreground" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Volume d'affaires</span>
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
               </div>
-              <p className="text-2xl font-bold tabular-nums">{totalAllocsAllTime.toLocaleString('fr-FR')}</p>
-              {lastCompleted && prevCompleted && (
-                <TrendBadge current={lastCompleted.allocations_count} previous={prevCompleted.allocations_count} />
+              {isLoading ? <Skeleton className="h-8 w-20" /> : (
+                <>
+                  <p className="text-2xl font-bold tabular-nums">
+                    {formatEur(activeFinancials?.volumeAffaires ?? lastMonth?.volumeAffaires ?? 0)}
+                  </p>
+                  {lastMonth && prevMonth && !activeFinancials && lastMonth.volumeAffaires > 0 && (
+                    <TrendBadge current={lastMonth.volumeAffaires} previous={prevMonth.volumeAffaires} />
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {activeFinancials ? 'Mois en cours' : lastMonth ? lastMonth.label : '—'}
+                  </p>
+                </>
               )}
-              <p className="text-[10px] text-muted-foreground mt-1">Processus termines : {completedProcesses.length}</p>
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Chiffre d'affaires */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Couverture mois</span>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Chiffre d'affaires</span>
+                <Euro className="h-4 w-4 text-muted-foreground" />
               </div>
-              {activeAllocStats && activeAllocStats.totalReq > 0 ? (
+              {isLoading ? <Skeleton className="h-8 w-20" /> : (
                 <>
-                  <p className="text-2xl font-bold tabular-nums">{fulfillmentRate.toFixed(1)}%</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {activeAllocStats.totalAlloc.toLocaleString('fr-FR')} / {activeAllocStats.totalReq.toLocaleString('fr-FR')} u.
+                  <p className="text-2xl font-bold tabular-nums">
+                    {formatEur(activeFinancials?.chiffreAffaires ?? lastMonth?.chiffreAffaires ?? 0)}
                   </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-2xl font-bold text-muted-foreground/40">—</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Aucune allocation en cours</p>
+                  {lastMonth && prevMonth && !activeFinancials && lastMonth.chiffreAffaires > 0 && (
+                    <TrendBadge current={lastMonth.chiffreAffaires} previous={prevMonth.chiffreAffaires} />
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {activeFinancials ? 'Mois en cours' : lastMonth ? lastMonth.label : '—'}
+                  </p>
                 </>
               )}
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Marge brute */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Volume demande</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Marge brute</span>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </div>
-              {activeAllocStats && activeAllocStats.totalReq > 0 ? (
+              {isLoading ? <Skeleton className="h-8 w-20" /> : (
                 <>
-                  <p className="text-2xl font-bold tabular-nums">{activeAllocStats.totalReq.toLocaleString('fr-FR')}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Unites demandees ce mois</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-2xl font-bold text-muted-foreground/40">—</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Pas de donnees</p>
+                  <p className={`text-2xl font-bold tabular-nums ${(activeFinancials?.margeBrute ?? lastMonth?.margeBrute ?? 0) < 0 ? 'text-red-500' : ''}`}>
+                    {formatEur(activeFinancials?.margeBrute ?? lastMonth?.margeBrute ?? 0)}
+                  </p>
+                  {lastMonth && prevMonth && !activeFinancials && lastMonth.margeBrute > 0 && prevMonth.margeBrute > 0 && (
+                    <TrendBadge current={lastMonth.margeBrute} previous={prevMonth.margeBrute} />
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {activeFinancials ? 'Mois en cours' : lastMonth ? lastMonth.label : '—'}
+                  </p>
                 </>
               )}
             </CardContent>
@@ -295,89 +424,103 @@ export default function DashboardPage() {
         </motion.div>
       </div>
 
-      {/* Client coverage chart for active process */}
-      {activeAllocStats && activeAllocStats.byCustomer.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card>
-            <CardContent className="p-4">
-              <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                <Users className="h-4 w-4" /> Couverture par client — {MONTH_NAMES[activeProcess!.month - 1]} {activeProcess!.year}
-              </h4>
-              <HorizontalBarChart
-                completionMode
-                items={activeAllocStats.byCustomer
-                  .sort((a, b) => {
-                    const pctA = a.req > 0 ? (a.alloc / a.req) * 100 : 0
-                    const pctB = b.req > 0 ? (b.alloc / b.req) * 100 : 0
-                    return pctB - pctA
-                  })
-                  .map(c => ({
-                    label: c.name,
-                    code: c.code,
-                    value: c.req > 0 ? Math.round((c.alloc / c.req) * 100) : 0,
-                  }))}
-                formatValue={(v) => `${v}%`}
-              />
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
+      {/* Evolution charts */}
+      {chartData.length > 1 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Evolution commandes */}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+            <Card>
+              <CardContent className="p-4">
+                <h4 className="text-sm font-semibold mb-4 flex items-center gap-1.5">
+                  <Package className="h-4 w-4" /> Evolution des commandes
+                </h4>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gradCmd" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="rgba(0,0,0,0.2)" />
+                      <YAxis tick={{ fontSize: 11 }} stroke="rgba(0,0,0,0.2)" />
+                      <RechartsTooltip formatter={tooltipFormatter} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)' }} />
+                      <Area type="monotone" dataKey="commandes" stroke="#3b82f6" strokeWidth={2} fill="url(#gradCmd)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
 
-      {/* Monthly evolution chart */}
-      {completedProcesses.length > 1 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-          <Card>
-            <CardContent className="p-4">
-              <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                <CalendarRange className="h-4 w-4" /> Evolution mensuelle des commandes
-              </h4>
-              <HorizontalBarChart
-                items={completedProcesses.slice(-6).map(p => ({
-                  label: `${MONTH_NAMES[p.month - 1]} ${p.year}`,
-                  code: `${MONTH_NAMES[p.month - 1]?.slice(0, 3)}`,
-                  value: p.orders_count ?? 0,
-                }))}
-                formatValue={(v) => `${v.toLocaleString('fr-FR')} cmd`}
-              />
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
+          {/* Evolution volume d'affaires */}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+            <Card>
+              <CardContent className="p-4">
+                <h4 className="text-sm font-semibold mb-4 flex items-center gap-1.5">
+                  <BarChart3 className="h-4 w-4" /> Volume d'affaires
+                </h4>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gradVol" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="rgba(0,0,0,0.2)" />
+                      <YAxis tick={{ fontSize: 11 }} stroke="rgba(0,0,0,0.2)" tickFormatter={(v) => formatEur(v)} />
+                      <RechartsTooltip formatter={tooltipFormatter} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)' }} />
+                      <Area type="monotone" dataKey="volume" stroke="#8b5cf6" strokeWidth={2} fill="url(#gradVol)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
 
-      {/* Reference data stats */}
-      <div>
-        <div className="flex items-center gap-2 mb-3.5">
-          <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
-            Donnees de reference
-          </span>
-          <div className="flex-1 h-px" style={{ background: 'rgba(0,0,0,0.04)' }} />
+          {/* CA + Marge brute combined */}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="lg:col-span-2">
+            <Card>
+              <CardContent className="p-4">
+                <h4 className="text-sm font-semibold mb-4 flex items-center gap-1.5">
+                  <Euro className="h-4 w-4" /> Chiffre d'affaires & Marge brute
+                </h4>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gradCA" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#0d9488" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gradMarge" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="rgba(0,0,0,0.2)" />
+                      <YAxis tick={{ fontSize: 11 }} stroke="rgba(0,0,0,0.2)" tickFormatter={(v) => formatEur(v)} />
+                      <RechartsTooltip formatter={tooltipFormatter} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)' }} />
+                      <Legend
+                        formatter={(value) => value === 'ca' ? "Chiffre d'affaires" : 'Marge brute'}
+                        wrapperStyle={{ fontSize: 11 }}
+                      />
+                      <Area type="monotone" dataKey="ca" stroke="#0d9488" strokeWidth={2} fill="url(#gradCA)" />
+                      <Area type="monotone" dataKey="marge" stroke="#f59e0b" strokeWidth={2} fill="url(#gradMarge)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {stats.map((stat, i) => (
-            stat.loading ? <StatSkeleton key={stat.name} /> : (
-              <Link key={stat.name} to={stat.href}>
-                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 + i * 0.05 }}>
-                  <div className="ivory-glass group cursor-pointer overflow-hidden p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ivory-text-muted)' }}>
-                        {stat.name}
-                      </span>
-                      <div className="h-8 w-8 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110"
-                        style={{ background: stat.gradient }}>
-                        <stat.icon className="h-3.5 w-3.5" style={{ color: stat.iconColor }} />
-                      </div>
-                    </div>
-                    <AnimatedCounter
-                      value={stat.value ?? 0}
-                      valueClassName={`text-xl ivory-heading tabular-nums ${stat.danger && stat.value ? 'text-red-500' : ''}`}
-                    />
-                  </div>
-                </motion.div>
-              </Link>
-            )
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* Quick actions */}
       <div>
@@ -389,9 +532,9 @@ export default function DashboardPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { name: 'Allocations', desc: 'Processus mensuel', href: '/monthly-processes', icon: CalendarRange, color: 'var(--ivory-accent)' },
-            { name: 'Produits', desc: `${productCount ?? 0} references`, href: '/products', icon: Pill, color: '#0D9488' },
-            { name: 'Grossistes', desc: `${wholesalerCount ?? 0} partenaires`, href: '/wholesalers', icon: Truck, color: '#3B82F6' },
+            { name: 'Processus mensuel', desc: 'Allocations & suivi', href: '/monthly-processes', icon: CalendarRange, color: 'var(--ivory-accent)' },
+            { name: 'Produits', desc: 'Catalogue medicaments', href: '/products', icon: Pill, color: '#0D9488' },
+            { name: 'Grossistes', desc: 'Partenaires fournisseurs', href: '/wholesalers', icon: Truck, color: '#3B82F6' },
             { name: 'Quotas', desc: 'Gestion mensuelle', href: '/quotas', icon: ClipboardList, color: '#F59E0B' },
           ].map((action, i) => (
             <Link key={action.href} to={action.href}>
