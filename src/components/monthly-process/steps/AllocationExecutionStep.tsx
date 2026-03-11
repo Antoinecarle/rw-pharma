@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { runAllocation, computeStats, type AllocationStrategy, type AllocationLog, type DryRunStats } from '@/lib/allocation-engine'
@@ -7,14 +7,26 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Cpu, ArrowRight, ArrowLeft, CheckCircle, AlertTriangle, Truck, Zap, Users, BarChart3, Eye, Settings2, Boxes, ShieldCheck, Play, ChevronRight } from 'lucide-react'
+import GaugeChart from '@/components/ui/gauge-chart'
+import {
+  Cpu, ArrowRight, ArrowLeft, CheckCircle, AlertTriangle, Truck, Zap,
+  Users, BarChart3, Eye, Settings2, Boxes, ShieldCheck, Play, ChevronRight,
+  Package, Warehouse, Calendar, Pencil, Check, X, RotateCcw, AlertCircle,
+} from 'lucide-react'
 import AllocationVisualizer from '@/components/allocations/AllocationVisualizer'
 import { toast } from 'sonner'
 import { createNotification } from '@/lib/notifications'
 import type { MonthlyProcess } from '@/types/database'
+
+// ── Types ──────────────────────────────────────────────────────────
 
 const STRATEGIES: { value: AllocationStrategy; label: string; description: string; icon: typeof Zap }[] = [
   { value: 'balanced', label: 'Equilibree', description: 'Repartir entre grossistes + round-robin clients', icon: BarChart3 },
@@ -22,17 +34,57 @@ const STRATEGIES: { value: AllocationStrategy; label: string; description: strin
   { value: 'max_coverage', label: 'Max couverture', description: 'Petites commandes en premier pour couvrir plus', icon: Zap },
 ]
 
-const STEP_LABELS = ['Configurer', 'Simuler', 'Lancer'] as const
+const STEP_LABELS = ['Configurer', 'Attribuer', 'Simuler', 'Lancer'] as const
+
+const SMALL_LOT_THRESHOLD = 50
+const SHORT_EXPIRY_MONTHS = 10
 
 interface AllocationExecutionStepProps {
   process: MonthlyProcess
   onNext: () => void
 }
 
+interface StockLot {
+  id: string
+  wholesaler_id: string
+  wholesaler_code: string
+  wholesaler_name: string
+  product_id: string
+  lot_number: string
+  expiry_date: string
+  quantity: number
+}
+
+interface OrderDemand {
+  productId: string
+  cip13: string
+  productName: string
+  totalQuantity: number
+  customers: { id: string; code: string; name: string; quantity: number }[]
+}
+
+// lot_attributions: { [productId]: { [customerId]: { [lotId]: quantity } } }
+type LotAttrMap = Record<string, Record<string, Record<string, number>>>
+
+// ── Helpers ─────────────────────────────────────────────────────────
+
+function monthsUntilExpiry(expiryDate: string): number {
+  const now = new Date()
+  const exp = new Date(expiryDate)
+  return (exp.getFullYear() - now.getFullYear()) * 12 + (exp.getMonth() - now.getMonth())
+}
+
+function formatExpiry(expiryDate: string): string {
+  const d = new Date(expiryDate)
+  return d.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })
+}
+
+// ── Component ───────────────────────────────────────────────────────
+
 export default function AllocationExecutionStep({ process, onNext }: AllocationExecutionStepProps) {
   const queryClient = useQueryClient()
+  const [internalStep, setInternalStep] = useState<1 | 2 | 3 | 4>(1)
   const [phase, setPhase] = useState<'config' | 'running' | 'done'>('config')
-  const [internalStep, setInternalStep] = useState<1 | 2 | 3>(1)
   const [strategy, setStrategy] = useState<AllocationStrategy>('balanced')
   const [excludedWholesalers, setExcludedWholesalers] = useState<Set<string>>(new Set())
   const [dryRunResult, setDryRunResult] = useState<DryRunStats | null>(null)
@@ -40,6 +92,16 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
   const [showLogs, setShowLogs] = useState(false)
   const [showVisualizer, setShowVisualizer] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
+
+  // Lot attribution state
+  const [lotAttrMap, setLotAttrMap] = useState<LotAttrMap>({})
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  const [editingCell, setEditingCell] = useState<{ productId: string; customerId: string; lotId: string } | null>(null)
+  const [editValue, setEditValue] = useState('')
+
+  const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
+
+  // ── Data Queries ──────────────────────────────────────────────────
 
   const { data: existingAllocations } = useQuery({
     queryKey: ['allocations', process.id, 'count'],
@@ -50,6 +112,70 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
         .eq('monthly_process_id', process.id)
         .limit(1)
       return data?.length ?? 0
+    },
+  })
+
+  const { data: orders, isLoading: ordersLoading } = useQuery({
+    queryKey: ['orders', process.id, 'allocation-visual'],
+    queryFn: async () => {
+      const all: any[] = []
+      let from = 0
+      const pageSize = 500
+      while (true) {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('id, product_id, customer_id, quantity, customer:customers(id, name, code), product:products(id, cip13, name)')
+          .eq('monthly_process_id', process.id)
+          .neq('status', 'rejected')
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        all.push(...data)
+        if (data.length < pageSize) break
+        from += pageSize
+      }
+      return all
+    },
+  })
+
+  const { data: stockLots, isLoading: stockLoading } = useQuery({
+    queryKey: ['collected_stock', process.id, 'visual'],
+    queryFn: async () => {
+      const all: any[] = []
+      let from = 0
+      const pageSize = 500
+      while (true) {
+        const { data, error } = await supabase
+          .from('collected_stock')
+          .select('id, wholesaler_id, product_id, lot_number, expiry_date, quantity, status, wholesaler:wholesalers(id, name, code)')
+          .eq('monthly_process_id', process.id)
+          .in('status', ['received', 'partially_allocated'])
+          .order('expiry_date', { ascending: true })
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        all.push(...data)
+        if (data.length < pageSize) break
+        from += pageSize
+      }
+      return all.map((s: any) => ({
+        id: s.id,
+        wholesaler_id: s.wholesaler_id,
+        wholesaler_code: (s.wholesaler as any)?.code ?? '?',
+        wholesaler_name: (s.wholesaler as any)?.name ?? '?',
+        product_id: s.product_id,
+        lot_number: s.lot_number,
+        expiry_date: s.expiry_date,
+        quantity: s.quantity,
+      })) as StockLot[]
+    },
+  })
+
+  const { data: wholesalers } = useQuery({
+    queryKey: ['wholesalers', 'all'],
+    queryFn: async () => {
+      const { data } = await supabase.from('wholesalers').select('id, name, code')
+      return data ?? []
     },
   })
 
@@ -66,25 +192,209 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     },
   })
 
-  const { data: wholesalers } = useQuery({
-    queryKey: ['wholesalers', 'all'],
-    queryFn: async () => {
-      const { data } = await supabase.from('wholesalers').select('id, name, code')
-      return data ?? []
-    },
-  })
+  // ── Derived Data ──────────────────────────────────────────────────
 
-  const { data: stockCount } = useQuery({
-    queryKey: ['collected_stock', process.id, 'count'],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from('collected_stock')
-        .select('*', { count: 'exact', head: true })
-        .eq('monthly_process_id', process.id)
-        .in('status', ['received', 'partially_allocated'])
-      return count ?? 0
-    },
-  })
+  const demands = useMemo(() => {
+    if (!orders) return []
+    const map = new Map<string, OrderDemand>()
+    for (const o of orders) {
+      const prod = o.product as any
+      const cust = o.customer as any
+      const existing = map.get(o.product_id)
+      if (existing) {
+        existing.totalQuantity += o.quantity
+        const custEntry = existing.customers.find((c: any) => c.id === o.customer_id)
+        if (custEntry) custEntry.quantity += o.quantity
+        else existing.customers.push({ id: o.customer_id, code: cust?.code ?? '?', name: cust?.name ?? '?', quantity: o.quantity })
+      } else {
+        map.set(o.product_id, {
+          productId: o.product_id,
+          cip13: prod?.cip13 ?? '?',
+          productName: prod?.name ?? '?',
+          totalQuantity: o.quantity,
+          customers: [{ id: o.customer_id, code: cust?.code ?? '?', name: cust?.name ?? '?', quantity: o.quantity }],
+        })
+      }
+    }
+    return [...map.values()].sort((a, b) => b.totalQuantity - a.totalQuantity)
+  }, [orders])
+
+  const filteredDemands = useMemo(() => {
+    if (!selectedCustomerId) return demands
+    return demands
+      .map(d => {
+        const custOrders = d.customers.filter(c => c.id === selectedCustomerId)
+        if (custOrders.length === 0) return null
+        return { ...d, totalQuantity: custOrders.reduce((s, c) => s + c.quantity, 0), customers: custOrders }
+      })
+      .filter(Boolean) as OrderDemand[]
+  }, [demands, selectedCustomerId])
+
+  const customers = useMemo(() => {
+    if (!orders) return []
+    const map = new Map<string, { id: string; code: string; name: string; totalQty: number }>()
+    for (const o of orders) {
+      const cust = o.customer as any
+      const existing = map.get(o.customer_id)
+      if (existing) existing.totalQty += o.quantity
+      else map.set(o.customer_id, { id: o.customer_id, code: cust?.code ?? '?', name: cust?.name ?? '?', totalQty: o.quantity })
+    }
+    return [...map.values()].sort((a, b) => b.totalQty - a.totalQty)
+  }, [orders])
+
+  // Lots grouped by product
+  const lotsByProduct = useMemo(() => {
+    if (!stockLots) return new Map<string, StockLot[]>()
+    const map = new Map<string, StockLot[]>()
+    for (const lot of stockLots) {
+      if (excludedWholesalers.has(lot.wholesaler_id)) continue
+      const list = map.get(lot.product_id) ?? []
+      list.push(lot)
+      map.set(lot.product_id, list)
+    }
+    return map
+  }, [stockLots, excludedWholesalers])
+
+  // Stats
+  const orderCount = orderStats?.length ?? 0
+  const pendingOrders = orderStats?.filter(o => o.status === 'validated' || o.status === 'pending') ?? []
+  const allocatableCount = pendingOrders.length
+  const uniqueProducts = new Set(orderStats?.map(o => o.product_id)).size
+  const activeWholesalers = (wholesalers?.length ?? 0) - excludedWholesalers.size
+  const stockCount = stockLots?.length ?? 0
+
+  // Attribution stats
+  const totalDemand = demands.reduce((s, d) => s + d.totalQuantity, 0)
+  const totalAttributed = useMemo(() => {
+    let sum = 0
+    for (const product of Object.values(lotAttrMap)) {
+      for (const customer of Object.values(product)) {
+        for (const qty of Object.values(customer)) {
+          sum += qty
+        }
+      }
+    }
+    return sum
+  }, [lotAttrMap])
+  const coverageRate = totalDemand > 0 ? (totalAttributed / totalDemand) * 100 : 0
+
+  const fulfillmentNum = dryRunResult ? parseFloat(dryRunResult.fulfillmentRate) : 0
+  const fulfillmentColor = fulfillmentNum >= 90 ? 'text-green-600' : fulfillmentNum >= 70 ? 'text-amber-600' : 'text-red-600'
+  const selectedStrategyLabel = STRATEGIES.find(s => s.value === strategy)?.label ?? strategy
+
+  // ── Lot Attribution Logic ─────────────────────────────────────────
+
+  // Get how much of a lot is already assigned across all customers
+  const getLotUsed = useCallback((lotId: string) => {
+    let used = 0
+    for (const product of Object.values(lotAttrMap)) {
+      for (const customer of Object.values(product)) {
+        used += customer[lotId] ?? 0
+      }
+    }
+    return used
+  }, [lotAttrMap])
+
+  // Get how much is attributed to a specific customer for a product
+  const getCustomerAttributed = useCallback((productId: string, customerId: string) => {
+    const product = lotAttrMap[productId]
+    if (!product) return 0
+    const customer = product[customerId]
+    if (!customer) return 0
+    return Object.values(customer).reduce((s, q) => s + q, 0)
+  }, [lotAttrMap])
+
+  // Auto-attribute: FEFO logic — assign lots to customers proportionally
+  const autoAttribute = useCallback(() => {
+    const newMap: LotAttrMap = {}
+
+    for (const demand of demands) {
+      const lots = lotsByProduct.get(demand.productId) ?? []
+      if (lots.length === 0) continue
+
+      newMap[demand.productId] = {}
+
+      // Sort customers by demand desc (biggest first)
+      const sortedCustomers = [...demand.customers].sort((a, b) => b.quantity - a.quantity)
+
+      // Track lot remaining
+      const lotRemaining = new Map<string, number>()
+      for (const lot of lots) {
+        lotRemaining.set(lot.id, lot.quantity)
+      }
+
+      for (const cust of sortedCustomers) {
+        newMap[demand.productId][cust.id] = {}
+        let remaining = cust.quantity
+
+        // FEFO: lots already sorted by expiry_date
+        for (const lot of lots) {
+          if (remaining <= 0) break
+          const lotRem = lotRemaining.get(lot.id) ?? 0
+          if (lotRem <= 0) continue
+
+          const assign = Math.min(remaining, lotRem)
+          newMap[demand.productId][cust.id][lot.id] = assign
+          lotRemaining.set(lot.id, lotRem - assign)
+          remaining -= assign
+        }
+      }
+    }
+
+    setLotAttrMap(newMap)
+    toast.success('Attribution FEFO automatique effectuee')
+  }, [demands, lotsByProduct])
+
+  const resetAttribution = () => {
+    setLotAttrMap({})
+    toast.info('Attribution reinitialise')
+  }
+
+  // Edit cell
+  const startEdit = (productId: string, customerId: string, lotId: string, currentValue: number) => {
+    if (isProcessLocked) return
+    setEditingCell({ productId, customerId, lotId })
+    setEditValue(String(currentValue))
+  }
+
+  const saveEdit = () => {
+    if (!editingCell) return
+    const val = parseInt(editValue, 10)
+    if (isNaN(val) || val < 0) { toast.error('Valeur invalide'); return }
+
+    const { productId, customerId, lotId } = editingCell
+    // Check lot capacity
+    const lot = stockLots?.find(l => l.id === lotId)
+    if (lot) {
+      const currentAssigned = lotAttrMap[productId]?.[customerId]?.[lotId] ?? 0
+      const otherUsed = getLotUsed(lotId) - currentAssigned
+      if (val + otherUsed > lot.quantity) {
+        toast.error(`Capacite lot depassee (${lot.quantity} dispo, ${otherUsed} deja attribues)`)
+        return
+      }
+    }
+
+    setLotAttrMap(prev => {
+      const next = { ...prev }
+      if (!next[productId]) next[productId] = {}
+      if (!next[productId][customerId]) next[productId][customerId] = {}
+
+      if (val === 0) {
+        delete next[productId][customerId][lotId]
+        if (Object.keys(next[productId][customerId]).length === 0) delete next[productId][customerId]
+        if (Object.keys(next[productId]).length === 0) delete next[productId]
+      } else {
+        next[productId] = { ...next[productId] }
+        next[productId][customerId] = { ...next[productId][customerId], [lotId]: val }
+      }
+      return next
+    })
+    setEditingCell(null)
+  }
+
+  const cancelEdit = () => setEditingCell(null)
+
+  // ── Wholesaler Toggle ─────────────────────────────────────────────
 
   const toggleWholesaler = (id: string) => {
     setExcludedWholesalers(prev => {
@@ -95,6 +405,8 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     })
     setDryRunResult(null)
   }
+
+  // ── Allocation Mutations ──────────────────────────────────────────
 
   const dryRunMut = useMutation({
     mutationFn: async () => {
@@ -111,9 +423,6 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     onError: (err: Error) => toast.error(err.message),
   })
 
-  // Guard: prevent re-allocation on completed/finalizing processes
-  const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
-
   const allocateMut = useMutation({
     mutationFn: async () => {
       if (isProcessLocked) {
@@ -127,7 +436,6 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       )
       setAllocationLogs(logs)
 
-      // Insert in batches
       const batchSize = 100
       let totalInserted = 0
       for (let i = 0; i < allocations.length; i += batchSize) {
@@ -137,8 +445,6 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
         totalInserted += data?.length ?? batch.length
       }
 
-      // Update process (orders already updated by runAllocation)
-      // Use Math.max to never regress current_step (e.g. if process is already at step 10)
       await supabase
         .from('monthly_processes')
         .update({
@@ -168,20 +474,12 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     },
   })
 
-  const orderCount = orderStats?.length ?? 0
-  const pendingOrders = orderStats?.filter(o => o.status === 'validated' || o.status === 'pending') ?? []
-  const allocatableCount = pendingOrders.length
-  const uniqueProducts = new Set(orderStats?.map(o => o.product_id)).size
-  const activeWholesalers = (wholesalers?.length ?? 0) - excludedWholesalers.size
-  const fulfillmentNum = dryRunResult ? parseFloat(dryRunResult.fulfillmentRate) : 0
-  const fulfillmentColor = fulfillmentNum >= 90 ? 'text-green-600' : fulfillmentNum >= 70 ? 'text-amber-600' : 'text-red-600'
-  const selectedStrategyLabel = STRATEGIES.find(s => s.value === strategy)?.label ?? strategy
+  // ── Stepper ───────────────────────────────────────────────────────
 
-  // ─── Stepper indicator ───
   const StepperHeader = () => (
     <div className="flex items-center gap-1 sm:gap-2">
       {STEP_LABELS.map((label, idx) => {
-        const stepNum = (idx + 1) as 1 | 2 | 3
+        const stepNum = (idx + 1) as 1 | 2 | 3 | 4
         const isActive = internalStep === stepNum
         const isDone = internalStep > stepNum
         return (
@@ -214,7 +512,6 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     </div>
   )
 
-  // ─── Summary line (used in steps 2 & 3) ───
   const ConfigSummary = () => (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
       <span>{orderCount} commandes</span>
@@ -222,7 +519,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       <span>{activeWholesalers} grossistes</span>
       <span className="text-muted-foreground/40">&middot;</span>
       <span>{uniqueProducts} produits</span>
-      {(stockCount ?? 0) > 0 && (
+      {stockCount > 0 && (
         <>
           <span className="text-muted-foreground/40">&middot;</span>
           <span>{stockCount} lots</span>
@@ -231,9 +528,13 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     </div>
   )
 
+  const isLoading = ordersLoading || stockLoading
+
+  // ── Render ────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-6">
-      {/* ─── Banner: existing allocations (above stepper) ─── */}
+      {/* Banner: existing allocations */}
       {existingAllocations != null && existingAllocations > 0 && (
         <Card className={allocatableCount === 0 ? 'border-green-200/60 bg-green-50/30' : 'border-amber-200/60 bg-amber-50/30'}>
           <CardContent className="p-4 flex items-center justify-between gap-3">
@@ -263,10 +564,9 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
         </Card>
       )}
 
-      {/* ─── Config phase: 3-step wizard ─── */}
+      {/* ═══ Config phase: 4-step wizard ═══ */}
       {phase === 'config' && (
         <div className="space-y-6">
-          {/* Stepper header */}
           <div className="flex items-center justify-between">
             <StepperHeader />
           </div>
@@ -350,8 +650,8 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge variant="outline" className={`gap-1 text-xs ${(stockCount ?? 0) > 0 ? 'border-green-200 text-green-700' : ''}`}>
-                      <Boxes className="h-3 w-3" /> FEFO {(stockCount ?? 0) > 0 ? 'actif' : 'aucun lot'}
+                    <Badge variant="outline" className={`gap-1 text-xs ${stockCount > 0 ? 'border-green-200 text-green-700' : ''}`}>
+                      <Boxes className="h-3 w-3" /> FEFO {stockCount > 0 ? 'actif' : 'aucun lot'}
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>First Expiry First Out — les lots proches de l'expiration sont alloues en priorite</TooltipContent>
@@ -366,18 +666,380 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 </Tooltip>
               </div>
 
-              {/* Footer: summary + next */}
+              {/* Footer */}
               <div className="flex items-center justify-between pt-2">
                 <ConfigSummary />
                 <Button onClick={() => setInternalStep(2)} className="gap-2">
-                  Suivant : Simuler <ArrowRight className="h-4 w-4" />
+                  Suivant : Attribuer <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           )}
 
-          {/* ═══ Step 2: Simuler ═══ */}
+          {/* ═══ Step 2: Attribuer (NEW — split-pane visual) ═══ */}
           {internalStep === 2 && (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Attribution Commandes ↔ Lots</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Attribuez les lots de stock aux commandes clients. L'auto-attribution utilise la logique FEFO.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInternalStep(1)}
+                  className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Configuration
+                </button>
+              </div>
+
+              {isLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+                </div>
+              ) : (
+                <>
+                  {/* Client navigation */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Filtrer par client</h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button type="button" onClick={() => setSelectedCustomerId(null)}>
+                        <Badge
+                          variant={selectedCustomerId === null ? 'default' : 'outline'}
+                          className={`py-1.5 px-3 cursor-pointer transition-all ${selectedCustomerId === null ? 'ring-2 ring-primary/30' : 'hover:bg-muted'}`}
+                        >
+                          <Users className="h-3 w-3 mr-1" /> Tous ({customers.length})
+                        </Badge>
+                      </button>
+                      {customers.map(c => (
+                        <button key={c.id} type="button" onClick={() => setSelectedCustomerId(selectedCustomerId === c.id ? null : c.id)}>
+                          <Badge
+                            variant={selectedCustomerId === c.id ? 'default' : 'outline'}
+                            className={`py-1.5 px-3 cursor-pointer transition-all ${selectedCustomerId === c.id ? 'ring-2 ring-primary/30' : 'hover:bg-muted'}`}
+                          >
+                            <span className="font-bold">{c.code}</span>
+                            <span className="ml-1 text-xs opacity-70">{c.totalQty.toLocaleString('fr-FR')} u.</span>
+                          </Badge>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* KPI cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <Card>
+                      <CardContent className="p-3 text-center">
+                        <Package className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
+                        <p className="text-xl font-bold">{filteredDemands.length}</p>
+                        <p className="text-[10px] text-muted-foreground">Produits</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-3 text-center">
+                        <Boxes className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
+                        <p className="text-xl font-bold">{stockCount}</p>
+                        <p className="text-[10px] text-muted-foreground">Lots disponibles</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-3 text-center">
+                        <p className="text-xl font-bold">{totalAttributed.toLocaleString('fr-FR')}</p>
+                        <p className="text-[10px] text-muted-foreground">Unites attribuees</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-2 flex flex-col items-center">
+                        <GaugeChart value={coverageRate} size={80} strokeWidth={7} label="Couverture" />
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Action buttons */}
+                  {!isProcessLocked && (
+                    <div className="flex gap-2">
+                      <Button onClick={autoAttribute} className="gap-1.5" variant="default" disabled={stockCount === 0}>
+                        <Zap className="h-4 w-4" /> Auto-attribution FEFO
+                      </Button>
+                      {Object.keys(lotAttrMap).length > 0 && (
+                        <Button onClick={resetAttribution} variant="outline" className="gap-1.5">
+                          <RotateCcw className="h-4 w-4" /> Reinitialiser
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* No stock warning */}
+                  {stockCount === 0 && (
+                    <Card className="border-amber-200 bg-amber-50/30">
+                      <CardContent className="p-4 flex items-center gap-3">
+                        <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold">Aucun lot de stock disponible</p>
+                          <p className="text-xs text-muted-foreground">L'allocation se fera uniquement par quotas grossistes. Vous pouvez passer cette etape.</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* ── Split-pane: Product rows with lot columns ── */}
+                  {filteredDemands.length > 0 && stockCount > 0 && (
+                    <div className="space-y-4">
+                      {filteredDemands.map(demand => {
+                        const lots = lotsByProduct.get(demand.productId) ?? []
+                        if (lots.length === 0) return null
+
+                        // Group lots by wholesaler
+                        const lotsByWholesaler = new Map<string, StockLot[]>()
+                        for (const lot of lots) {
+                          const list = lotsByWholesaler.get(lot.wholesaler_id) ?? []
+                          list.push(lot)
+                          lotsByWholesaler.set(lot.wholesaler_id, list)
+                        }
+
+                        const allCustomersForProduct = selectedCustomerId
+                          ? demand.customers.filter(c => c.id === selectedCustomerId)
+                          : demand.customers
+
+                        return (
+                          <Card key={demand.productId} className="overflow-hidden">
+                            {/* Product header */}
+                            <div className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <Badge variant="outline" className="font-mono text-xs">{demand.cip13}</Badge>
+                                <span className="text-sm font-semibold truncate max-w-[300px]">{demand.productName}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>Demande: <strong className="text-foreground">{demand.totalQuantity.toLocaleString('fr-FR')}</strong></span>
+                                <span className="text-muted-foreground/40">|</span>
+                                <span>{lots.length} lot{lots.length > 1 ? 's' : ''}</span>
+                              </div>
+                            </div>
+
+                            <CardContent className="p-0">
+                              <div className="overflow-x-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="min-w-[80px] sticky left-0 bg-background z-10">Client</TableHead>
+                                      <TableHead className="text-right min-w-[70px]">Demande</TableHead>
+                                      {/* One column per lot, grouped by wholesaler */}
+                                      {[...lotsByWholesaler.entries()].map(([wsId, wsLots]) => (
+                                        wsLots.map(lot => {
+                                          const months = monthsUntilExpiry(lot.expiry_date)
+                                          const isShortExpiry = months <= SHORT_EXPIRY_MONTHS
+                                          const isSmallLot = lot.quantity < SMALL_LOT_THRESHOLD
+                                          const lotUsed = getLotUsed(lot.id)
+                                          const lotRemaining = lot.quantity - lotUsed
+
+                                          return (
+                                            <TableHead key={lot.id} className="text-center min-w-[110px] px-2">
+                                              <div className="space-y-0.5">
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <span className="font-bold text-xs cursor-help">{lot.wholesaler_code}</span>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>{lot.wholesaler_name}</TooltipContent>
+                                                </Tooltip>
+                                                <div className="text-[10px] font-mono text-muted-foreground">{lot.lot_number.slice(0, 12)}</div>
+                                                <div className="flex items-center justify-center gap-1">
+                                                  <span className={`text-[10px] ${isShortExpiry ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
+                                                    <Calendar className="h-2.5 w-2.5 inline mr-0.5" />
+                                                    {formatExpiry(lot.expiry_date)}
+                                                  </span>
+                                                </div>
+                                                <div className="flex items-center justify-center gap-1">
+                                                  <span className={`text-[10px] font-medium ${lotRemaining <= 0 ? 'text-red-600' : lotRemaining < lot.quantity * 0.2 ? 'text-amber-600' : 'text-green-600'}`}>
+                                                    {lotRemaining}/{lot.quantity}
+                                                  </span>
+                                                  {isSmallLot && (
+                                                    <Tooltip>
+                                                      <TooltipTrigger asChild>
+                                                        <span><AlertCircle className="h-3 w-3 text-amber-500" /></span>
+                                                      </TooltipTrigger>
+                                                      <TooltipContent>Petit lot (&lt;{SMALL_LOT_THRESHOLD})</TooltipContent>
+                                                    </Tooltip>
+                                                  )}
+                                                  {isShortExpiry && (
+                                                    <Tooltip>
+                                                      <TooltipTrigger asChild>
+                                                        <span><Calendar className="h-3 w-3 text-red-500" /></span>
+                                                      </TooltipTrigger>
+                                                      <TooltipContent>Expiration &lt;{SHORT_EXPIRY_MONTHS} mois ({months} mois)</TooltipContent>
+                                                    </Tooltip>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </TableHead>
+                                          )
+                                        })
+                                      ))}
+                                      <TableHead className="text-right min-w-[80px]">Attribue</TableHead>
+                                      <TableHead className="text-right min-w-[60px]">Reste</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {allCustomersForProduct.map(cust => {
+                                      const custAttributed = getCustomerAttributed(demand.productId, cust.id)
+                                      const custRemaining = cust.quantity - custAttributed
+                                      const isFull = custRemaining <= 0
+
+                                      return (
+                                        <TableRow key={cust.id} className={isFull ? '' : 'bg-amber-50/20 dark:bg-amber-950/10'}>
+                                          <TableCell className="sticky left-0 bg-background z-10">
+                                            <Badge variant="outline" className="text-xs font-bold">{cust.code}</Badge>
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums font-semibold text-sm">
+                                            {cust.quantity.toLocaleString('fr-FR')}
+                                          </TableCell>
+
+                                          {/* Lot cells */}
+                                          {[...lotsByWholesaler.entries()].map(([, wsLots]) => (
+                                            wsLots.map(lot => {
+                                              const assignedQty = lotAttrMap[demand.productId]?.[cust.id]?.[lot.id] ?? 0
+                                              const isEditing = editingCell?.productId === demand.productId
+                                                && editingCell?.customerId === cust.id
+                                                && editingCell?.lotId === lot.id
+                                              const lotUsed = getLotUsed(lot.id)
+                                              const lotRemaining = lot.quantity - lotUsed
+
+                                              return (
+                                                <TableCell key={lot.id} className="text-center p-1">
+                                                  {isEditing ? (
+                                                    <div className="flex items-center gap-0.5 justify-center">
+                                                      <Input
+                                                        type="number"
+                                                        value={editValue}
+                                                        onChange={e => setEditValue(e.target.value)}
+                                                        className="h-7 w-16 text-xs text-center"
+                                                        autoFocus
+                                                        onKeyDown={e => {
+                                                          if (e.key === 'Enter') saveEdit()
+                                                          if (e.key === 'Escape') cancelEdit()
+                                                        }}
+                                                      />
+                                                      <button type="button" onClick={saveEdit} className="p-0.5 hover:text-green-600">
+                                                        <Check className="h-3 w-3" />
+                                                      </button>
+                                                      <button type="button" onClick={cancelEdit} className="p-0.5 hover:text-red-600">
+                                                        <X className="h-3 w-3" />
+                                                      </button>
+                                                    </div>
+                                                  ) : (
+                                                    <button
+                                                      type="button"
+                                                      className={`w-full text-center py-1 rounded transition-colors group ${
+                                                        isProcessLocked ? 'cursor-default' : 'hover:bg-primary/5 cursor-pointer'
+                                                      }`}
+                                                      onClick={() => !isProcessLocked && startEdit(demand.productId, cust.id, lot.id, assignedQty)}
+                                                      disabled={isProcessLocked}
+                                                    >
+                                                      <div className="tabular-nums text-sm font-medium">
+                                                        {assignedQty > 0 ? (
+                                                          <span className={assignedQty > lotRemaining + assignedQty ? 'text-red-600' : 'text-green-700 dark:text-green-400'}>
+                                                            {assignedQty.toLocaleString('fr-FR')}
+                                                          </span>
+                                                        ) : (
+                                                          <span className="text-muted-foreground/30">—</span>
+                                                        )}
+                                                      </div>
+                                                      {!isProcessLocked && assignedQty === 0 && (
+                                                        <Pencil className="h-2.5 w-2.5 mx-auto opacity-0 group-hover:opacity-40 transition-opacity" />
+                                                      )}
+                                                    </button>
+                                                  )}
+                                                </TableCell>
+                                              )
+                                            })
+                                          ))}
+
+                                          <TableCell className="text-right tabular-nums font-medium text-sm">
+                                            <span className={isFull ? 'text-green-600' : 'text-amber-600'}>
+                                              {custAttributed.toLocaleString('fr-FR')}
+                                            </span>
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums text-sm">
+                                            {custRemaining > 0 ? (
+                                              <span className="text-red-500 font-medium">{custRemaining.toLocaleString('fr-FR')}</span>
+                                            ) : custRemaining === 0 ? (
+                                              <Check className="h-4 w-4 text-green-600 mx-auto" />
+                                            ) : (
+                                              <Tooltip>
+                                                <TooltipTrigger>
+                                                  <span className="text-blue-500 font-medium">+{Math.abs(custRemaining).toLocaleString('fr-FR')}</span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Sur-attribution</TooltipContent>
+                                              </Tooltip>
+                                            )}
+                                          </TableCell>
+                                        </TableRow>
+                                      )
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+
+                      {/* Products without lots */}
+                      {(() => {
+                        const noLotProducts = filteredDemands.filter(d => (lotsByProduct.get(d.productId) ?? []).length === 0)
+                        if (noLotProducts.length === 0) return null
+                        return (
+                          <Card className="border-muted">
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Warehouse className="h-4 w-4 text-muted-foreground" />
+                                <h4 className="text-sm font-semibold text-muted-foreground">
+                                  {noLotProducts.length} produit{noLotProducts.length > 1 ? 's' : ''} sans lot — allocation par quotas uniquement
+                                </h4>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {noLotProducts.slice(0, 20).map(d => (
+                                  <Badge key={d.productId} variant="outline" className="text-xs gap-1">
+                                    <span className="font-mono">{d.cip13}</span>
+                                    <span className="text-muted-foreground">{d.totalQuantity} u.</span>
+                                  </Badge>
+                                ))}
+                                {noLotProducts.length > 20 && (
+                                  <Badge variant="outline" className="text-xs">+{noLotProducts.length - 20} autres</Badge>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="text-sm text-muted-foreground">
+                      {totalAttributed > 0 && (
+                        <span>{totalAttributed.toLocaleString('fr-FR')} unites attribuees via lots ({Math.round(coverageRate)}%)</span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      {stockCount === 0 && (
+                        <Button variant="outline" onClick={() => setInternalStep(3)} className="gap-1.5">
+                          Passer <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button onClick={() => setInternalStep(3)} className="gap-2">
+                        Suivant : Simuler <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ═══ Step 3: Simuler ═══ */}
+          {internalStep === 3 && (
             <div className="space-y-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -385,14 +1047,19 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                   <div className="flex items-center gap-2 mt-1">
                     <Badge variant="secondary" className="text-xs">{selectedStrategyLabel}</Badge>
                     <span className="text-sm text-muted-foreground">{activeWholesalers} grossistes</span>
+                    {totalAttributed > 0 && (
+                      <Badge variant="outline" className="text-xs gap-1">
+                        <Boxes className="h-3 w-3" /> {totalAttributed.toLocaleString('fr-FR')} pre-attribues
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setInternalStep(1)}
+                  onClick={() => setInternalStep(2)}
                   className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
                 >
-                  <ArrowLeft className="h-3.5 w-3.5" /> Modifier la configuration
+                  <ArrowLeft className="h-3.5 w-3.5" /> Modifier l'attribution
                 </button>
               </div>
 
@@ -455,7 +1122,6 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                       </div>
                     </div>
 
-                    {/* Coverage bar */}
                     <div>
                       <Progress value={Math.min(fulfillmentNum, 100)} className="h-2" />
                       <div className="flex justify-between mt-1 text-xs text-muted-foreground">
@@ -516,7 +1182,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 </Card>
               )}
 
-              {/* Visualizer toggle after dry-run */}
+              {/* Visualizer */}
               {dryRunResult && allocationLogs.length > 0 && !showVisualizer && (
                 <Button variant="outline" onClick={() => setShowVisualizer(true)} className="gap-2">
                   <Play className="h-4 w-4" />
@@ -528,17 +1194,17 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 <AllocationVisualizer logs={allocationLogs} onClose={() => setShowVisualizer(false)} />
               )}
 
-              {/* Footer: actions */}
+              {/* Footer */}
               <div className="flex items-center justify-between pt-2">
                 <button
                   type="button"
-                  onClick={() => setInternalStep(3)}
+                  onClick={() => setInternalStep(4)}
                   className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
                 >
                   Passer directement au lancement
                 </button>
                 <Button
-                  onClick={() => setInternalStep(3)}
+                  onClick={() => setInternalStep(4)}
                   disabled={!dryRunResult}
                   className="gap-2"
                 >
@@ -548,8 +1214,8 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
             </div>
           )}
 
-          {/* ═══ Step 3: Lancer ═══ */}
-          {internalStep === 3 && (
+          {/* ═══ Step 4: Lancer ═══ */}
+          {internalStep === 4 && (
             <div className="space-y-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -563,7 +1229,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 </div>
                 <button
                   type="button"
-                  onClick={() => setInternalStep(2)}
+                  onClick={() => setInternalStep(3)}
                   className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" /> Retour a la simulation
@@ -576,13 +1242,13 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                   <CardContent className="p-4 flex items-center gap-3">
                     <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
                     <p className="text-sm text-amber-800">
-                      Vous n'avez pas simule — les resultats ne sont pas previsibles. <button type="button" onClick={() => setInternalStep(2)} className="underline font-medium hover:text-amber-900">Revenir a la simulation</button>
+                      Vous n'avez pas simule — les resultats ne sont pas previsibles. <button type="button" onClick={() => setInternalStep(3)} className="underline font-medium hover:text-amber-900">Revenir a la simulation</button>
                     </p>
                   </CardContent>
                 </Card>
               )}
 
-              {/* Recap card */}
+              {/* Recap */}
               <Card>
                 <CardContent className="p-5 space-y-3">
                   <h4 className="text-sm font-semibold text-muted-foreground">Recapitulatif</h4>
@@ -606,6 +1272,12 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                       </div>
                     )}
                   </div>
+                  {totalAttributed > 0 && (
+                    <div className="flex items-center gap-2 pt-1 text-sm text-muted-foreground">
+                      <Boxes className="h-4 w-4" />
+                      <span>{totalAttributed.toLocaleString('fr-FR')} unites pre-attribuees via lots</span>
+                    </div>
+                  )}
                   {dryRunResult && (
                     <div className="flex flex-wrap gap-2 pt-1">
                       <Badge variant="outline" className="text-xs">{dryRunResult.totalAllocations} allocations prevues</Badge>
@@ -658,7 +1330,6 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
             <p className="text-sm text-muted-foreground">Repartition des {orderCount} commandes</p>
           </div>
 
-          {/* Live allocation log */}
           {showLogs && allocationLogs.length > 0 && (
             <Card className="max-h-48 overflow-hidden">
               <CardContent className="p-0">
