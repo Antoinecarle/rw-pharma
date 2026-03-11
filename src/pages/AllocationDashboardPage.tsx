@@ -103,7 +103,7 @@ export default function AllocationDashboardPage() {
     ? { month: activeProcess.month, year: activeProcess.year }
     : null
 
-  function handleMonthChange(v: MonthValue | null, opt?: MonthOption) {
+  function handleMonthChange(v: MonthValue | null) {
     if (!v) return // no "all" option on this page
     const proc = processes?.find(p => p.month === v.month && p.year === v.year)
     if (proc) handleSelectProcess(proc.id)

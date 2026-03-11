@@ -53,11 +53,6 @@ export interface MonthSelectorProps {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function isSameMonth(a: MonthValue | null, b: MonthValue | null) {
-  if (!a || !b) return a === b
-  return a.month === b.month && a.year === b.year
-}
-
 function formatMonth(v: MonthValue | null, allLabel: string): string {
   if (!v) return allLabel
   return `${MONTH_NAMES_FULL[v.month - 1]} ${v.year}`

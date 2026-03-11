@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { motion } from 'framer-motion'
-import AnimatedCounter from '@/components/ui/animated-counter'
 import GaugeChart from '@/components/ui/gauge-chart'
 import MonthSelector, { type MonthValue, type MonthOption } from '@/components/ui/month-selector'
 import {
@@ -21,17 +20,6 @@ const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juil
 const MONTH_SHORT = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec']
 const STEP_LABELS = ['Import quotas', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
-function StatSkeleton() {
-  return (
-    <div className="ivory-glass p-5">
-      <div className="flex items-center justify-between mb-3">
-        <Skeleton className="h-3.5 w-16 rounded-md" />
-        <Skeleton className="h-9 w-9 rounded-xl" />
-      </div>
-      <Skeleton className="h-8 w-16 rounded-md" />
-    </div>
-  )
-}
 
 function TrendBadge({ current, previous }: { current: number; previous: number }) {
   if (previous === 0) return null
@@ -64,7 +52,8 @@ interface ProcessFinancials {
 }
 
 async function fetchAllPaginated<T>(
-  query: () => ReturnType<ReturnType<typeof supabase.from>['select']>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: () => any,
   pageSize = 500,
 ): Promise<T[]> {
   const all: T[] = []
@@ -228,9 +217,12 @@ export default function DashboardPage() {
     marge: Math.round(p.margeBrute),
   }))
 
-  const tooltipFormatter = (value: number, name: string) => {
-    if (name === 'commandes') return [value.toLocaleString('fr-FR'), 'Commandes']
-    return [formatEur(value), name === 'volume' ? "Volume d'affaires" : name === 'ca' ? "Chiffre d'affaires" : 'Marge brute']
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tooltipFormatter = (value: any, name: any) => {
+    const v = typeof value === 'number' ? value : 0
+    const n = String(name ?? '')
+    if (n === 'commandes') return [v.toLocaleString('fr-FR'), 'Commandes']
+    return [formatEur(v), n === 'volume' ? "Volume d'affaires" : n === 'ca' ? "Chiffre d'affaires" : 'Marge brute']
   }
 
   return (
