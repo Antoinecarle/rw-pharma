@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Progress } from '@/components/ui/progress'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -15,7 +16,8 @@ import {
 import GaugeChart from '@/components/ui/gauge-chart'
 import {
   ArrowRight, ArrowLeft, Zap, Users, Package, Warehouse,
-  AlertTriangle, Check, Pencil, X, RotateCcw,
+  AlertTriangle, Check, Pencil, X, RotateCcw, BarChart3, TrendingUp,
+  AlertCircle, Info,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { MonthlyProcess } from '@/types/database'
@@ -50,16 +52,29 @@ interface QuotaSupply {
 // { [productId]: { [wholesalerId]: quantity } }
 type MacroMap = Record<string, Record<string, number>>
 
+type AutoStrategy = 'proportional' | 'top_first' | 'max_coverage'
+
+const AUTO_STRATEGIES: { value: AutoStrategy; label: string; description: string; icon: typeof Zap }[] = [
+  { value: 'proportional', label: 'Proportionnelle', description: 'Repartir au prorata des quotas', icon: BarChart3 },
+  { value: 'top_first', label: 'Top grossiste d\'abord', description: 'Remplir le plus gros quota en priorite', icon: TrendingUp },
+  { value: 'max_coverage', label: 'Max couverture', description: 'Couvrir un maximum de produits', icon: Zap },
+]
+
 export default function MacroAttributionStep({ process, onNext, onBack }: MacroAttributionStepProps) {
   const queryClient = useQueryClient()
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [editingCell, setEditingCell] = useState<{ productId: string; wholesalerId: string } | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [autoStrategy, setAutoStrategy] = useState<AutoStrategy>('proportional')
+  const [showStrategyPicker, setShowStrategyPicker] = useState(false)
   const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
 
   // Load existing macro attributions from process metadata
   const existingMacro = (process.metadata?.macro_attributions as MacroMap) ?? {}
   const [macroMap, setMacroMap] = useState<MacroMap>(existingMacro)
+
+  // Track manual edits count
+  const [manualEditsCount, setManualEditsCount] = useState(0)
 
   // Fetch orders
   const { data: orders, isLoading: ordersLoading } = useQuery({
@@ -176,30 +191,121 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
     return [...map.values()].sort((a, b) => b.totalQty - a.totalQty)
   }, [orders])
 
-  // Auto-attribution: distribute demand across quotas proportionally
-  const autoAttribute = useCallback(() => {
+  // Get unique wholesalers from quotas for column headers
+  const wholesalerColumns = useMemo(() => {
+    if (!quotas) return []
+    const map = new Map<string, { id: string; code: string; name: string }>()
+    for (const q of quotas) {
+      const ws = q.wholesaler as any
+      if (!map.has(q.wholesaler_id)) {
+        map.set(q.wholesaler_id, { id: q.wholesaler_id, code: ws?.code ?? '?', name: ws?.name ?? '?' })
+      }
+    }
+    return [...map.values()]
+  }, [quotas])
+
+  // ── Wholesaler usage summary ──────────────────────────────────────
+  const wholesalerSummary = useMemo(() => {
+    const summary = new Map<string, { total: number; used: number }>()
+
+    // Total quotas per wholesaler
+    if (quotas) {
+      for (const q of quotas) {
+        const total = (q.quota_quantity ?? 0) + (q.extra_available ?? 0)
+        const existing = summary.get(q.wholesaler_id) ?? { total: 0, used: 0 }
+        existing.total += total
+        summary.set(q.wholesaler_id, existing)
+      }
+    }
+
+    // Used per wholesaler from macroMap
+    for (const productMap of Object.values(macroMap)) {
+      for (const [wsId, qty] of Object.entries(productMap)) {
+        const existing = summary.get(wsId) ?? { total: 0, used: 0 }
+        existing.used += qty
+        summary.set(wsId, existing)
+      }
+    }
+
+    return summary
+  }, [quotas, macroMap])
+
+  // Products with demand but no quota
+  const productsWithoutQuota = useMemo(() => {
+    return demands.filter(d => {
+      const supply = supplyByProduct.get(d.productId) ?? []
+      return supply.length === 0
+    })
+  }, [demands, supplyByProduct])
+
+  // Detect over-quota cells
+  const overQuotaCells = useMemo(() => {
+    const cells: { productId: string; wholesalerId: string; assigned: number; quota: number }[] = []
+    for (const [productId, wsMap] of Object.entries(macroMap)) {
+      const supply = supplyByProduct.get(productId) ?? []
+      for (const [wsId, qty] of Object.entries(wsMap)) {
+        const q = supply.find(s => s.wholesalerId === wsId)
+        if (q && qty > q.total) {
+          cells.push({ productId, wholesalerId: wsId, assigned: qty, quota: q.total })
+        }
+      }
+    }
+    return cells
+  }, [macroMap, supplyByProduct])
+
+  // ── Auto-attribution strategies ───────────────────────────────────
+
+  const autoAttribute = useCallback((strategy: AutoStrategy) => {
     const newMap: MacroMap = {}
+
     for (const demand of demands) {
       const supply = supplyByProduct.get(demand.productId) ?? []
       if (supply.length === 0) continue
 
-      const totalSupply = supply.reduce((s, q) => s + q.total, 0)
+      newMap[demand.productId] = {}
       let remaining = demand.totalQuantity
 
-      newMap[demand.productId] = {}
-      for (const q of supply) {
+      if (strategy === 'proportional') {
         // Proportional: each wholesaler gets share proportional to their quota
-        const share = Math.min(
-          Math.round((q.total / totalSupply) * demand.totalQuantity),
-          q.total,
-          remaining,
-        )
-        if (share > 0) {
-          newMap[demand.productId][q.wholesalerId] = share
-          remaining -= share
+        const totalSupply = supply.reduce((s, q) => s + q.total, 0)
+        for (const q of supply) {
+          const share = Math.min(
+            Math.round((q.total / totalSupply) * demand.totalQuantity),
+            q.total,
+            remaining,
+          )
+          if (share > 0) {
+            newMap[demand.productId][q.wholesalerId] = share
+            remaining -= share
+          }
+        }
+      } else if (strategy === 'top_first') {
+        // Top first: fill biggest quota first, then next, etc.
+        const sorted = [...supply].sort((a, b) => b.total - a.total)
+        for (const q of sorted) {
+          const assign = Math.min(remaining, q.total)
+          if (assign > 0) {
+            newMap[demand.productId][q.wholesalerId] = assign
+            remaining -= assign
+          }
+          if (remaining <= 0) break
+        }
+      } else if (strategy === 'max_coverage') {
+        // Max coverage: spread evenly to use as many wholesalers as possible
+        const perWs = Math.floor(remaining / supply.length)
+        let leftover = remaining - perWs * supply.length
+        for (const q of supply) {
+          const assign = Math.min(perWs + (leftover > 0 ? 1 : 0), q.total, remaining)
+          if (assign > 0) {
+            newMap[demand.productId][q.wholesalerId] = assign
+            remaining -= assign
+            if (leftover > 0) leftover--
+          }
+          if (remaining <= 0) break
         }
       }
-      // Assign remainder to first wholesaler with capacity
+
+      // Assign any remainder to first wholesaler with capacity
       if (remaining > 0) {
         for (const q of supply) {
           const current = newMap[demand.productId][q.wholesalerId] ?? 0
@@ -214,12 +320,15 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
       }
     }
     setMacroMap(newMap)
-    toast.success('Attribution automatique effectuee')
+    setManualEditsCount(0)
+    const stratLabel = AUTO_STRATEGIES.find(s => s.value === strategy)?.label ?? strategy
+    toast.success(`Attribution "${stratLabel}" effectuee`)
   }, [demands, supplyByProduct])
 
   // Reset
   const resetAttribution = () => {
     setMacroMap({})
+    setManualEditsCount(0)
     toast.info('Attribution reinitialise')
   }
 
@@ -248,6 +357,10 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
   const totalAttributed = Object.values(macroMap).reduce((s, ws) =>
     s + Object.values(ws).reduce((s2, q) => s2 + q, 0), 0)
   const coverageRate = totalDemand > 0 ? (totalAttributed / totalDemand) * 100 : 0
+  const productsFullyCovered = demands.filter(d => {
+    const attributed = Object.values(macroMap[d.productId] ?? {}).reduce((s, q) => s + q, 0)
+    return attributed >= d.totalQuantity
+  }).length
 
   // Edit cell
   const startEdit = (productId: string, wholesalerId: string, currentValue: number) => {
@@ -260,6 +373,14 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
     if (!editingCell) return
     const val = parseInt(editValue, 10)
     if (isNaN(val) || val < 0) { toast.error('Valeur invalide'); return }
+
+    // Check quota
+    const supply = supplyByProduct.get(editingCell.productId) ?? []
+    const q = supply.find(s => s.wholesalerId === editingCell.wholesalerId)
+    if (q && val > q.total) {
+      toast.warning(`Attention : ${val} depasse le quota de ${q.total} pour ${q.wholesalerCode}`)
+    }
+
     setMacroMap(prev => {
       const next = { ...prev }
       if (!next[editingCell.productId]) next[editingCell.productId] = {}
@@ -272,22 +393,10 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
       return next
     })
     setEditingCell(null)
+    setManualEditsCount(prev => prev + 1)
   }
 
   const cancelEdit = () => setEditingCell(null)
-
-  // Get unique wholesalers from quotas for column headers
-  const wholesalerColumns = useMemo(() => {
-    if (!quotas) return []
-    const map = new Map<string, { id: string; code: string; name: string }>()
-    for (const q of quotas) {
-      const ws = q.wholesaler as any
-      if (!map.has(q.wholesaler_id)) {
-        map.set(q.wholesaler_id, { id: q.wholesaler_id, code: ws?.code ?? '?', name: ws?.name ?? '?' })
-      }
-    }
-    return [...map.values()]
-  }, [quotas])
 
   const isLoading = ordersLoading || quotasLoading
   const hasAttribution = Object.keys(macroMap).length > 0
@@ -326,10 +435,12 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
 
   return (
     <div className="space-y-5">
+      {/* Header */}
       <div>
         <h3 className="text-lg font-semibold">Attribution Macro — Commandes ↔ Quotas</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Attribuez les commandes aux quotas grossistes avant l'export. L'auto-attribution repartit proportionnellement.
+          Attribuez les commandes aux quotas grossistes avant l'export.
+          Cliquez sur une cellule pour modifier manuellement, ou utilisez l'auto-attribution.
         </p>
       </div>
 
@@ -337,10 +448,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
       <div>
         <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Filtrer par client</h4>
         <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={() => setSelectedCustomerId(null)}
-          >
+          <button type="button" onClick={() => setSelectedCustomerId(null)}>
             <Badge
               variant={selectedCustomerId === null ? 'default' : 'outline'}
               className={`py-1.5 px-3 cursor-pointer transition-all ${selectedCustomerId === null ? 'ring-2 ring-primary/30' : 'hover:bg-muted'}`}
@@ -349,11 +457,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
             </Badge>
           </button>
           {customers.map(c => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setSelectedCustomerId(selectedCustomerId === c.id ? null : c.id)}
-            >
+            <button key={c.id} type="button" onClick={() => setSelectedCustomerId(selectedCustomerId === c.id ? null : c.id)}>
               <Badge
                 variant={selectedCustomerId === c.id ? 'default' : 'outline'}
                 className={`py-1.5 px-3 cursor-pointer transition-all ${selectedCustomerId === c.id ? 'ring-2 ring-primary/30' : 'hover:bg-muted'}`}
@@ -367,7 +471,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <Card>
           <CardContent className="p-3 text-center">
             <Package className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
@@ -385,7 +489,15 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
           <CardContent className="p-3 text-center">
             <Warehouse className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
             <p className="text-xl font-bold">{wholesalerColumns.length}</p>
-            <p className="text-[10px] text-muted-foreground">Grossistes dispo</p>
+            <p className="text-[10px] text-muted-foreground">Grossistes</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className={`text-xl font-bold ${productsFullyCovered === demands.length ? 'text-green-600' : 'text-amber-600'}`}>
+              {productsFullyCovered}/{demands.length}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Produits couverts</p>
           </CardContent>
         </Card>
         <Card>
@@ -395,18 +507,150 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
         </Card>
       </div>
 
-      {/* Action buttons */}
+      {/* Action buttons: strategy picker */}
       {!isProcessLocked && (
-        <div className="flex gap-2">
-          <Button onClick={autoAttribute} className="gap-1.5" variant="default">
-            <Zap className="h-4 w-4" /> Auto-attribution
-          </Button>
-          {hasAttribution && (
-            <Button onClick={resetAttribution} variant="outline" className="gap-1.5">
-              <RotateCcw className="h-4 w-4" /> Reinitialiser
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2 items-center">
+            <Button
+              onClick={() => setShowStrategyPicker(!showStrategyPicker)}
+              className="gap-1.5"
+              variant="default"
+            >
+              <Zap className="h-4 w-4" /> Auto-attribution
             </Button>
+            {hasAttribution && (
+              <Button onClick={resetAttribution} variant="outline" className="gap-1.5">
+                <RotateCcw className="h-4 w-4" /> Reinitialiser
+              </Button>
+            )}
+            {manualEditsCount > 0 && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                <Pencil className="h-3 w-3" /> {manualEditsCount} modification{manualEditsCount > 1 ? 's' : ''} manuelle{manualEditsCount > 1 ? 's' : ''}
+              </Badge>
+            )}
+          </div>
+
+          {/* Strategy picker dropdown */}
+          {showStrategyPicker && (
+            <Card className="border-primary/20">
+              <CardContent className="p-3">
+                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Choisir une strategie d'attribution</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {AUTO_STRATEGIES.map((s) => (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => {
+                        setAutoStrategy(s.value)
+                        autoAttribute(s.value)
+                        setShowStrategyPicker(false)
+                      }}
+                      className={`p-3 rounded-lg border-2 text-left transition-all hover:border-primary/40 hover:bg-primary/5 ${
+                        autoStrategy === s.value ? 'border-primary/30 bg-primary/5' : 'border-border'
+                      }`}
+                    >
+                      <s.icon className="h-4 w-4 text-primary mb-1" />
+                      <p className="text-sm font-medium">{s.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
+      )}
+
+      {/* Over-quota warnings */}
+      {overQuotaCells.length > 0 && (
+        <Card className="border-red-200 bg-red-50/30">
+          <CardContent className="p-3 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-800">
+                {overQuotaCells.length} depassement{overQuotaCells.length > 1 ? 's' : ''} de quota
+              </p>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {overQuotaCells.slice(0, 5).map(c => {
+                  const ws = wholesalerColumns.find(w => w.id === c.wholesalerId)
+                  return (
+                    <Badge key={`${c.productId}-${c.wholesalerId}`} variant="outline" className="text-xs border-red-200 text-red-700">
+                      {ws?.code}: {c.assigned}/{c.quota}
+                    </Badge>
+                  )
+                })}
+                {overQuotaCells.length > 5 && (
+                  <Badge variant="outline" className="text-xs border-red-200 text-red-700">+{overQuotaCells.length - 5} autres</Badge>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Wholesaler usage summary */}
+      {hasAttribution && wholesalerColumns.length > 0 && (
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+              Utilisation des quotas par grossiste
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {wholesalerColumns.map(ws => {
+                const s = wholesalerSummary.get(ws.id)
+                if (!s || s.total === 0) return null
+                const pct = Math.round((s.used / s.total) * 100)
+                const isOver = s.used > s.total
+                return (
+                  <div key={ws.id} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="font-bold cursor-help">{ws.code}</span>
+                        </TooltipTrigger>
+                        <TooltipContent>{ws.name}</TooltipContent>
+                      </Tooltip>
+                      <span className={`tabular-nums font-medium ${isOver ? 'text-red-600' : pct > 90 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                        {pct}%
+                      </span>
+                    </div>
+                    <Progress value={Math.min(pct, 100)} className={`h-1.5 ${isOver ? '[&>div]:bg-red-500' : pct > 90 ? '[&>div]:bg-amber-500' : ''}`} />
+                    <div className="text-[10px] text-muted-foreground tabular-nums">
+                      {s.used.toLocaleString('fr-FR')} / {s.total.toLocaleString('fr-FR')}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Products without quota warning */}
+      {productsWithoutQuota.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/30">
+          <CardContent className="p-3 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">
+                {productsWithoutQuota.length} produit{productsWithoutQuota.length > 1 ? 's' : ''} commande{productsWithoutQuota.length > 1 ? 's' : ''} sans quota
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Ces produits ne peuvent pas etre attribues. Verifiez les quotas a l'etape 1.
+              </p>
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {productsWithoutQuota.slice(0, 10).map(d => (
+                  <Badge key={d.productId} variant="outline" className="text-[10px] border-amber-200 text-amber-700">
+                    {d.cip13} ({d.totalQuantity} u.)
+                  </Badge>
+                ))}
+                {productsWithoutQuota.length > 10 && (
+                  <Badge variant="outline" className="text-[10px] border-amber-200 text-amber-700">+{productsWithoutQuota.length - 10}</Badge>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Attribution matrix: Products (rows) × Wholesalers (columns) */}
@@ -418,16 +662,32 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                 <TableHead className="sticky left-0 bg-background z-10 min-w-[100px]">CIP13</TableHead>
                 <TableHead className="min-w-[150px]">Produit</TableHead>
                 <TableHead className="text-right min-w-[80px]">Demande</TableHead>
-                {wholesalerColumns.map(ws => (
-                  <TableHead key={ws.id} className="text-center min-w-[90px]">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="cursor-help font-bold">{ws.code}</span>
-                      </TooltipTrigger>
-                      <TooltipContent>{ws.name}</TooltipContent>
-                    </Tooltip>
-                  </TableHead>
-                ))}
+                {wholesalerColumns.map(ws => {
+                  const s = wholesalerSummary.get(ws.id)
+                  const pct = s && s.total > 0 ? Math.round((s.used / s.total) * 100) : 0
+                  return (
+                    <TableHead key={ws.id} className="text-center min-w-[90px]">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="cursor-help">
+                            <span className="font-bold">{ws.code}</span>
+                            {hasAttribution && (
+                              <div className={`text-[9px] font-normal ${pct > 100 ? 'text-red-600' : pct > 90 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                                {pct}% utilise
+                              </div>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <div>
+                            <p className="font-medium">{ws.name}</p>
+                            {s && <p className="text-xs">{s.used.toLocaleString('fr-FR')} / {s.total.toLocaleString('fr-FR')} utilises</p>}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableHead>
+                  )
+                })}
                 <TableHead className="text-right min-w-[80px]">Attribue</TableHead>
                 <TableHead className="text-right min-w-[60px]">Reste</TableHead>
               </TableRow>
@@ -438,18 +698,19 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                 const attributed = Object.values(macroMap[demand.productId] ?? {}).reduce((s, q) => s + q, 0)
                 const remaining = demand.totalQuantity - attributed
                 const isFull = remaining <= 0
+                const pctCovered = demand.totalQuantity > 0 ? Math.min(100, Math.round((attributed / demand.totalQuantity) * 100)) : 0
 
                 return (
                   <TableRow key={demand.productId} className={isFull ? '' : 'bg-amber-50/20 dark:bg-amber-950/10'}>
                     <TableCell className="sticky left-0 bg-background z-10 font-mono text-xs font-medium">
                       {demand.cip13}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground truncate max-w-[150px]">
-                      {demand.productName}
-                      <div className="flex gap-0.5 mt-0.5">
+                    <TableCell className="text-xs text-muted-foreground max-w-[180px]">
+                      <div className="truncate" title={demand.productName}>{demand.productName}</div>
+                      <div className="flex flex-wrap gap-0.5 mt-0.5">
                         {demand.customers.map(c => (
-                          <Badge key={c.id} variant="outline" className="text-[8px] py-0 px-1">
-                            {c.code}: {c.quantity}
+                          <Badge key={c.id} variant="outline" className="text-[9px] py-0 px-1.5 font-medium">
+                            {c.code}: {c.quantity.toLocaleString('fr-FR')}
                           </Badge>
                         ))}
                       </div>
@@ -462,6 +723,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                       const assignedQty = macroMap[demand.productId]?.[ws.id] ?? 0
                       const isEditing = editingCell?.productId === demand.productId && editingCell?.wholesalerId === ws.id
                       const hasQuota = quota && quota.total > 0
+                      const isOverQuota = hasQuota && assignedQty > quota.total
 
                       if (!hasQuota) {
                         return (
@@ -472,7 +734,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                       }
 
                       return (
-                        <TableCell key={ws.id} className="text-center p-1">
+                        <TableCell key={ws.id} className={`text-center p-1 ${isOverQuota ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
                           {isEditing ? (
                             <div className="flex items-center gap-0.5 justify-center">
                               <Input
@@ -485,6 +747,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                                   if (e.key === 'Enter') saveEdit()
                                   if (e.key === 'Escape') cancelEdit()
                                 }}
+                                max={quota.total}
                               />
                               <button type="button" onClick={saveEdit} className="p-0.5 hover:text-green-600">
                                 <Check className="h-3 w-3" />
@@ -504,7 +767,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                             >
                               <div className="tabular-nums text-sm font-medium">
                                 {assignedQty > 0 ? (
-                                  <span className={assignedQty > quota.total ? 'text-red-600' : 'text-green-700 dark:text-green-400'}>
+                                  <span className={isOverQuota ? 'text-red-600 font-bold' : 'text-green-700 dark:text-green-400'}>
                                     {assignedQty.toLocaleString('fr-FR')}
                                   </span>
                                 ) : (
@@ -514,7 +777,10 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                               <div className="text-[9px] text-muted-foreground">
                                 /{quota.total.toLocaleString('fr-FR')}
                               </div>
-                              {!isProcessLocked && assignedQty === 0 && (
+                              {isOverQuota && (
+                                <AlertCircle className="h-2.5 w-2.5 mx-auto text-red-500 mt-0.5" />
+                              )}
+                              {!isProcessLocked && assignedQty === 0 && !isOverQuota && (
                                 <Pencil className="h-2.5 w-2.5 mx-auto opacity-0 group-hover:opacity-40 transition-opacity" />
                               )}
                             </button>
@@ -523,9 +789,14 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                       )
                     })}
                     <TableCell className="text-right tabular-nums font-medium text-sm">
-                      <span className={isFull ? 'text-green-600' : 'text-amber-600'}>
+                      <div className={isFull ? 'text-green-600' : 'text-amber-600'}>
                         {attributed.toLocaleString('fr-FR')}
-                      </span>
+                      </div>
+                      {hasAttribution && (
+                        <div className="w-12 ml-auto mt-0.5">
+                          <Progress value={pctCovered} className={`h-1 ${isFull ? '[&>div]:bg-green-500' : '[&>div]:bg-amber-500'}`} />
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm">
                       {remaining > 0 ? (
@@ -560,6 +831,17 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Info box about editing */}
+      {!isProcessLocked && hasAttribution && (
+        <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-3">
+          <Info className="h-4 w-4 shrink-0 mt-0.5" />
+          <p>
+            <strong>Astuce :</strong> Cliquez sur n'importe quelle cellule pour modifier la quantite attribuee.
+            Les depassements de quota sont signales en rouge. L'attribution est sauvegardee uniquement quand vous cliquez "Sauvegarder et continuer".
+          </p>
+        </div>
       )}
 
       {/* Navigation */}
