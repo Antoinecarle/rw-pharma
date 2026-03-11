@@ -825,7 +825,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                       <TableHead className="min-w-[80px] sticky left-0 bg-background z-10">Client</TableHead>
                                       <TableHead className="text-right min-w-[70px]">Demande</TableHead>
                                       {/* One column per lot, grouped by wholesaler */}
-                                      {[...lotsByWholesaler.entries()].map(([wsId, wsLots]) => (
+                                      {[...lotsByWholesaler.entries()].map(([, wsLots]) => (
                                         wsLots.map(lot => {
                                           const months = monthsUntilExpiry(lot.expiry_date)
                                           const isShortExpiry = months <= SHORT_EXPIRY_MONTHS
