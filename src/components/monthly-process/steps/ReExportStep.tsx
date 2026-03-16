@@ -411,7 +411,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
                 </div>
 
                 {/* Items preview table */}
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-xl overflow-hidden">
                   <Table>
                     <TableHeader>
                       <TableRow>

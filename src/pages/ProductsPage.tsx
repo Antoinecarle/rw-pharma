@@ -268,7 +268,7 @@ export default function ProductsPage() {
   const catalogProgress = products?.count ? Math.min((products.count / 1760) * 100, 100) : 0
 
   return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1200px] mx-auto ivory-page-glow">
+    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1400px] mx-auto ivory-page-glow">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}

@@ -222,7 +222,7 @@ export default function MonthlyProcessDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-4 md:p-7 lg:p-8 space-y-5 max-w-[1200px] mx-auto ivory-page-glow">
+      <div className="p-4 md:p-7 lg:p-8 space-y-5 max-w-[1600px] mx-auto ivory-page-glow">
         <Skeleton className="h-8 w-48 rounded-xl" />
         <Skeleton className="h-16 w-full rounded-xl" />
         <Skeleton className="h-64 w-full rounded-xl" />
@@ -232,7 +232,7 @@ export default function MonthlyProcessDetailPage() {
 
   if (!process) {
     return (
-      <div className="p-4 md:p-7 lg:p-8 text-center max-w-[1200px] mx-auto ivory-page-glow">
+      <div className="p-4 md:p-7 lg:p-8 text-center max-w-[1600px] mx-auto ivory-page-glow">
         <p style={{ color: 'var(--ivory-text-muted)' }}>Processus introuvable</p>
         <Button variant="outline" className="mt-4 rounded-xl" onClick={() => navigate('/monthly-processes')}>
           Retour
@@ -244,7 +244,7 @@ export default function MonthlyProcessDetailPage() {
   const monthName = MONTH_NAMES[process.month - 1] ?? ''
 
   return (
-    <div className="p-4 md:p-7 lg:p-8 space-y-5 max-w-[1200px] mx-auto ivory-page-glow overflow-x-hidden">
+    <div className="p-4 md:p-7 lg:p-8 space-y-5 max-w-[1600px] mx-auto ivory-page-glow overflow-x-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}

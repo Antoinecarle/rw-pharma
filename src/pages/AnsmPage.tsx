@@ -215,7 +215,7 @@ export default function AnsmPage() {
   const totalPages = blockedProducts ? Math.ceil(blockedProducts.count / PAGE_SIZE) : 0
 
   return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-7 max-w-[1200px] mx-auto ivory-page-glow">
+    <div className="p-5 md:p-7 lg:p-8 space-y-7 max-w-[1400px] mx-auto ivory-page-glow">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}

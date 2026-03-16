@@ -111,7 +111,7 @@ export default function QuotasPage() {
   const totalExtra = quotas?.data.reduce((s, q) => s + q.extra_available, 0) ?? 0
 
   return (
-    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1200px] mx-auto ivory-page-glow">
+    <div className="p-5 md:p-7 lg:p-8 space-y-6 max-w-[1400px] mx-auto ivory-page-glow">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="relative z-10">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
