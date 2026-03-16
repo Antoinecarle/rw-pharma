@@ -404,9 +404,21 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     })
   }, [editing, editMutation])
 
+  const cancelRef = useRef(false)
   const cancelEdit = useCallback(() => {
+    cancelRef.current = true
     setEditing(null)
+    setTimeout(() => { cancelRef.current = false }, 100)
   }, [])
+
+  const handleBlurSave = useCallback(() => {
+    // Delay to let cancel button click fire first
+    setTimeout(() => {
+      if (!cancelRef.current && editing) {
+        confirmEdit()
+      }
+    }, 150)
+  }, [editing, confirmEdit])
 
   // ── Check if customer-wholesaler link is open ──
   const isWholesalerOpenForCustomer = useCallback((customerId: string, wholesalerId: string) => {
@@ -793,6 +805,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                                   onChange={e => setEditing({ ...editing, value: e.target.value })}
                                   className="w-20 h-6 text-[11px] text-right"
                                   autoFocus
+                                  onBlur={handleBlurSave}
                                   onKeyDown={e => {
                                     if (e.key === 'Enter') confirmEdit()
                                     if (e.key === 'Escape') cancelEdit()
@@ -832,6 +845,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                                   onChange={e => setEditing({ ...editing, value: e.target.value })}
                                   className="w-16 h-6 text-[11px] text-right font-bold"
                                   autoFocus
+                                  onBlur={handleBlurSave}
                                   onKeyDown={e => {
                                     if (e.key === 'Enter') confirmEdit()
                                     if (e.key === 'Escape') cancelEdit()
@@ -928,6 +942,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                                   className="h-6 text-[11px] min-w-[120px]"
                                   placeholder="Commentaire..."
                                   autoFocus
+                                  onBlur={handleBlurSave}
                                   onKeyDown={e => {
                                     if (e.key === 'Enter') confirmEdit()
                                     if (e.key === 'Escape') cancelEdit()
