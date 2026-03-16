@@ -30,11 +30,11 @@ const PHASE_IMPACTS: Record<number, { deletions: string[]; preserved: string[] }
   1: {
     deletions: [
       'Toutes les allocations seront supprimees',
-      'Le processus reviendra a l\'etape 1 (Import Quotas)',
+      'Le processus reviendra a l\'etape 1 (Import Disponibilites)',
     ],
     preserved: [
       'Le stock collecte est conserve (il existe physiquement)',
-      'Les quotas et commandes de base sont conserves',
+      'Les disponibilites et commandes de base sont conservees',
     ],
   },
   2: {
@@ -45,7 +45,7 @@ const PHASE_IMPACTS: Record<number, { deletions: string[]; preserved: string[] }
     preserved: [
       'Les commandes validees sont conservees',
       'Le stock collecte est conserve',
-      'Les quotas sont conserves',
+      'Les disponibilites sont conservees',
     ],
   },
   3: {

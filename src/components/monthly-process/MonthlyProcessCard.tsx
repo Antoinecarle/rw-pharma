@@ -10,7 +10,7 @@ const MONTH_NAMES = [
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   draft: { label: 'Brouillon', color: 'var(--ivory-text-muted)', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.06)' },
-  importing_quotas: { label: 'Import quotas', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
+  importing_quotas: { label: 'Import dispos', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
   importing_orders: { label: 'Import commandes', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
   reviewing_orders: { label: 'Revue commandes', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
   macro_attributing: { label: 'Attribution macro', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
@@ -23,7 +23,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 }
 
 const TOTAL_STEPS = 10
-const STEP_LABELS = ['', 'Import quotas', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
+const STEP_LABELS = ['', 'Import dispos', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
 interface MonthlyProcessCardProps {
   process: MonthlyProcess

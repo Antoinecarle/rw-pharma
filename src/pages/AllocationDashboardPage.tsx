@@ -561,7 +561,7 @@ export default function AllocationDashboardPage() {
               <Card>
                 <CardContent className="p-5 space-y-3">
                   <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                    <ShieldCheck className="h-4 w-4" /> Utilisation des quotas
+                    <ShieldCheck className="h-4 w-4" /> Utilisation des disponibilites
                   </h4>
                   <div className="space-y-2">
                     {quotaUtilization.map(q => {

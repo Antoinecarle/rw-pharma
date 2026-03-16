@@ -15,11 +15,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import TagInput from '@/components/ui/tag-input'
-import { Plus, Search, Pencil, Trash2, ShieldAlert, FileSpreadsheet, Pill, Package, X, TrendingUp, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, ShieldAlert, FileSpreadsheet, Pill, Package, TrendingUp, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import ExcelImport from '@/components/ExcelImport'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -70,7 +66,6 @@ const rowVariants = {
 export default function ProductsPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
-  const [labFilter, setLabFilter] = useState<string>('all')
   const [ansm, setAnsm] = useState(false)
   const [page, setPage] = useState(0)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -78,10 +73,8 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductInsert>(emptyProduct)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [expiryTags, setExpiryTags] = useState<string[]>([])
-
   const { data: products, isLoading } = useQuery({
-    queryKey: ['products', search, labFilter, ansm, page],
+    queryKey: ['products', search, ansm, page],
     queryFn: async () => {
       let query = supabase
         .from('products')
@@ -92,9 +85,6 @@ export default function ProductsPage() {
       if (search) {
         query = query.or(`cip13.ilike.%${search}%,name.ilike.%${search}%,laboratory.ilike.%${search}%`)
       }
-      if (labFilter && labFilter !== 'all') {
-        query = query.eq('laboratory', labFilter)
-      }
       if (ansm) {
         query = query.eq('is_ansm_blocked', true)
       }
@@ -102,34 +92,6 @@ export default function ProductsPage() {
       const { data, count, error } = await query
       if (error) throw error
       return { data: data as Product[], count: count ?? 0 }
-    },
-  })
-
-  const { data: laboratories } = useQuery({
-    queryKey: ['products', 'laboratories'],
-    staleTime: 1000 * 60 * 60, // Labs rarely change — cache 1h
-    queryFn: async () => {
-      // Use a single lightweight query: fetch only distinct labs via the products_laboratory_idx
-      const { data, error } = await supabase.rpc('get_distinct_laboratories')
-      if (!error && data) return (data as { laboratory: string }[]).map(r => r.laboratory)
-      // Fallback: paginate to avoid Supabase 1000-row cap
-      const all: string[] = []
-      let from = 0
-      const pageSize = 1000
-      while (true) {
-        const { data: rows, error: err } = await supabase
-          .from('products')
-          .select('laboratory')
-          .not('laboratory', 'is', null)
-          .order('laboratory')
-          .range(from, from + pageSize - 1)
-        if (err) throw err
-        if (!rows || rows.length === 0) break
-        all.push(...rows.map(r => r.laboratory).filter(Boolean) as string[])
-        if (rows.length < pageSize) break
-        from += pageSize
-      }
-      return [...new Set(all)]
     },
   })
 
@@ -167,7 +129,6 @@ export default function ProductsPage() {
   const openCreate = () => {
     setEditing(null)
     setForm(emptyProduct)
-    setExpiryTags([])
     setDialogOpen(true)
   }
 
@@ -186,17 +147,14 @@ export default function ProductsPage() {
       expiry_dates: p.expiry_dates,
       metadata: p.metadata,
     })
-    setExpiryTags(Array.isArray(p.expiry_dates) ? p.expiry_dates : [])
     setDialogOpen(true)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const payload = { ...form, expiry_dates: expiryTags.length > 0 ? expiryTags : null }
-    upsert.mutate(editing ? { ...payload, id: editing.id } : payload)
+    upsert.mutate(editing ? { ...form, id: editing.id } : form)
   }
 
-  const topLabs = (laboratories ?? []).slice(0, 8)
   const totalPages = Math.ceil((products?.count ?? 0) / PAGE_SIZE)
   const catalogProgress = products?.count ? Math.min((products.count / 1760) * 100, 100) : 0
 
@@ -332,42 +290,6 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {topLabs.length > 0 && (
-          <div className="flex gap-1.5 items-center flex-wrap">
-            <span className="text-[11px] font-medium mr-1" style={{ color: 'var(--ivory-text-muted)' }}>Labos</span>
-            <button
-              type="button"
-              onClick={() => { setLabFilter('all'); setPage(0) }}
-              className={`ivory-chip ${labFilter === 'all' ? 'active' : ''}`}
-            >
-              Tous
-            </button>
-            {topLabs.map((lab) => (
-              <button
-                key={lab}
-                type="button"
-                onClick={() => { setLabFilter(labFilter === lab ? 'all' : lab); setPage(0) }}
-                className={`ivory-chip ${labFilter === lab ? 'active' : ''}`}
-              >
-                {lab}
-                {labFilter === lab && <X className="h-2.5 w-2.5" />}
-              </button>
-            ))}
-            {(laboratories?.length ?? 0) > 8 && (
-              <Select value={labFilter} onValueChange={(v) => { setLabFilter(v); setPage(0) }}>
-                <SelectTrigger className="h-7 w-auto border-dashed text-[11px] gap-1 px-2.5 rounded-full">
-                  <SelectValue placeholder={`+${(laboratories?.length ?? 0) - 8}`} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les labos</SelectItem>
-                  {laboratories?.map((lab) => (
-                    <SelectItem key={lab} value={lab}>{lab}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        )}
       </motion.div>
 
       {/* Table */}
@@ -654,15 +576,6 @@ export default function ProductsPage() {
                 className="ivory-mono text-[13px] h-10 rounded-xl"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-[13px] font-medium">Dates d'expiration</Label>
-              <TagInput
-                value={expiryTags}
-                onChange={setExpiryTags}
-                placeholder="Saisir MM/YYYY puis Entree..."
-              />
-              <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>Format : MM/YYYY ou YYYY-MM</p>
-            </div>
             <div className="flex items-center justify-between rounded-xl p-3.5"
               style={{ border: '1px solid rgba(0,0,0,0.06)', background: 'rgba(248,247,244,0.5)' }}>
               <div className="space-y-0.5">
@@ -699,7 +612,7 @@ export default function ProductsPage() {
         open={!!deleteId}
         onOpenChange={() => setDeleteId(null)}
         title="Supprimer le produit"
-        description="Cette action est irreversible. Le produit et ses quotas associes seront supprimes."
+        description="Cette action est irreversible. Le produit et ses disponibilites associees seront supprimes."
         onConfirm={() => deleteId && deleteMut.mutate(deleteId)}
         loading={deleteMut.isPending}
       />

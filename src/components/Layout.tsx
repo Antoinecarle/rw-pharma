@@ -44,7 +44,7 @@ const referenceNavigation = [
   { name: 'Produits', href: '/products', icon: Pill, description: 'Catalogue pharmaceutique' },
   { name: 'Grossistes', href: '/wholesalers', icon: Truck, description: 'Partenaires francais' },
   { name: 'Clients', href: '/customers', icon: Users, description: 'Importateurs europeens' },
-  { name: 'Quotas', href: '/quotas', icon: ClipboardList, description: 'Quotas mensuels' },
+  { name: 'Disponibilites', href: '/disponibilites', icon: ClipboardList, description: 'Disponibilites grossistes' },
 ]
 
 const navigation = [...mainNavigation, ...referenceNavigation]

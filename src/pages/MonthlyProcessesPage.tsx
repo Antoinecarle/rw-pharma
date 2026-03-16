@@ -173,7 +173,7 @@ export default function MonthlyProcessesPage() {
       setDialogOpen(false)
       setSelectedMonthKey('')
       if (clonedCount > 0) {
-        toast.success(`Processus cree avec ${clonedCount} quotas dupliques`)
+        toast.success(`Processus cree avec ${clonedCount} disponibilites dupliquees`)
       } else {
         toast.success('Processus mensuel cree')
       }
@@ -319,10 +319,10 @@ export default function MonthlyProcessesPage() {
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center gap-1.5 font-medium" style={{ color: cloneQuotas ? 'var(--ivory-accent)' : 'var(--ivory-text)' }}>
                       <Copy className="h-3 w-3" />
-                      Dupliquer quotas du mois precedent
+                      Copier les disponibilites du mois precedent
                     </div>
                     <p style={{ color: 'var(--ivory-text-muted)' }}>
-                      {lastProcessQuotaCount} quotas de {MONTH_NAMES[lastCompletedProcess.month - 1]} {lastCompletedProcess.year} seront copies.
+                      {lastProcessQuotaCount} disponibilites de {MONTH_NAMES[lastCompletedProcess.month - 1]} {lastCompletedProcess.year} seront copiees.
                       Les quantites restent identiques, vous pourrez les ajuster ensuite.
                     </p>
                   </div>

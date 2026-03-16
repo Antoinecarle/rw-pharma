@@ -35,7 +35,7 @@ const MONTH_NAMES = [
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Brouillon',
-  importing_quotas: 'Import quotas',
+  importing_quotas: 'Import dispos',
   importing_orders: 'Import commandes',
   reviewing_orders: 'Revue commandes',
   macro_attributing: 'Attribution macro',
@@ -148,7 +148,7 @@ export default function MonthlyProcessDetailPage() {
   const stepStats = (() => {
     if (!process) return {}
     const stats: Record<number, { value: string | number; label: string }> = {}
-    if ((process.quotas_count ?? 0) > 0) stats[1] = { value: process.quotas_count ?? 0, label: 'quotas' }
+    if ((process.quotas_count ?? 0) > 0) stats[1] = { value: process.quotas_count ?? 0, label: 'dispos' }
     if (process.orders_count > 0) stats[2] = { value: process.orders_count, label: 'commandes' }
     if (process.orders_count > 0 && processStep > 3) stats[3] = { value: 'validees', label: '' }
     if (process.orders_count > 0 && processStep > 4) stats[4] = { value: 'attribue', label: '' }

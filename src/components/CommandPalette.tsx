@@ -34,7 +34,7 @@ const NAV_ITEMS = [
   { path: '/products', label: 'Produits', keywords: 'produits catalogue medicaments cip13', icon: Pill, shortcut: 'catalogue' },
   { path: '/wholesalers', label: 'Grossistes', keywords: 'grossistes fournisseurs alliance cerp ocp', icon: Truck },
   { path: '/customers', label: 'Clients importateurs', keywords: 'clients importateurs orifarm mpa axicorp', icon: Users },
-  { path: '/quotas', label: 'Quotas mensuels', keywords: 'quotas mensuels quotas grossistes', icon: ClipboardList },
+  { path: '/disponibilites', label: 'Disponibilites', keywords: 'disponibilites quotas dispos grossistes', icon: ClipboardList },
   { path: '/debts', label: 'Dettes clients', keywords: 'dettes sous-allocation compensation', icon: Scale },
   { path: '/stock', label: 'Stock', keywords: 'stock lots collecte inventaire', icon: Boxes },
   { path: '/ansm', label: 'ANSM', keywords: 'ansm bloques export interdit', icon: ShieldAlert },
@@ -124,7 +124,7 @@ export default function CommandPalette() {
   })
 
   const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
-  const STEP_LABELS = ['Import quotas', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
+  const STEP_LABELS = ['Import dispos', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
   const isOnProcess = location.pathname.startsWith('/monthly-processes/')
 

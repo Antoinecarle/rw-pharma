@@ -8,6 +8,7 @@ import Layout from '@/components/Layout'
 
 // Lazy-loaded pages — split into separate chunks
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
+const VibesSelectionPage = lazy(() => import('@/pages/VibesSelectionPage'))
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const ProductsPage = lazy(() => import('@/pages/ProductsPage'))
 const WholesalersPage = lazy(() => import('@/pages/WholesalersPage'))
@@ -101,6 +102,9 @@ function AppRoutes() {
           user ? <Navigate to={role === 'customer' ? '/portal' : '/'} replace /> : <LazyPage><LoginPage /></LazyPage>
         } />
 
+        {/* Vibes selection (temporary) */}
+        <Route path="/vibes" element={<LazyPage><VibesSelectionPage /></LazyPage>} />
+
         {/* Invitation acceptance (public) */}
         <Route path="/invite/:token" element={<LazyPage><AcceptInvitationPage /></LazyPage>} />
 
@@ -116,7 +120,8 @@ function AppRoutes() {
           <Route index element={<LazyPage><DashboardPage /></LazyPage>} />
           <Route path="products" element={<LazyPage><ProductsPage /></LazyPage>} />
           <Route path="wholesalers" element={<LazyPage><WholesalersPage /></LazyPage>} />
-          <Route path="quotas" element={<LazyPage><QuotasPage /></LazyPage>} />
+          <Route path="disponibilites" element={<LazyPage><QuotasPage /></LazyPage>} />
+          <Route path="quotas" element={<Navigate to="/disponibilites" replace />} />
           <Route path="customers" element={<LazyPage><CustomersPage /></LazyPage>} />
           <Route path="monthly-processes" element={<LazyPage><MonthlyProcessesPage /></LazyPage>} />
           <Route path="monthly-processes/:id" element={<LazyPage><MonthlyProcessDetailPage /></LazyPage>} />

@@ -643,10 +643,10 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Badge variant="outline" className="gap-1 text-xs">
-                      <ShieldCheck className="h-3 w-3" /> Quotas stricts
+                      <ShieldCheck className="h-3 w-3" /> Dispos strictes
                     </Badge>
                   </TooltipTrigger>
-                  <TooltipContent>L'algorithme respecte les quotas grossistes et ne depasse jamais les limites</TooltipContent>
+                  <TooltipContent>L'algorithme respecte les disponibilites grossistes et ne depasse jamais les limites</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -777,7 +777,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                         <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
                         <div>
                           <p className="text-sm font-semibold">Aucun lot de stock disponible</p>
-                          <p className="text-xs text-muted-foreground">L'allocation se fera uniquement par quotas grossistes. Vous pouvez passer cette etape.</p>
+                          <p className="text-xs text-muted-foreground">L'allocation se fera uniquement par disponibilites grossistes. Vous pouvez passer cette etape.</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -994,7 +994,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                               <div className="flex items-center gap-2 mb-2">
                                 <Warehouse className="h-4 w-4 text-muted-foreground" />
                                 <h4 className="text-sm font-semibold text-muted-foreground">
-                                  {noLotProducts.length} produit{noLotProducts.length > 1 ? 's' : ''} sans lot — allocation par quotas uniquement
+                                  {noLotProducts.length} produit{noLotProducts.length > 1 ? 's' : ''} sans lot — allocation par disponibilites uniquement
                                 </h4>
                               </div>
                               <div className="flex flex-wrap gap-1.5">
@@ -1133,7 +1133,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                     {/* Quota utilization */}
                     {dryRunResult.quotaUtilization.length > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1.5">Utilisation des quotas</p>
+                        <p className="text-xs font-semibold text-muted-foreground mb-1.5">Utilisation des disponibilites</p>
                         <div className="flex flex-wrap gap-1.5">
                           {dryRunResult.quotaUtilization.map(q => {
                             const pct = q.total > 0 ? Math.round((q.used / q.total) * 100) : 0

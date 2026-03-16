@@ -89,13 +89,13 @@ export default function QuotasPage() {
 
   const upsert = useMutation({
     mutationFn: async (q: WholesalerQuotaInsert & { id?: string }) => { if (q.id) { const { id, ...rest } = q; const { error } = await supabase.from('wholesaler_quotas').update(rest).eq('id', id); if (error) throw error } else { const { error } = await supabase.from('wholesaler_quotas').insert(q); if (error) throw error } },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotas'] }); setDialogOpen(false); toast.success(editing ? 'Quota modifie' : 'Quota cree') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotas'] }); setDialogOpen(false); toast.success(editing ? 'Disponibilite modifiee' : 'Disponibilite creee') },
     onError: (err: Error) => toast.error(err.message),
   })
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('wholesaler_quotas').delete().eq('id', id); if (error) throw error },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotas'] }); toast.success('Quota supprime') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotas'] }); toast.success('Disponibilite supprimee') },
     onError: (err: Error) => toast.error(err.message),
   })
 
@@ -119,8 +119,8 @@ export default function QuotasPage() {
               <ClipboardList className="h-5 w-5 text-amber-500" />
             </div>
             <div>
-              <h2 className="ivory-heading text-xl md:text-2xl">Quotas grossistes</h2>
-              <p className="text-[12px] mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}><Calendar className="h-3 w-3" />{currentMonthLabel} &middot; {quotas?.count ?? 0} quotas</p>
+              <h2 className="ivory-heading text-xl md:text-2xl">Disponibilites grossistes</h2>
+              <p className="text-[12px] mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}><Calendar className="h-3 w-3" />{currentMonthLabel} &middot; {quotas?.count ?? 0} disponibilites</p>
             </div>
           </div>
           <Button size="sm" onClick={openCreate} className="gap-1.5 text-[13px] h-9 rounded-xl shadow-sm" style={{ background: 'linear-gradient(180deg, var(--ivory-accent), var(--ivory-accent-hover))', color: 'white' }}><Plus className="h-3.5 w-3.5" /> Ajouter</Button>
@@ -157,7 +157,7 @@ export default function QuotasPage() {
               <TableHead className="ivory-table-head py-3.5 px-4">Grossiste</TableHead>
               <TableHead className="ivory-table-head py-3.5">CIP13</TableHead>
               <TableHead className="ivory-table-head py-3.5">Produit</TableHead>
-              <TableHead className="ivory-table-head py-3.5 text-right">Quota</TableHead>
+              <TableHead className="ivory-table-head py-3.5 text-right">Dispo</TableHead>
               <TableHead className="ivory-table-head py-3.5 text-right">Extra</TableHead>
               <TableHead className="ivory-table-head py-3.5 text-right">Total</TableHead>
               <TableHead className="ivory-table-head py-3.5 text-right">Utilise</TableHead>
@@ -169,8 +169,8 @@ export default function QuotasPage() {
               <TableRow><TableCell colSpan={8} className="text-center py-20">
                 <motion.div className="flex flex-col items-center gap-3" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
                   <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.06)' }}><Package className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} /></div>
-                  <p className="ivory-heading text-[14px]">Aucun quota pour {currentMonthLabel}</p>
-                  <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Ajoutez des quotas</p>
+                  <p className="ivory-heading text-[14px]">Aucune disponibilite pour {currentMonthLabel}</p>
+                  <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Ajoutez des disponibilites</p>
                   <Button size="sm" onClick={openCreate} className="mt-2 gap-1.5 text-[12px] h-8 rounded-xl" style={{ background: 'var(--ivory-accent)', color: 'white' }}><Plus className="h-3 w-3" /> Ajouter</Button>
                 </motion.div>
               </TableCell></TableRow>
@@ -182,7 +182,7 @@ export default function QuotasPage() {
                   <TableCell className="px-4"><div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} /><span className="ivory-mono text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{ background: `${color}12`, color }}>{q.wholesaler?.code ?? q.wholesaler?.name ?? '-'}</span></div></TableCell>
                   <TableCell><span className="ivory-mono text-[12px] font-medium px-2 py-0.5 rounded-md" style={{ color: 'var(--ivory-accent)', background: 'rgba(13,148,136,0.06)' }}>{q.product?.cip13 ?? '-'}</span></TableCell>
                   <TableCell><span className="text-[13px] font-medium max-w-[200px] truncate block" style={{ color: 'var(--ivory-text-heading)' }}>{q.product?.name ?? '-'}</span></TableCell>
-                  <TableCell className="text-right tabular-nums font-semibold text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>{q.quota_quantity}</TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>{q.quota_quantity === 0 || q.quota_quantity == null ? <span className="text-lg" title="Deplafonne">∞</span> : q.quota_quantity}</TableCell>
                   <TableCell className="text-right tabular-nums text-[13px]">{q.extra_available > 0 ? <span style={{ color: 'var(--ivory-teal)' }}>+{q.extra_available}</span> : <span style={{ color: 'var(--ivory-text-muted)' }}>{q.extra_available}</span>}</TableCell>
                   <TableCell className="text-right"><span className="font-bold tabular-nums text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>{total}</span></TableCell>
                   <TableCell className="text-right tabular-nums text-[13px]">{q.quota_used > 0 ? <span style={{ color: q.quota_used >= total ? 'rgb(220,38,38)' : 'var(--ivory-accent)' }}>{q.quota_used}/{total}</span> : <span style={{ color: 'var(--ivory-text-muted)' }}>0</span>}</TableCell>
@@ -213,8 +213,8 @@ export default function QuotasPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base"><div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.08)' }}><ClipboardList className="h-4 w-4 text-amber-500" /></div>{editing ? 'Modifier le quota' : 'Nouveau quota'}</DialogTitle>
-            <DialogDescription className="text-[13px]">{editing ? 'Modifiez la quantite' : 'Definissez un quota mensuel'}</DialogDescription>
+            <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base"><div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.08)' }}><ClipboardList className="h-4 w-4 text-amber-500" /></div>{editing ? 'Modifier la disponibilite' : 'Nouvelle disponibilite'}</DialogTitle>
+            <DialogDescription className="text-[13px]">{editing ? 'Modifiez la quantite' : 'Definissez une disponibilite mensuelle'}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5"><Label className="text-[13px] font-medium">Grossiste *</Label><Select value={form.wholesaler_id} onValueChange={(v) => setForm({ ...form, wholesaler_id: v })}><SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Selectionner" /></SelectTrigger><SelectContent>{wholesalers?.map((w) => <SelectItem key={w.id} value={w.id}><div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: wholesalerColorMap[w.id] }} />{w.name}</div></SelectItem>)}</SelectContent></Select></div>
@@ -238,7 +238,7 @@ export default function QuotasPage() {
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Supprimer le quota" description="Action irreversible." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
+      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Supprimer la disponibilite" description="Action irreversible." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
     </div>
   )
 }

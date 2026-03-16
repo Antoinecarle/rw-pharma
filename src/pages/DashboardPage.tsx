@@ -18,7 +18,7 @@ import {
 
 const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
 const MONTH_SHORT = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec']
-const STEP_LABELS = ['Import quotas', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
+const STEP_LABELS = ['Import dispos', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
 
 function TrendBadge({ current, previous }: { current: number; previous: number }) {
@@ -527,7 +527,7 @@ export default function DashboardPage() {
             { name: 'Processus mensuel', desc: 'Allocations & suivi', href: '/monthly-processes', icon: CalendarRange, color: 'var(--ivory-accent)' },
             { name: 'Produits', desc: 'Catalogue medicaments', href: '/products', icon: Pill, color: '#0D9488' },
             { name: 'Grossistes', desc: 'Partenaires fournisseurs', href: '/wholesalers', icon: Truck, color: '#3B82F6' },
-            { name: 'Quotas', desc: 'Gestion mensuelle', href: '/quotas', icon: ClipboardList, color: '#F59E0B' },
+            { name: 'Disponibilites', desc: 'Dispos grossistes', href: '/disponibilites', icon: ClipboardList, color: '#F59E0B' },
           ].map((action, i) => (
             <Link key={action.href} to={action.href}>
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 + i * 0.05 }}>

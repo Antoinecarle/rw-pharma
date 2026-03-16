@@ -12,7 +12,7 @@ export interface StepDefinition {
 
 /** All 10 steps with their metadata */
 export const ALL_STEPS: StepDefinition[] = [
-  { stepNum: 1, label: 'Import Quotas', shortLabel: 'Quotas', icon: BarChart3 },
+  { stepNum: 1, label: 'Import Disponibilites', shortLabel: 'Dispos', icon: BarChart3 },
   { stepNum: 2, label: 'Import Commandes', shortLabel: 'Commandes', icon: FileUp },
   { stepNum: 3, label: 'Revue Commandes', shortLabel: 'Revue', icon: ClipboardCheck },
   { stepNum: 4, label: 'Attribution Macro', shortLabel: 'Attribution', icon: GitMerge },
