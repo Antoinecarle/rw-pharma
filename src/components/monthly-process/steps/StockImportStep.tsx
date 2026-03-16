@@ -388,12 +388,14 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
 
       updateFile(fileId, { status: 'importing', importProgress: { current: 0, total: f.rows.length, phase: 'Chargement des references...' } })
 
-      // Load all products (paginated)
+      // Load all products (paginated with safety limit)
       let allProducts: { id: string; cip13: string }[] = []
       let from = 0
       const pageSize = 1000
-      while (true) {
-        const { data: page } = await supabase.from('products').select('id, cip13').range(from, from + pageSize - 1)
+      const maxPages = 10
+      for (let pg = 0; pg < maxPages; pg++) {
+        const { data: page, error: pgErr } = await supabase.from('products').select('id, cip13').range(from, from + pageSize - 1)
+        if (pgErr) throw new Error(`Erreur chargement produits: ${pgErr.message}`)
         if (!page || page.length === 0) break
         allProducts = allProducts.concat(page)
         if (page.length < pageSize) break
@@ -571,8 +573,8 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
       toast.success(`${result.inserted} lots importes`)
     },
     onError: (err: Error, fileId: string) => {
-      updateFile(fileId, { status: 'mapping' })
-      toast.error(`Erreur: ${err.message}`)
+      updateFile(fileId, { status: 'error', importProgress: { current: 0, total: 0, phase: err.message } })
+      toast.error(`Erreur import: ${err.message}`)
     },
   })
 
@@ -723,7 +725,9 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
                 ? <Check className="h-4 w-4 text-green-600" />
                 : f.status === 'importing'
                   ? <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-                  : <PackageCheck className="h-4 w-4 text-muted-foreground" />
+                  : f.status === 'error'
+                    ? <AlertTriangle className="h-4 w-4 text-red-500" />
+                    : <PackageCheck className="h-4 w-4 text-muted-foreground" />
               }
             </div>
 
@@ -769,6 +773,14 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
             <div className="px-3.5 pb-3">
               <Progress value={progressPercent} className="h-1.5" />
               <p className="text-[11px] text-muted-foreground mt-1">{f.importProgress.phase}</p>
+            </div>
+          )}
+          {f.status === 'error' && (
+            <div className="px-3.5 pb-3 flex items-center gap-2">
+              <p className="text-[11px] text-red-600 flex-1">{f.importProgress.phase || 'Erreur inconnue'}</p>
+              <Button variant="outline" size="sm" className="h-6 text-[11px]" onClick={(e) => { e.stopPropagation(); updateFile(f.id, { status: 'mapping' }) }}>
+                <RotateCcw className="h-3 w-3 mr-1" /> Reessayer
+              </Button>
             </div>
           )}
         </Card>

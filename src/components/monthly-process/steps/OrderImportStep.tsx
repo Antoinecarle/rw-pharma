@@ -371,8 +371,10 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       let allProducts: { id: string; cip13: string; name: string }[] = []
       let from = 0
       const pageSize = 1000
-      while (true) {
-        const { data: page } = await supabase.from('products').select('id, cip13, name').range(from, from + pageSize - 1)
+      const maxPages = 10
+      for (let pg = 0; pg < maxPages; pg++) {
+        const { data: page, error: pgErr } = await supabase.from('products').select('id, cip13, name').range(from, from + pageSize - 1)
+        if (pgErr) throw new Error(`Erreur chargement produits: ${pgErr.message}`)
         if (!page || page.length === 0) break
         allProducts = allProducts.concat(page)
         if (page.length < pageSize) break

@@ -341,12 +341,14 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
 
       updateFile(fileId, { status: 'importing', importProgress: { current: 0, total: f.rows.length, phase: 'Chargement des references...' } })
 
-      // Load all products (paginated to avoid 1000-row limit)
+      // Load all products (paginated with safety limit)
       let allProducts: { id: string; cip13: string; name: string; is_ansm_blocked: boolean }[] = []
       let from = 0
       const pageSize = 1000
-      while (true) {
-        const { data: page } = await supabase.from('products').select('id, cip13, name, is_ansm_blocked').range(from, from + pageSize - 1)
+      const maxPages = 10
+      for (let pg = 0; pg < maxPages; pg++) {
+        const { data: page, error: pgErr } = await supabase.from('products').select('id, cip13, name, is_ansm_blocked').range(from, from + pageSize - 1)
+        if (pgErr) throw new Error(`Erreur chargement produits: ${pgErr.message}`)
         if (!page || page.length === 0) break
         allProducts = allProducts.concat(page)
         if (page.length < pageSize) break
