@@ -18,7 +18,7 @@ import {
 
 const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
 const MONTH_SHORT = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec']
-const STEP_LABELS = ['Import dispos', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
+const STEP_LABELS = ['Import dispos', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Negociation', 'Re-export', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
 
 function TrendBadge({ current, previous }: { current: number; previous: number }) {

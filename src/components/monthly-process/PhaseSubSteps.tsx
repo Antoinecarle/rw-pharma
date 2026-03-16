@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { Check, BarChart3, FileUp, ClipboardCheck, GitMerge, Send, PackageCheck, Layers, Cpu, SearchCheck, Flag } from 'lucide-react'
+import { Check, BarChart3, FileUp, ClipboardCheck, GitMerge, Send, PackageCheck, Layers, Cpu, SearchCheck, Flag, MessageSquare, RefreshCw } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export interface StepDefinition {
@@ -10,18 +10,20 @@ export interface StepDefinition {
   icon: typeof BarChart3
 }
 
-/** All 10 steps with their metadata */
+/** All 12 steps with their metadata */
 export const ALL_STEPS: StepDefinition[] = [
   { stepNum: 1, label: 'Import Disponibilites', shortLabel: 'Dispos', icon: BarChart3 },
   { stepNum: 2, label: 'Import Commandes', shortLabel: 'Commandes', icon: FileUp },
   { stepNum: 3, label: 'Revue Commandes', shortLabel: 'Revue', icon: ClipboardCheck },
   { stepNum: 4, label: 'Attribution Macro', shortLabel: 'Attribution', icon: GitMerge },
   { stepNum: 5, label: 'Export Grossistes', shortLabel: 'Export', icon: Send },
-  { stepNum: 6, label: 'Reception Stocks', shortLabel: 'Stocks', icon: PackageCheck },
-  { stepNum: 7, label: 'Aggregation Stock', shortLabel: 'Agregation', icon: Layers },
-  { stepNum: 8, label: 'Allocation', shortLabel: 'Allocation', icon: Cpu },
-  { stepNum: 9, label: 'Revue Allocations', shortLabel: 'Revue Alloc', icon: SearchCheck },
-  { stepNum: 10, label: 'Finalisation', shortLabel: 'Final', icon: Flag },
+  { stepNum: 6, label: 'Negociation', shortLabel: 'Nego', icon: MessageSquare },
+  { stepNum: 7, label: 'Re-export Grossistes', shortLabel: 'Re-export', icon: RefreshCw },
+  { stepNum: 8, label: 'Reception Stocks', shortLabel: 'Stocks', icon: PackageCheck },
+  { stepNum: 9, label: 'Aggregation Stock', shortLabel: 'Agregation', icon: Layers },
+  { stepNum: 10, label: 'Allocation', shortLabel: 'Allocation', icon: Cpu },
+  { stepNum: 11, label: 'Revue Allocations', shortLabel: 'Revue Alloc', icon: SearchCheck },
+  { stepNum: 12, label: 'Finalisation', shortLabel: 'Final', icon: Flag },
 ]
 
 interface PhaseSubStepsProps {

@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { MonthlyProcess } from '@/types/database'
 
 export interface PhaseGate {
-  phase: 1 | 2 | 3
+  phase: 1 | 2 | 3 | 4
   canProceed: boolean
   warnings: string[]
   blockers: string[]
@@ -73,6 +73,7 @@ export function usePhaseGates(process: MonthlyProcess | null) {
     computePhase1Gate(gateData),
     computePhase2Gate(gateData),
     computePhase3Gate(gateData),
+    computePhase4Gate(gateData),
   ]
 
   return { gates, gateData }
@@ -101,6 +102,12 @@ function computePhase1Gate(data: ReturnType<typeof usePhaseGates>['gateData'] ex
 
 function computePhase2Gate(data: ReturnType<typeof usePhaseGates>['gateData'] extends infer T ? T : never): PhaseGate {
   if (!data) return { phase: 2, canProceed: false, warnings: [], blockers: ['Chargement...'] }
+  // Phase 2 = Negotiation — needs orders to exist
+  return { phase: 2, canProceed: data.ordersCount > 0, warnings: [], blockers: data.ordersCount === 0 ? ['Aucune commande'] : [] }
+}
+
+function computePhase3Gate(data: ReturnType<typeof usePhaseGates>['gateData'] extends infer T ? T : never): PhaseGate {
+  if (!data) return { phase: 3, canProceed: false, warnings: [], blockers: ['Chargement...'] }
 
   const blockers: string[] = []
   const warnings: string[] = []
@@ -111,16 +118,11 @@ function computePhase2Gate(data: ReturnType<typeof usePhaseGates>['gateData'] ex
     warnings.push('Aucune allocation confirmee')
   }
 
-  return {
-    phase: 2,
-    canProceed: blockers.length === 0,
-    warnings,
-    blockers,
-  }
+  return { phase: 3, canProceed: blockers.length === 0, warnings, blockers }
 }
 
-function computePhase3Gate(data: ReturnType<typeof usePhaseGates>['gateData'] extends infer T ? T : never): PhaseGate {
-  if (!data) return { phase: 3, canProceed: false, warnings: [], blockers: ['Chargement...'] }
+function computePhase4Gate(data: ReturnType<typeof usePhaseGates>['gateData'] extends infer T ? T : never): PhaseGate {
+  if (!data) return { phase: 4, canProceed: false, warnings: [], blockers: ['Chargement...'] }
 
   const blockers: string[] = []
   const warnings: string[] = []
@@ -131,12 +133,7 @@ function computePhase3Gate(data: ReturnType<typeof usePhaseGates>['gateData'] ex
     warnings.push(`${pending} allocation(s) non confirmee(s)`)
   }
 
-  return {
-    phase: 3,
-    canProceed: blockers.length === 0,
-    warnings,
-    blockers,
-  }
+  return { phase: 4, canProceed: blockers.length === 0, warnings, blockers }
 }
 
 export function getGateForPhase(gates: PhaseGate[], phaseId: number): PhaseGate | undefined {

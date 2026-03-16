@@ -23,19 +23,27 @@ export const PHASES: PhaseDefinition[] = [
   },
   {
     id: 2,
-    label: 'Collecte & Allocation',
-    shortLabel: 'Alloc',
-    icon: Warehouse,
-    phase: 'collecte', // covers collecte + allocation DB phases
-    steps: [6, 7, 8],
+    label: 'Negociation',
+    shortLabel: 'Nego',
+    icon: ShoppingCart,
+    phase: 'commandes',
+    steps: [6, 7],
   },
   {
     id: 3,
+    label: 'Collecte & Allocation',
+    shortLabel: 'Alloc',
+    icon: Warehouse,
+    phase: 'collecte',
+    steps: [8, 9, 10],
+  },
+  {
+    id: 4,
     label: 'Livraison & Cloture',
     shortLabel: 'Export',
     icon: Flag,
     phase: 'cloture',
-    steps: [9, 10],
+    steps: [11, 12],
   },
 ]
 

@@ -138,7 +138,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
 
       const { error: stepError } = await supabase
         .from('monthly_processes')
-        .update({ status: 'finalizing', current_step: 10, phase: 'cloture' })
+        .update({ status: 'finalizing', current_step: 12, phase: 'cloture' })
         .eq('id', process.id)
       if (stepError) throw stepError
     },
