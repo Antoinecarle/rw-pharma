@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import AnimatedCounter from '@/components/ui/animated-counter'
 import {
-  Receipt, Euro, Clock, CheckCircle2, AlertTriangle, Send,
+  Receipt, Clock, CheckCircle2, AlertTriangle, Send,
   Ban, FileText, Plus, Loader2, Search,
 } from 'lucide-react'
 import { toast } from 'sonner'

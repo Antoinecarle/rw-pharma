@@ -549,7 +549,7 @@ export default function DashboardPage() {
                 { label: 'Couverture moy.', value: `${avgCoverage}%`, icon: CheckCircle2, color: '#16a34a' },
                 { label: 'Marge annuelle', value: formatEur(totalMarge), icon: TrendingUp, color: '#f59e0b' },
               ]
-            })().map((kpi, i) => (
+            })().map((kpi) => (
               <Card key={kpi.label}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">

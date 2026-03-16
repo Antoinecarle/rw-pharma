@@ -181,7 +181,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     },
   })
 
-  const { data: wholesalers } = useQuery({
+  const { data: _wholesalersList } = useQuery({
     queryKey: ['wholesalers', 'all'],
     queryFn: async () => {
       const { data } = await supabase.from('wholesalers').select('id, name, code')

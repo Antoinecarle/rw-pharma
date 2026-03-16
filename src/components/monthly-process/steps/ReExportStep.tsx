@@ -105,7 +105,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
 
       // 3. Fetch wholesalers
       const { data: wholesalers } = await supabase.from('wholesalers').select('id, code, name')
-      const wsMap = new Map((wholesalers ?? []).map((w: Wholesaler) => [w.id, w]))
+      const wsMap = new Map((wholesalers ?? []).map((w) => [w.id, w as Wholesaler]))
 
       // 4. Determine "new order" threshold: orders created after negotiation started
       // Use the earliest nego_updated_at as the start of negotiation
