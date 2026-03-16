@@ -83,8 +83,9 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
 
       if (targetPhaseId === 1) {
         toStep = 1
-        // Delete all allocations
+        // Delete all allocations + reset stock status
         await supabase.from('allocations').delete().eq('monthly_process_id', process.id)
+        await supabase.from('collected_stock').update({ status: 'received' }).eq('monthly_process_id', process.id).in('status', ['allocated', 'partially_allocated'])
         await supabase.from('orders').update({ status: 'validated', allocated_quantity: 0 }).eq('monthly_process_id', process.id).in('status', ['allocated', 'partially_allocated'])
         const { error: updErr } = await supabase.from('monthly_processes').update({ current_step: toStep, status: 'importing_quotas', phase: 'commandes', allocations_count: 0, date_cloture: null }).eq('id', process.id)
         if (updErr) throw updErr
@@ -96,8 +97,9 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
         if (updErr) throw updErr
       } else if (targetPhaseId === 3) {
         toStep = 8
-        // Delete all allocations
+        // Delete all allocations + reset stock status
         await supabase.from('allocations').delete().eq('monthly_process_id', process.id)
+        await supabase.from('collected_stock').update({ status: 'received' }).eq('monthly_process_id', process.id).in('status', ['allocated', 'partially_allocated'])
         await supabase.from('orders').update({ status: 'validated', allocated_quantity: 0 }).eq('monthly_process_id', process.id).in('status', ['allocated', 'partially_allocated'])
         const { error: updErr } = await supabase.from('monthly_processes').update({ current_step: toStep, status: 'collecting_stock', phase: 'collecte', allocations_count: 0, date_cloture: null }).eq('id', process.id)
         if (updErr) throw updErr

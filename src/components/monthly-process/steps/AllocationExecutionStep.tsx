@@ -536,6 +536,11 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       }
       setPhase('running')
 
+      // Clean up previous allocation run (if any) — reset stock + orders + delete old allocations
+      await supabase.from('allocations').delete().eq('monthly_process_id', process.id)
+      await supabase.from('collected_stock').update({ status: 'received' }).eq('monthly_process_id', process.id).in('status', ['allocated', 'partially_allocated'])
+      await supabase.from('orders').update({ allocated_quantity: 0, status: 'validated' }).eq('monthly_process_id', process.id).in('status', ['allocated', 'partially_allocated'])
+
       const { allocations, logs } = await runAllocation(
         process.id, process.month, process.year, strategy, new Set(), false,
         undefined, customerWholesalerMap,

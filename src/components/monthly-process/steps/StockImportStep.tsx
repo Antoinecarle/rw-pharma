@@ -523,7 +523,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
 
           const { error, data } = await supabase
             .from('collected_stock')
-            .insert(stockWithLots)
+            .upsert(stockWithLots, { onConflict: 'monthly_process_id,product_id,wholesaler_id,lot_number' })
             .select('id')
 
           if (error) {
