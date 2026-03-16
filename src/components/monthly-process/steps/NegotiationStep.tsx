@@ -719,6 +719,22 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
               <div className="flex-1 overflow-auto">
                 <Table>
                   <TableHeader className="sticky top-0 bg-background z-10">
+                    {/* Banner row: FOURNISSEURS — ATTRIBUÉ / DISPO */}
+                    {activeWholesalers.length > 0 && (
+                      <TableRow className="border-b-0">
+                        <TableHead colSpan={6} className="bg-background border-b-0" />
+                        <TableHead
+                          colSpan={activeWholesalers.length}
+                          className="text-center text-[10px] font-bold uppercase tracking-widest py-1.5 border-b-0"
+                          style={{ background: 'rgba(59,130,246,0.06)', color: '#6b7280' }}
+                        >
+                          Fournisseurs — Attribue / Dispo
+                        </TableHead>
+                        <TableHead className="bg-background border-b-0" />
+                        <TableHead className="bg-background border-b-0" />
+                        <TableHead className="bg-background border-b-0" />
+                      </TableRow>
+                    )}
                     <TableRow>
                       <TableHead className="text-[11px] w-10 text-center px-2">
                         <Tooltip>
@@ -731,18 +747,27 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                       <TableHead className="text-[11px] text-right">Qte</TableHead>
                       <TableHead className="text-[11px] text-right">Lot min</TableHead>
                       <TableHead className="text-[11px] text-right border-r-2">Exp&ge;</TableHead>
-                      {/* Wholesaler columns */}
-                      {activeWholesalers.map(ws => (
-                        <TableHead key={ws.id} className="text-[11px] text-center px-1.5 min-w-[52px]">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="font-medium">{ws.code?.substring(0, 4) ?? ws.name.substring(0, 4)}</span>
-                            </TooltipTrigger>
-                            <TooltipContent>{ws.name}</TooltipContent>
-                          </Tooltip>
-                        </TableHead>
-                      ))}
-                      <TableHead className="text-[11px] text-center">Attr.</TableHead>
+                      {/* Wholesaler columns with dispo total */}
+                      {activeWholesalers.map(ws => {
+                        const wsQuota = getQuota(selectedGroup?.productId ?? '', ws.id)
+                        const wsDispo = wsQuota ? wsQuota.quotaQuantity + wsQuota.extraAvailable : 0
+                        return (
+                          <TableHead key={ws.id} className="text-[11px] text-center px-1.5 min-w-[68px]">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex flex-col items-center leading-tight">
+                                  <span className="font-bold uppercase">{ws.code?.substring(0, 5) ?? ws.name.substring(0, 5)}</span>
+                                  <span className="text-[10px] text-muted-foreground font-normal tabular-nums">
+                                    {wsDispo > 0 ? wsDispo.toLocaleString('fr-FR') : ''}
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>{ws.name} — Dispo: {wsDispo.toLocaleString('fr-FR')}</TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                        )
+                      })}
+                      <TableHead className="text-[11px] text-center font-bold uppercase">Attr.</TableHead>
                       <TableHead className="text-[11px] text-center">Aj. prix</TableHead>
                       <TableHead className="text-[11px]">Commentaire</TableHead>
                     </TableRow>
@@ -921,27 +946,21 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <span
-                                        className="inline-flex items-center justify-center w-[52px] h-7 rounded text-[11px] font-mono text-muted-foreground/40"
-                                        style={{ background: 'repeating-linear-gradient(-45deg, #f3f4f6, #f3f4f6 3px, #eaebee 3px, #eaebee 6px)' }}
-                                      />
+                                        className="inline-flex items-center justify-center w-[60px] h-7 rounded-md text-xs font-semibold text-gray-300"
+                                        style={{ background: 'repeating-linear-gradient(-45deg, #f5f5f5, #f5f5f5 3px, #eaeaea 3px, #eaeaea 6px)' }}
+                                      >✕</span>
                                     </TooltipTrigger>
                                     <TooltipContent>Grossiste non ouvert pour {cust?.code}</TooltipContent>
                                   </Tooltip>
                                 ) : !hasQuota ? (
-                                  <input
-                                    readOnly
-                                    value=""
-                                    placeholder="\u2014"
-                                    className="w-[52px] h-7 text-center font-mono text-[11px] border rounded bg-background text-muted-foreground/30 placeholder:text-muted-foreground/30 cursor-default"
-                                    tabIndex={-1}
-                                  />
+                                  <span className="inline-flex items-center justify-center w-[60px] h-7 text-center font-mono text-[11px] text-gray-300 cursor-default">&mdash;</span>
                                 ) : macroQty > 0 ? (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <input
                                         readOnly
-                                        value={macroQty}
-                                        className="w-[52px] h-7 text-center font-mono text-[11px] border rounded bg-blue-50 border-blue-500 text-blue-700 font-bold cursor-default dark:bg-blue-950/30"
+                                        value={macroQty.toLocaleString('fr-FR')}
+                                        className="w-[60px] h-7 text-center font-mono text-[11px] border border-blue-300 rounded-md bg-white text-blue-700 font-bold cursor-default shadow-sm"
                                         tabIndex={-1}
                                       />
                                     </TooltipTrigger>
@@ -950,13 +969,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                                     </TooltipContent>
                                   </Tooltip>
                                 ) : (
-                                  <input
-                                    readOnly
-                                    value=""
-                                    placeholder="\u2014"
-                                    className="w-[52px] h-7 text-center font-mono text-[11px] border rounded bg-background text-muted-foreground/30 placeholder:text-muted-foreground/30 cursor-default"
-                                    tabIndex={-1}
-                                  />
+                                  <span className="inline-flex items-center justify-center w-[60px] h-7 text-center font-mono text-[11px] text-gray-300 cursor-default">&mdash;</span>
                                 )}
                               </TableCell>
                             )
@@ -1037,12 +1050,18 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                           const quota = getQuota(selectedGroup.productId, ws.id)
                           const total = quota ? quota.quotaQuantity + quota.extraAvailable : 0
                           const isOver = total > 0 && macroQty > total
-                          const isAtLimit = total > 0 && macroQty === total
                           return (
                             <TableCell key={ws.id} className="text-center px-1">
-                              <span className={`font-mono text-[11px] font-semibold ${isOver ? 'text-red-600' : isAtLimit ? 'text-amber-600' : 'text-green-600'}`}>
-                                {total > 0 || macroQty > 0 ? `${macroQty}/${total}` : '-'}
-                              </span>
+                              {total > 0 || macroQty > 0 ? (
+                                <span className="font-mono text-[11px]">
+                                  <span className={`font-bold ${isOver ? 'text-red-600' : 'text-blue-700'}`}>
+                                    {macroQty.toLocaleString('fr-FR')}
+                                  </span>
+                                  <span className="text-gray-400">/ {total.toLocaleString('fr-FR')}</span>
+                                </span>
+                              ) : (
+                                <span className="text-gray-300 text-[11px]">&mdash;</span>
+                              )}
                             </TableCell>
                           )
                         })}
