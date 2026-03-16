@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Customer, CustomerInsert } from '@/types/database'
+import type { Customer, CustomerInsert, CustomerContact, CustomerContactInsert, Wholesaler } from '@/types/database'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,7 @@ import {
 import StarRating from '@/components/ui/star-rating'
 import GradientSlider from '@/components/ui/gradient-slider'
 import StepperInput from '@/components/ui/stepper-input'
-import { Plus, Pencil, Trash2, Star, FileText, Users, Globe, Mail, UserPlus, AlertTriangle, CheckCircle2, Send, Copy, Link2, Clock, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Star, FileText, Users, Globe, Mail, UserPlus, AlertTriangle, CheckCircle2, Send, Copy, Link2, Clock, Loader2, Truck } from 'lucide-react'
 import { toast } from 'sonner'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useAuth } from '@/hooks/useAuth'
@@ -422,11 +422,13 @@ export default function CustomersPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <Tabs defaultValue="general" className="space-y-4">
-              <TabsList className="w-full grid grid-cols-4 h-9 rounded-xl">
-                <TabsTrigger value="general" className="text-[12px] rounded-lg">General</TabsTrigger>
-                <TabsTrigger value="documents" className="text-[12px] rounded-lg">Documents</TabsTrigger>
-                <TabsTrigger value="preferences" className="text-[12px] rounded-lg">Preferences</TabsTrigger>
-                {editing && <TabsTrigger value="access" className="text-[12px] rounded-lg">Acces</TabsTrigger>}
+              <TabsList className="w-full grid h-9 rounded-xl" style={{ gridTemplateColumns: editing ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)' }}>
+                <TabsTrigger value="general" className="text-[11px] rounded-lg">General</TabsTrigger>
+                <TabsTrigger value="documents" className="text-[11px] rounded-lg">Documents</TabsTrigger>
+                <TabsTrigger value="preferences" className="text-[11px] rounded-lg">Prefs</TabsTrigger>
+                {editing && <TabsTrigger value="contacts" className="text-[11px] rounded-lg">Contacts</TabsTrigger>}
+                {editing && <TabsTrigger value="wholesalers" className="text-[11px] rounded-lg">Grossistes</TabsTrigger>}
+                {editing && <TabsTrigger value="access" className="text-[11px] rounded-lg">Acces</TabsTrigger>}
               </TabsList>
               <TabsContent value="general" className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
@@ -511,6 +513,20 @@ export default function CustomersPage() {
                 </div>
                 <div className="space-y-1.5"><Label className="text-[13px] font-medium">Notes</Label><Textarea value={prefs.notes ?? ''} onChange={(e) => setPrefs({ ...prefs, notes: e.target.value || undefined })} placeholder="Notes..." rows={2} className="text-[13px] rounded-xl" /></div>
               </TabsContent>
+
+              {/* Onglet Contacts */}
+              {editing && (
+                <TabsContent value="contacts" className="space-y-4">
+                  <CustomerContactsTab customerId={editing.id} />
+                </TabsContent>
+              )}
+
+              {/* Onglet Grossistes ouverts */}
+              {editing && (
+                <TabsContent value="wholesalers" className="space-y-4">
+                  <CustomerWholesalersTab customerId={editing.id} />
+                </TabsContent>
+              )}
 
               {/* Onglet Acces portail */}
               {editing && (
@@ -816,5 +832,192 @@ function CustomerCard({
         </div>
       </div>
     </motion.div>
+  )
+}
+
+/* ── Customer Contacts Tab ─────────────────────────────────────── */
+
+function CustomerContactsTab({ customerId }: { customerId: string }) {
+  const queryClient = useQueryClient()
+  const [newContact, setNewContact] = useState<Partial<CustomerContactInsert>>({})
+  const [addOpen, setAddOpen] = useState(false)
+
+  const { data: contacts = [] } = useQuery({
+    queryKey: ['customer_contacts', customerId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('customer_contacts').select('*').eq('customer_id', customerId).order('is_primary', { ascending: false })
+      if (error) throw error
+      return data as CustomerContact[]
+    },
+  })
+
+  const addMut = useMutation({
+    mutationFn: async (c: CustomerContactInsert) => {
+      const { error } = await supabase.from('customer_contacts').insert(c)
+      if (error) throw error
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customer_contacts', customerId] }); setAddOpen(false); setNewContact({}); toast.success('Contact ajoute') },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('customer_contacts').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customer_contacts', customerId] }); toast.success('Contact supprime') },
+  })
+
+  const setPrimaryMut = useMutation({
+    mutationFn: async (contactId: string) => {
+      await supabase.from('customer_contacts').update({ is_primary: false }).eq('customer_id', customerId)
+      const { error } = await supabase.from('customer_contacts').update({ is_primary: true }).eq('id', contactId)
+      if (error) throw error
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['customer_contacts', customerId] }),
+  })
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
+          <Users className="h-3.5 w-3.5" />{contacts.length} contact{contacts.length !== 1 ? 's' : ''}
+        </p>
+        <Button size="sm" variant="outline" className="text-[11px] h-7 rounded-lg gap-1" onClick={() => setAddOpen(!addOpen)}>
+          <Plus className="h-3 w-3" />Ajouter
+        </Button>
+      </div>
+
+      {addOpen && (
+        <div className="space-y-2 rounded-xl p-3" style={{ border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(248,247,244,0.5)' }}>
+          <div className="grid grid-cols-2 gap-2">
+            <Input placeholder="Nom *" value={newContact.name ?? ''} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} className="text-[12px] h-8 rounded-lg" />
+            <Input placeholder="Role" value={newContact.role ?? ''} onChange={(e) => setNewContact({ ...newContact, role: e.target.value })} className="text-[12px] h-8 rounded-lg" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input type="email" placeholder="Email" value={newContact.email ?? ''} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} className="text-[12px] h-8 rounded-lg" />
+            <Input placeholder="Telephone" value={newContact.phone ?? ''} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} className="text-[12px] h-8 rounded-lg" />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button size="sm" variant="ghost" className="text-[11px] h-7" onClick={() => setAddOpen(false)}>Annuler</Button>
+            <Button size="sm" className="text-[11px] h-7 rounded-lg" style={{ background: 'var(--ivory-accent)', color: 'white' }}
+              disabled={!newContact.name || addMut.isPending}
+              onClick={() => newContact.name && addMut.mutate({ customer_id: customerId, name: newContact.name, email: newContact.email || null, phone: newContact.phone || null, role: newContact.role || null, is_primary: contacts.length === 0 })}>
+              Ajouter
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        {contacts.map((c) => (
+          <div key={c.id} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-medium" style={{ color: 'var(--ivory-text-heading)' }}>{c.name}</span>
+                {c.is_primary && <Badge variant="secondary" className="text-[9px] h-4 px-1.5">Principal</Badge>}
+                {c.role && <span className="text-[10px]" style={{ color: 'var(--ivory-text-muted)' }}>{c.role}</span>}
+              </div>
+              <div className="flex gap-3 mt-0.5">
+                {c.email && <span className="text-[10px]" style={{ color: 'var(--ivory-text-muted)' }}>{c.email}</span>}
+                {c.phone && <span className="text-[10px]" style={{ color: 'var(--ivory-text-muted)' }}>{c.phone}</span>}
+              </div>
+            </div>
+            <div className="flex gap-0.5">
+              {!c.is_primary && (
+                <Tooltip><TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 rounded" onClick={() => setPrimaryMut.mutate(c.id)}>
+                    <Star className="h-3 w-3" style={{ color: 'var(--ivory-text-muted)' }} />
+                  </Button>
+                </TooltipTrigger><TooltipContent className="text-[10px]">Definir comme principal</TooltipContent></Tooltip>
+              )}
+              <Tooltip><TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6 rounded hover:bg-red-50" onClick={() => deleteMut.mutate(c.id)}>
+                  <Trash2 className="h-3 w-3 text-red-400" />
+                </Button>
+              </TooltipTrigger><TooltipContent className="text-[10px]">Supprimer</TooltipContent></Tooltip>
+            </div>
+          </div>
+        ))}
+        {contacts.length === 0 && !addOpen && (
+          <p className="text-[11px] text-center py-4" style={{ color: 'var(--ivory-text-muted)' }}>Aucun contact</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ── Customer Wholesalers Tab ──────────────────────────────────── */
+
+function CustomerWholesalersTab({ customerId }: { customerId: string }) {
+  const queryClient = useQueryClient()
+
+  const { data: wholesalers = [] } = useQuery({
+    queryKey: ['wholesalers'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('wholesalers').select('id, name, code').order('name')
+      if (error) throw error
+      return data as Pick<Wholesaler, 'id' | 'name' | 'code'>[]
+    },
+  })
+
+  const { data: links = [] } = useQuery({
+    queryKey: ['customer_wholesalers', customerId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('customer_wholesalers').select('*').eq('customer_id', customerId)
+      if (error) throw error
+      return data as { id: string; customer_id: string; wholesaler_id: string; is_open: boolean; notes: string | null }[]
+    },
+  })
+
+  const toggleMut = useMutation({
+    mutationFn: async ({ wholesalerId, isOpen }: { wholesalerId: string; isOpen: boolean }) => {
+      const existing = links.find(l => l.wholesaler_id === wholesalerId)
+      if (existing) {
+        const { error } = await supabase.from('customer_wholesalers').update({ is_open: isOpen }).eq('id', existing.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('customer_wholesalers').insert({ customer_id: customerId, wholesaler_id: wholesalerId, is_open: isOpen })
+        if (error) throw error
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['customer_wholesalers', customerId] }),
+  })
+
+  const openCount = wholesalers.filter(w => {
+    const link = links.find(l => l.wholesaler_id === w.id)
+    return link ? link.is_open : true // default open if no link exists
+  }).length
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
+          <Truck className="h-3.5 w-3.5" />{openCount}/{wholesalers.length} grossistes ouverts
+        </p>
+      </div>
+      <div className="space-y-1">
+        {wholesalers.map((w) => {
+          const link = links.find(l => l.wholesaler_id === w.id)
+          const isOpen = link ? link.is_open : true
+          return (
+            <div key={w.id} className="flex items-center justify-between px-3 py-2 rounded-lg transition-all"
+              style={{ border: '1px solid rgba(0,0,0,0.06)', background: isOpen ? 'rgba(13,148,136,0.03)' : 'rgba(0,0,0,0.02)' }}>
+              <div className="flex items-center gap-2">
+                <span className="ivory-mono text-[11px] font-semibold px-1.5 py-0.5 rounded" style={{ background: isOpen ? 'rgba(13,148,136,0.08)' : 'rgba(0,0,0,0.04)', color: isOpen ? 'var(--ivory-accent)' : 'var(--ivory-text-muted)' }}>
+                  {w.code ?? w.name.slice(0, 3).toUpperCase()}
+                </span>
+                <span className="text-[12px]" style={{ color: isOpen ? 'var(--ivory-text-heading)' : 'var(--ivory-text-muted)' }}>{w.name}</span>
+              </div>
+              <Switch
+                checked={isOpen}
+                onCheckedChange={(checked) => toggleMut.mutate({ wholesalerId: w.id, isOpen: checked })}
+                className="scale-75"
+              />
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }

@@ -34,6 +34,7 @@ export interface Product {
   pfht: number | null
   laboratory: string | null
   is_ansm_blocked: boolean
+  is_discontinued: boolean
   is_demo_generated: boolean
   categorie: string | null
   expiry_dates: string[] | null
@@ -52,9 +53,17 @@ export interface Wholesaler {
   type: string | null
   contact_email: string | null
   drive_folder_url: string | null
+  documents: WholesalerDocument[]
   metadata: Record<string, unknown>
   created_at: string
   updated_at: string
+}
+
+export interface WholesalerDocument {
+  type: string
+  name: string
+  path: string
+  uploaded_at: string
 }
 
 export type WholesalerInsert = Omit<Wholesaler, 'id' | 'created_at' | 'updated_at'>
@@ -273,3 +282,44 @@ export interface AnsmSyncLog {
   total_ansm_count: number
   created_at: string
 }
+
+// ── Product Audit Log ────────────────────────────────────────────
+
+export interface ProductAuditLog {
+  id: string
+  product_id: string
+  field_changed: string
+  old_value: string | null
+  new_value: string | null
+  changed_by: string | null
+  changed_at: string
+  reason: string | null
+}
+
+// ── Customer Contacts ────────────────────────────────────────────
+
+export interface CustomerContact {
+  id: string
+  customer_id: string
+  name: string
+  email: string | null
+  phone: string | null
+  role: string | null
+  is_primary: boolean
+  created_at: string
+}
+
+export type CustomerContactInsert = Omit<CustomerContact, 'id' | 'created_at'>
+
+// ── Customer-Wholesaler Links ────────────────────────────────────
+
+export interface CustomerWholesaler {
+  id: string
+  customer_id: string
+  wholesaler_id: string
+  is_open: boolean
+  opened_at: string
+  notes: string | null
+}
+
+export type CustomerWholesalerInsert = Omit<CustomerWholesaler, 'id' | 'opened_at'>

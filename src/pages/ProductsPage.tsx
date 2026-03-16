@@ -30,6 +30,7 @@ const emptyProduct: ProductInsert = {
   pfht: null,
   laboratory: null,
   is_ansm_blocked: false,
+  is_discontinued: false,
   is_demo_generated: false,
   categorie: null,
   expiry_dates: null,
@@ -66,7 +67,7 @@ const rowVariants = {
 export default function ProductsPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
-  const [ansm, setAnsm] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'ansm' | 'discontinued'>('all')
   const [page, setPage] = useState(0)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -74,7 +75,7 @@ export default function ProductsPage() {
   const [form, setForm] = useState<ProductInsert>(emptyProduct)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const { data: products, isLoading } = useQuery({
-    queryKey: ['products', search, ansm, page],
+    queryKey: ['products', search, statusFilter, page],
     queryFn: async () => {
       let query = supabase
         .from('products')
@@ -85,8 +86,10 @@ export default function ProductsPage() {
       if (search) {
         query = query.or(`cip13.ilike.%${search}%,name.ilike.%${search}%,laboratory.ilike.%${search}%`)
       }
-      if (ansm) {
+      if (statusFilter === 'ansm') {
         query = query.eq('is_ansm_blocked', true)
+      } else if (statusFilter === 'discontinued') {
+        query = query.eq('is_discontinued', true)
       }
 
       const { data, count, error } = await query
@@ -99,6 +102,21 @@ export default function ProductsPage() {
     mutationFn: async (product: ProductInsert & { id?: string }) => {
       if (product.id) {
         const { id, ...rest } = product
+        // Audit trail: log changes to critical fields
+        if (editing) {
+          const trackedFields = ['is_ansm_blocked', 'is_discontinued', 'pfht', 'name'] as const
+          const auditEntries: { product_id: string; field_changed: string; old_value: string | null; new_value: string | null }[] = []
+          for (const field of trackedFields) {
+            const oldVal = String(editing[field] ?? '')
+            const newVal = String(rest[field] ?? '')
+            if (oldVal !== newVal) {
+              auditEntries.push({ product_id: id, field_changed: field, old_value: oldVal, new_value: newVal })
+            }
+          }
+          if (auditEntries.length > 0) {
+            await supabase.from('product_audit_log').insert(auditEntries)
+          }
+        }
         const { error } = await supabase.from('products').update(rest).eq('id', id)
         if (error) throw error
       } else {
@@ -142,6 +160,7 @@ export default function ProductsPage() {
       pfht: p.pfht,
       laboratory: p.laboratory,
       is_ansm_blocked: p.is_ansm_blocked,
+      is_discontinued: p.is_discontinued,
       is_demo_generated: p.is_demo_generated,
       categorie: p.categorie,
       expiry_dates: p.expiry_dates,
@@ -266,26 +285,37 @@ export default function ProductsPage() {
           <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.08)', boxShadow: 'var(--ivory-shadow-sm)' }}>
             <button
               type="button"
-              onClick={() => { setAnsm(false); setPage(0) }}
+              onClick={() => { setStatusFilter('all'); setPage(0) }}
               className="px-3.5 py-2 text-[12px] font-medium transition-all"
               style={{
-                background: !ansm ? 'var(--ivory-accent)' : 'white',
-                color: !ansm ? 'white' : 'var(--ivory-text-muted)',
+                background: statusFilter === 'all' ? 'var(--ivory-accent)' : 'white',
+                color: statusFilter === 'all' ? 'white' : 'var(--ivory-text-muted)',
               }}
             >
               Tous
             </button>
             <button
               type="button"
-              onClick={() => { setAnsm(true); setPage(0) }}
+              onClick={() => { setStatusFilter('ansm'); setPage(0) }}
               className="px-3.5 py-2 text-[12px] font-medium transition-all flex items-center gap-1.5"
               style={{
-                background: ansm ? '#DC4A4A' : 'white',
-                color: ansm ? 'white' : 'var(--ivory-text-muted)',
+                background: statusFilter === 'ansm' ? '#DC4A4A' : 'white',
+                color: statusFilter === 'ansm' ? 'white' : 'var(--ivory-text-muted)',
               }}
             >
               <ShieldAlert className="h-3.5 w-3.5" />
               ANSM
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStatusFilter('discontinued'); setPage(0) }}
+              className="px-3.5 py-2 text-[12px] font-medium transition-all flex items-center gap-1.5"
+              style={{
+                background: statusFilter === 'discontinued' ? '#7C3AED' : 'white',
+                color: statusFilter === 'discontinued' ? 'white' : 'var(--ivory-text-muted)',
+              }}
+            >
+              Arretes
             </button>
           </div>
         </div>
@@ -397,19 +427,28 @@ export default function ProductsPage() {
                       <span className="ivory-mono text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>{p.eunb ?? '-'}</span>
                     </TableCell>
                     <TableCell>
-                      {p.is_ansm_blocked ? (
-                        <span className="ivory-badge"
-                          style={{ background: 'rgba(220,74,74,0.08)', color: '#DC4A4A', border: '1px solid rgba(220,74,74,0.15)' }}>
-                          <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-subtle-pulse inline-block" />
-                          Bloque
-                        </span>
-                      ) : (
-                        <span className="ivory-badge"
-                          style={{ background: 'rgba(13,148,136,0.08)', color: 'var(--ivory-teal)', border: '1px solid rgba(13,148,136,0.12)' }}>
-                          <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ background: 'var(--ivory-teal)' }} />
-                          Actif
-                        </span>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {p.is_ansm_blocked && (
+                          <span className="ivory-badge"
+                            style={{ background: 'rgba(220,74,74,0.08)', color: '#DC4A4A', border: '1px solid rgba(220,74,74,0.15)' }}>
+                            <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-subtle-pulse inline-block" />
+                            Bloque
+                          </span>
+                        )}
+                        {p.is_discontinued && (
+                          <span className="ivory-badge"
+                            style={{ background: 'rgba(139,92,246,0.08)', color: '#7C3AED', border: '1px solid rgba(139,92,246,0.15)' }}>
+                            Arrete
+                          </span>
+                        )}
+                        {!p.is_ansm_blocked && !p.is_discontinued && (
+                          <span className="ivory-badge"
+                            style={{ background: 'rgba(13,148,136,0.08)', color: 'var(--ivory-teal)', border: '1px solid rgba(13,148,136,0.12)' }}>
+                            <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ background: 'var(--ivory-teal)' }} />
+                            Actif
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
@@ -576,17 +615,31 @@ export default function ProductsPage() {
                 className="ivory-mono text-[13px] h-10 rounded-xl"
               />
             </div>
-            <div className="flex items-center justify-between rounded-xl p-3.5"
-              style={{ border: '1px solid rgba(0,0,0,0.06)', background: 'rgba(248,247,244,0.5)' }}>
-              <div className="space-y-0.5">
-                <Label htmlFor="ansm-switch" className="cursor-pointer text-[13px] font-medium">Bloque ANSM</Label>
-                <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>Interdit a l'export</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-xl p-3.5"
+                style={{ border: '1px solid rgba(0,0,0,0.06)', background: 'rgba(248,247,244,0.5)' }}>
+                <div className="space-y-0.5">
+                  <Label htmlFor="ansm-switch" className="cursor-pointer text-[13px] font-medium">Bloque ANSM</Label>
+                  <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>Interdit a l'export</p>
+                </div>
+                <Switch
+                  id="ansm-switch"
+                  checked={form.is_ansm_blocked}
+                  onCheckedChange={(checked) => setForm({ ...form, is_ansm_blocked: checked })}
+                />
               </div>
-              <Switch
-                id="ansm-switch"
-                checked={form.is_ansm_blocked}
-                onCheckedChange={(checked) => setForm({ ...form, is_ansm_blocked: checked })}
-              />
+              <div className="flex items-center justify-between rounded-xl p-3.5"
+                style={{ border: '1px solid rgba(0,0,0,0.06)', background: 'rgba(248,247,244,0.5)' }}>
+                <div className="space-y-0.5">
+                  <Label htmlFor="discontinued-switch" className="cursor-pointer text-[13px] font-medium">Produit arrete</Label>
+                  <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>Ne se fait plus / non existant</p>
+                </div>
+                <Switch
+                  id="discontinued-switch"
+                  checked={form.is_discontinued}
+                  onCheckedChange={(checked) => setForm({ ...form, is_discontinued: checked })}
+                />
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">
