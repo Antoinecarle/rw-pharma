@@ -838,7 +838,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                             ) : (
                               <button
                                 type="button"
-                                className="inline-flex items-center gap-1 hover:bg-muted/60 rounded px-1 py-0.5 transition-colors group"
+                                className="inline-flex items-center gap-1 hover:bg-blue-50/60 hover:shadow-sm rounded px-1 py-0.5 transition-all duration-150 group border border-transparent hover:border-blue-200"
                                 onClick={() => startEdit(order.id, 'unit_price', order.unit_price != null ? String(order.unit_price) : '')}
                               >
                                 <span className={`font-mono text-xs ${isBestPrice ? 'text-green-700 font-bold' : priceModified ? 'text-blue-700 font-medium' : ''}`}>
@@ -878,7 +878,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                             ) : (
                               <button
                                 type="button"
-                                className="inline-flex items-center gap-1 hover:bg-muted/60 rounded px-1 py-0.5 transition-colors group"
+                                className="inline-flex items-center gap-1 hover:bg-blue-50/60 hover:shadow-sm rounded px-1 py-0.5 transition-all duration-150 group border border-transparent hover:border-blue-200"
                                 onClick={() => startEdit(order.id, 'quantity', String(order.quantity))}
                               >
                                 <span className={`font-mono text-xs font-bold ${qtyModified ? 'text-blue-700' : ''}`}>
@@ -976,7 +976,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                               step="0.01"
                               defaultValue={order.unit_price != null ? order.unit_price.toFixed(2) : ''}
                               placeholder="\u2014"
-                              className="w-[52px] h-7 text-center font-mono text-[11px] border rounded bg-background"
+                              className="w-[52px] h-7 text-center font-mono text-[11px] border border-gray-200 rounded bg-background hover:border-blue-300 hover:bg-blue-50/20 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all duration-150 outline-none"
                               onBlur={(e) => {
                                 const newVal = e.target.value
                                 if (newVal && order.unit_price != null && parseFloat(newVal) !== order.unit_price) {
@@ -1015,11 +1015,11 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                             ) : (
                               <button
                                 type="button"
-                                className="inline-flex items-center gap-1 hover:bg-muted/60 rounded px-1 py-0.5 transition-colors group text-[11px] text-muted-foreground max-w-[140px]"
+                                className="inline-flex items-center gap-1 hover:bg-blue-50/60 hover:shadow-sm rounded px-1 py-0.5 transition-all duration-150 group text-[11px] text-muted-foreground max-w-[140px] border border-transparent hover:border-blue-200"
                                 onClick={() => startEdit(order.id, 'nego_comment', order.nego_comment ?? '')}
                               >
-                                <span className="truncate">{order.nego_comment || 'Ajouter...'}</span>
-                                <Pencil className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover:opacity-100" />
+                                <span className="truncate group-hover:text-foreground transition-colors">{order.nego_comment || 'Ajouter...'}</span>
+                                <Pencil className="h-2.5 w-2.5 shrink-0 text-gray-300 opacity-0 group-hover:opacity-100 group-hover:text-blue-400 transition-all" />
                               </button>
                             )}
                           </TableCell>

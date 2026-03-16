@@ -953,7 +953,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                                     type="number"
                                                     value={editValue}
                                                     onChange={e => setEditValue(e.target.value)}
-                                                    className="h-7 w-14 text-xs text-center font-mono border-blue-500 focus:ring-blue-200"
+                                                    className="h-7 w-14 text-xs text-center font-mono border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 shadow-sm"
                                                     autoFocus
                                                     min={0}
                                                     onKeyDown={e => {
@@ -967,10 +967,10 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                               ) : (
                                                 <button
                                                   type="button"
-                                                  className={`w-14 mx-auto text-center py-1 rounded-md transition-all group ${
+                                                  className={`w-14 mx-auto text-center py-1 rounded-md transition-all duration-150 group ${
                                                     assignedQty > 0
-                                                      ? `bg-blue-50 border border-blue-500 ${assignedQty > src.quantity ? '' : ''}`
-                                                      : `bg-white border border-gray-200 ${isProcessLocked ? 'cursor-default' : 'hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer'}`
+                                                      ? 'bg-blue-50 border border-blue-400 shadow-sm hover:border-blue-500 hover:shadow-md'
+                                                      : `bg-white border border-dashed border-gray-300 ${isProcessLocked ? 'cursor-default' : 'hover:border-blue-400 hover:bg-blue-50/40 hover:border-solid hover:shadow-sm cursor-pointer'}`
                                                   } ${isProcessLocked ? 'cursor-default' : 'cursor-pointer'}`}
                                                   onClick={() => !isProcessLocked && startEdit(demand.productId, cust.id, src.stock_id, assignedQty)}
                                                   disabled={isProcessLocked}
@@ -983,10 +983,10 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                                       {assignedQty.toLocaleString('fr-FR')}
                                                     </span>
                                                   ) : (
-                                                    <span className="text-muted-foreground/30 text-xs">&mdash;</span>
+                                                    <span className="text-gray-400 text-xs group-hover:text-blue-400 transition-colors">&mdash;</span>
                                                   )}
                                                   {!isProcessLocked && assignedQty === 0 && (
-                                                    <Pencil className="h-2.5 w-2.5 mx-auto opacity-0 group-hover:opacity-40 transition-opacity" />
+                                                    <Pencil className="h-2.5 w-2.5 mx-auto text-gray-300 opacity-0 group-hover:opacity-100 group-hover:text-blue-400 transition-all" />
                                                   )}
                                                 </button>
                                               )}
