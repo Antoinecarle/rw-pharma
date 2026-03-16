@@ -35,7 +35,7 @@ type QuotaColumnMapping = Record<QuotaField, string>
 
 const FIELD_LABELS: Record<QuotaField, string> = {
   cip13: 'CIP13 Produit *',
-  quantity: 'Quantite quota *',
+  quantity: 'Quantite disponible *',
   extra: 'Extra disponible',
   productName: 'Nom produit',
   wholesalerColumn: 'Grossiste (multi)',
@@ -886,9 +886,9 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-semibold">Import des Quotas Grossistes</h3>
+        <h3 className="text-lg font-semibold">Import des Disponibilites Grossistes</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Importez les fichiers de quotas recus des grossistes pour ce mois. Un fichier par grossiste.
+          Importez les fichiers de disponibilites recus des grossistes pour ce mois. Un fichier par grossiste.
         </p>
       </div>
 
@@ -897,7 +897,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
           <CardContent className="p-4 flex items-center gap-3">
             <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
             <p className="text-sm">
-              <strong>{existingQuotas}</strong> quotas deja importes pour ce mois.
+              <strong>{existingQuotas}</strong> disponibilites deja importees pour ce mois.
             </p>
           </CardContent>
         </Card>
@@ -952,7 +952,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
             </Badge>
             {(totalInserted > 0 || (existingQuotas ?? 0) > 0) && (
               <Badge variant="default" className="text-xs gap-1">
-                {totalInserted + (existingQuotas ?? 0)} quotas total
+                {totalInserted + (existingQuotas ?? 0)} disponibilites total
               </Badge>
             )}
           </div>
@@ -990,7 +990,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
             ? 'Deposez les fichiers ici'
             : queue.length > 0
               ? 'Ajouter un autre fichier grossiste'
-              : 'Deposez des fichiers Excel de quotas ou cliquez pour selectionner'
+              : 'Deposez des fichiers Excel de disponibilites ou cliquez pour selectionner'
           }
         </p>
         <p className="text-xs text-muted-foreground mt-1">

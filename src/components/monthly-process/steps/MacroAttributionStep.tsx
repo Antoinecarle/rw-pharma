@@ -55,8 +55,8 @@ type MacroMap = Record<string, Record<string, number>>
 type AutoStrategy = 'proportional' | 'top_first' | 'max_coverage'
 
 const AUTO_STRATEGIES: { value: AutoStrategy; label: string; description: string; icon: typeof Zap }[] = [
-  { value: 'proportional', label: 'Proportionnelle', description: 'Repartir au prorata des quotas', icon: BarChart3 },
-  { value: 'top_first', label: 'Top grossiste d\'abord', description: 'Remplir le plus gros quota en priorite', icon: TrendingUp },
+  { value: 'proportional', label: 'Proportionnelle', description: 'Repartir au prorata des disponibilites', icon: BarChart3 },
+  { value: 'top_first', label: 'Top grossiste d\'abord', description: 'Remplir la plus grosse disponibilite en priorite', icon: TrendingUp },
   { value: 'max_coverage', label: 'Max couverture', description: 'Couvrir un maximum de produits', icon: Zap },
 ]
 
@@ -633,7 +633,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-amber-800">
-                {productsWithoutQuota.length} produit{productsWithoutQuota.length > 1 ? 's' : ''} commande{productsWithoutQuota.length > 1 ? 's' : ''} sans quota
+                {productsWithoutQuota.length} produit{productsWithoutQuota.length > 1 ? 's' : ''} commande{productsWithoutQuota.length > 1 ? 's' : ''} sans disponibilite
               </p>
               <p className="text-xs text-amber-700 mt-0.5">
                 Ces produits ne peuvent pas etre attribues. Verifiez les quotas a l'etape 1.

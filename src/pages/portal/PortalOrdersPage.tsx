@@ -361,7 +361,7 @@ export default function PortalOrdersPage() {
           <Badge variant="outline" className="ml-2 text-[10px]">
             {({
               draft: 'Brouillon',
-              importing_quotas: 'Import quotas',
+              importing_quotas: 'Import disponibilites',
               importing_orders: 'Import commandes',
               reviewing_orders: 'Revue commandes',
               exporting_wholesalers: 'Export grossistes',

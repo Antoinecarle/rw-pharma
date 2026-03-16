@@ -61,7 +61,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         const count = process.quotas_count ?? 0
         if (count === 0) {
           score = 0
-          details.push('Aucun quota importe')
+          details.push('Aucune disponibilite importee')
         } else if (count < 100) {
           score = 40
           details.push(`${count} quotas (faible volume)`)

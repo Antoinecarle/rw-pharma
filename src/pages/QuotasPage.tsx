@@ -144,7 +144,7 @@ export default function QuotasPage() {
 
       {quotas && quotas.data.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="flex gap-3 flex-wrap relative z-10">
-          <div className="ivory-stat-pill"><span className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Quota</span><span className="font-bold tabular-nums text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>{totalQuota.toLocaleString('fr-FR')}</span></div>
+          <div className="ivory-stat-pill"><span className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Dispo</span><span className="font-bold tabular-nums text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>{totalQuota.toLocaleString('fr-FR')}</span></div>
           {totalExtra > 0 && <div className="ivory-stat-pill"><span className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Extra</span><span className="font-bold tabular-nums text-[13px]" style={{ color: 'var(--ivory-teal)' }}>+{totalExtra.toLocaleString('fr-FR')}</span></div>}
           <div className="ivory-stat-pill"><span className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Total</span><span className="font-bold tabular-nums text-[13px]" style={{ color: 'var(--ivory-accent)' }}>{(totalQuota + totalExtra).toLocaleString('fr-FR')}</span></div>
         </motion.div>

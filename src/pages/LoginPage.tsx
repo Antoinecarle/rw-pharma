@@ -57,7 +57,7 @@ export default function LoginPage() {
             <div className="space-y-2.5">
               {[
                 { icon: Package, label: '1 760+ produits', desc: 'Catalogue pharmaceutique complet' },
-                { icon: TrendingUp, label: 'Allocation optimisee', desc: 'Quotas grossistes en temps reel' },
+                { icon: TrendingUp, label: 'Allocation optimisee', desc: 'Disponibilites grossistes en temps reel' },
                 { icon: Shield, label: 'Conformite ANSM', desc: 'Controle des produits bloques' },
               ].map((feat) => (
                 <div key={feat.label} className="flex items-center gap-3 bg-white/[0.08] backdrop-blur-sm rounded-xl px-4 py-3">

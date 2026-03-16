@@ -22,8 +22,8 @@ interface AllocationVisualizerProps {
 
 const REASON_CONFIG: Record<AllocationReason, { label: string; color: string; icon: typeof Boxes; bg: string }> = {
   fefo_lot:        { label: 'Stock FEFO',       color: 'text-violet-700',  icon: Boxes,          bg: 'bg-violet-50 border-violet-200' },
-  quota:           { label: 'Quota direct',     color: 'text-blue-700',    icon: ShieldCheck,    bg: 'bg-blue-50 border-blue-200' },
-  quota_balanced:  { label: 'Quota reparti',    color: 'text-teal-700',    icon: ShieldCheck,    bg: 'bg-teal-50 border-teal-200' },
+  quota:           { label: 'Dispo directe',    color: 'text-blue-700',    icon: ShieldCheck,    bg: 'bg-blue-50 border-blue-200' },
+  quota_balanced:  { label: 'Dispo repartie',   color: 'text-teal-700',    icon: ShieldCheck,    bg: 'bg-teal-50 border-teal-200' },
   fallback:        { label: 'Repartition',      color: 'text-amber-700',   icon: Truck,          bg: 'bg-amber-50 border-amber-200' },
   fallback_single: { label: 'Grossiste unique', color: 'text-orange-700',  icon: Truck,          bg: 'bg-orange-50 border-orange-200' },
   max_pct_cap:     { label: 'Limite % max',     color: 'text-red-700',     icon: AlertTriangle,  bg: 'bg-red-50 border-red-200' },
