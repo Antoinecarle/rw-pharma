@@ -26,6 +26,7 @@ import {
   Shield,
   Warehouse,
   Scale,
+  Receipt,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import CommandPalette from '@/components/CommandPalette'
@@ -38,6 +39,7 @@ const mainNavigation = [
   { name: 'Metriques', href: '/allocation-dashboard', icon: BarChart3, description: 'Dashboard allocation' },
   { name: 'Dettes', href: '/debts', icon: Scale, description: 'Sous-allocations clients' },
   { name: 'ANSM', href: '/ansm', icon: Shield, description: 'Produits interdits a l\'export' },
+  { name: 'Facturation', href: '/facturation', icon: Receipt, description: 'Factures commissions' },
 ]
 
 const referenceNavigation = [

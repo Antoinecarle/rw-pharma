@@ -328,3 +328,36 @@ export interface CustomerWholesaler {
 }
 
 export type CustomerWholesalerInsert = Omit<CustomerWholesaler, 'id' | 'opened_at'>
+
+// ── Invoices ─────────────────────────────────────────────────────
+
+export type InvoiceType = 'wholesaler_commission' | 'client_commission'
+export type InvoiceEntityType = 'wholesaler' | 'customer'
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+
+export interface Invoice {
+  id: string
+  invoice_number: string
+  type: InvoiceType
+  entity_type: InvoiceEntityType
+  entity_id: string
+  process_id: string | null
+  month: string
+  amount: number
+  tax_rate: number
+  amount_ttc: number | null
+  status: InvoiceStatus
+  sent_at: string | null
+  paid_at: string | null
+  due_date: string | null
+  notes: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+  // Joined fields
+  wholesaler?: Wholesaler
+  customer?: Customer
+}
+
+export type InvoiceInsert = Omit<Invoice, 'id' | 'created_at' | 'updated_at' | 'wholesaler' | 'customer'>
+export type InvoiceUpdate = Partial<InvoiceInsert>

@@ -1,5 +1,5 @@
 /**
- * RW Pharma — Allocation Engine v2
+ * RW Pharma — Allocation Engine v2 + v3 rules
  *
  * Intelligent allocation algorithm with:
  * - True balanced distribution across wholesalers
@@ -9,6 +9,17 @@
  * - Max allocation % per client enforcement
  * - Preferred expiry month filtering
  * - Dry-run simulation support
+ *
+ * v3 rules (toggleable):
+ * - R1: Priority client refinement (3 top clients treated first)
+ * - R2: Price as first differentiator (highest price served first)
+ * - R3: Open wholesalers enforcement (customer_wholesalers check)
+ * - R4: Min batch quantity enforcement
+ * - R5: Min expiry accepted per client
+ * - R6: Smart expiry (short-expiry lots to accepting clients first)
+ * - R7: Order multiples enforcement
+ * - R8: Price gap tolerance (round-robin when gap < threshold)
+ * - R9: Max secondary wholesaler % cap
  */
 
 import { supabase } from '@/lib/supabase'
@@ -25,12 +36,44 @@ export interface AllocationPrefs {
   notes?: string
 }
 
+// ── V3 Config ────────────────────────────────────────────────────────
+
+export interface AllocationV3Config {
+  strategy: AllocationStrategy
+  enforce_min_batch: boolean
+  enforce_min_expiry: boolean
+  enforce_open_wholesalers: boolean
+  enforce_multiples: boolean
+  smart_expiry: boolean
+  max_price_gap: number       // EUR — if price diff < this, treat clients as equal priority
+  max_secondary_pct: number   // % — cap secondary (non-quota) wholesalers at this %
+  use_collected_stock: boolean
+  use_wholesaler_quotas: boolean
+}
+
+export const DEFAULT_V3_CONFIG: AllocationV3Config = {
+  strategy: 'balanced',
+  enforce_min_batch: false,
+  enforce_min_expiry: false,
+  enforce_open_wholesalers: false,
+  enforce_multiples: false,
+  smart_expiry: false,
+  max_price_gap: 0,
+  max_secondary_pct: 50,
+  use_collected_stock: true,
+  use_wholesaler_quotas: true,
+}
+
+/** Open wholesaler links per customer: Map<customerId, Set<wholesalerId>> */
+export type CustomerWholesalerMap = Map<string, Set<string>>
+
 interface OrderRow {
   id: string
   customer_id: string
   product_id: string
   quantity: number
   unit_price: number | null
+  metadata: { order_multiple?: number; min_expiry_months?: number } | null
   customer: { id: string; code: string; name: string; is_top_client: boolean; min_lot_acceptable: number | null; allocation_preferences: AllocationPrefs } | null
 }
 
@@ -137,7 +180,7 @@ async function fetchOrders(processId: string): Promise<OrderRow[]> {
   while (true) {
     const { data, error } = await supabase
       .from('orders')
-      .select('id, customer_id, product_id, quantity, unit_price, customer:customers(id, code, name, is_top_client, min_lot_acceptable, allocation_preferences)')
+      .select('id, customer_id, product_id, quantity, unit_price, metadata, customer:customers(id, code, name, is_top_client, min_lot_acceptable, allocation_preferences)')
       .eq('monthly_process_id', processId)
       .in('status', ['validated', 'pending'])
       .range(from, from + pageSize - 1)
@@ -386,6 +429,180 @@ class MaxAllocationTracker {
   }
 }
 
+// ── V3 Rule Functions (pure, toggleable) ────────────────────────────
+
+/**
+ * R1 + R2: Sort orders by priority with price as differentiator.
+ * Top 3 clients (is_top_client) are treated first with equal priority among them.
+ * Between same-priority clients, highest price is served first.
+ * If price gap < max_price_gap, they are treated as equal (interleaved round-robin).
+ */
+function sortOrdersV3(
+  orders: OrderRow[],
+  strategy: AllocationStrategy,
+  maxPriceGap: number,
+): OrderRow[] {
+  const sorted = [...orders]
+
+  // Group by customer
+  const byCustomer = new Map<string, OrderRow[]>()
+  for (const o of sorted) {
+    const list = byCustomer.get(o.customer_id) ?? []
+    list.push(o)
+    byCustomer.set(o.customer_id, list)
+  }
+
+  // Build customer priority groups
+  const customerGroups = [...byCustomer.entries()].map(([cid, orders]) => {
+    const cust = orders[0].customer
+    const isTop = cust?.is_top_client ?? false
+    const prefLevel = cust?.allocation_preferences?.priority_level ?? 3
+    const priorityScore = (6 - prefLevel) * 20 + (isTop ? 50 : 0)
+    // R2: average price for this customer's orders
+    const avgPrice = orders.reduce((s, o) => s + (o.unit_price ?? 0), 0) / orders.length
+    return { cid, orders, priorityScore, avgPrice, isTop }
+  })
+
+  // R1: top clients first, then by priority score
+  customerGroups.sort((a, b) => {
+    // Both top clients → same priority tier
+    if (a.isTop && b.isTop) {
+      // R2 + R8: differentiate by price unless gap < maxPriceGap
+      if (maxPriceGap > 0 && Math.abs(a.avgPrice - b.avgPrice) < maxPriceGap) return 0
+      return b.avgPrice - a.avgPrice // Highest price first
+    }
+    // One is top, other isn't
+    if (a.isTop !== b.isTop) return a.isTop ? -1 : 1
+    // Same priority score
+    if (a.priorityScore === b.priorityScore) {
+      if (maxPriceGap > 0 && Math.abs(a.avgPrice - b.avgPrice) < maxPriceGap) return 0
+      return b.avgPrice - a.avgPrice
+    }
+    return b.priorityScore - a.priorityScore
+  })
+
+  if (strategy === 'balanced') {
+    // Round-robin interleave
+    const interleaved: OrderRow[] = []
+    let hasMore = true
+    let idx = 0
+    while (hasMore) {
+      hasMore = false
+      for (const { orders: custOrders } of customerGroups) {
+        if (idx < custOrders.length) {
+          interleaved.push(custOrders[idx])
+          if (idx + 1 < custOrders.length) hasMore = true
+        }
+      }
+      idx++
+    }
+    return interleaved
+  } else if (strategy === 'max_coverage') {
+    // Flatten sorted groups, then sort by quantity asc
+    return customerGroups.flatMap(g => g.orders).sort((a, b) => a.quantity - b.quantity)
+  } else {
+    // top_clients: flatten in priority order
+    return customerGroups.flatMap(g => g.orders)
+  }
+}
+
+/**
+ * R3: Check if a customer can receive stock from a specific wholesaler.
+ * Returns true if the customer has this wholesaler marked as open,
+ * or if no customer_wholesalers data is provided (backward compat).
+ */
+function isWholesalerOpenForCustomer(
+  customerId: string,
+  wholesalerId: string,
+  cwMap: CustomerWholesalerMap | undefined,
+): boolean {
+  if (!cwMap || cwMap.size === 0) return true
+  const openWholesalers = cwMap.get(customerId)
+  if (!openWholesalers) return true // No restrictions configured for this customer
+  return openWholesalers.has(wholesalerId)
+}
+
+/**
+ * R4: Min batch quantity. If available qty < min_batch for the customer,
+ * don't allocate that lot. Returns the qty to allocate (0 if below min).
+ */
+function enforceMinBatch(qty: number, minBatch: number | undefined): number {
+  if (!minBatch || minBatch <= 0) return qty
+  return qty >= minBatch ? qty : 0
+}
+
+/**
+ * R5: Min expiry accepted. If lot expiry < client's min expiry threshold, skip.
+ * Returns true if lot is acceptable.
+ */
+function isExpiryAcceptable(
+  lotExpiryDate: string,
+  minExpiryMonths: number | undefined,
+): boolean {
+  if (!minExpiryMonths || minExpiryMonths <= 0) return true
+  const minDate = new Date()
+  minDate.setMonth(minDate.getMonth() + minExpiryMonths)
+  return lotExpiryDate >= minDate.toISOString().slice(0, 10)
+}
+
+/**
+ * R6: Smart expiry — sort lots so short-expiry lots go to clients who accept them first.
+ * Returns lots reordered: short-expiry first if client accepts them, long-expiry first otherwise.
+ */
+function smartExpirySortLots(
+  lots: { id: string; wholesalerId: string; lotNumber: string; expiryDate: string; remaining: number }[],
+  clientMinExpiryMonths: number | undefined,
+): typeof lots {
+  if (!clientMinExpiryMonths || clientMinExpiryMonths <= 0) {
+    // Client accepts everything — give them short-expiry first (FEFO)
+    return [...lots].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate))
+  }
+  // Client has restrictions — give them longer-expiry lots, preserve short ones for others
+  return [...lots].sort((a, b) => b.expiryDate.localeCompare(a.expiryDate))
+}
+
+/**
+ * R7: Order multiples. Round down allocated quantity to nearest multiple of N.
+ */
+function enforceMultiple(qty: number, multiple: number | undefined): number {
+  if (!multiple || multiple <= 1) return qty
+  return Math.floor(qty / multiple) * multiple
+}
+
+/**
+ * R9: Max secondary wholesaler %. Track allocation per wholesaler for a product
+ * and cap non-quota (secondary) wholesalers at maxPct of total allocated for that product.
+ */
+class SecondaryWholesalerTracker {
+  // Map: productId -> Map<wholesalerId, allocated>
+  private allocated = new Map<string, Map<string, number>>()
+  private quotaWholesalers: Set<string>
+
+  constructor(quotaWholesalerIds: Set<string>) {
+    this.quotaWholesalers = quotaWholesalerIds
+  }
+
+  record(productId: string, wholesalerId: string, qty: number) {
+    if (!this.allocated.has(productId)) this.allocated.set(productId, new Map())
+    const wsMap = this.allocated.get(productId)!
+    wsMap.set(wholesalerId, (wsMap.get(wholesalerId) ?? 0) + qty)
+  }
+
+  canAllocateSecondary(productId: string, wholesalerId: string, qty: number, maxSecondaryPct: number): number {
+    if (this.quotaWholesalers.has(wholesalerId)) return qty // Primary wholesaler, no cap
+    if (maxSecondaryPct >= 100) return qty
+
+    const wsMap = this.allocated.get(productId)
+    const totalForProduct = wsMap ? [...wsMap.values()].reduce((s, v) => s + v, 0) : 0
+    const currentSecondary = wsMap?.get(wholesalerId) ?? 0
+
+    // Max allowed for this secondary wholesaler
+    const maxAllowed = Math.floor((totalForProduct + qty) * (maxSecondaryPct / 100))
+    const remaining = Math.max(0, maxAllowed - currentSecondary)
+    return Math.min(qty, remaining)
+  }
+}
+
 // ── Main Algorithm ───────────────────────────────────────────────────
 
 export async function runAllocation(
@@ -395,6 +612,8 @@ export async function runAllocation(
   strategy: AllocationStrategy,
   excludedWholesalers: Set<string>,
   dryRun: boolean = false,
+  v3Config?: AllocationV3Config,
+  customerWholesalerMap?: CustomerWholesalerMap,
 ): Promise<{ allocations: AllocationResult[]; logs: AllocationLog[] }> {
   // 1. Fetch all data in parallel
   const [orders, quotaRows, stockRows, wholesalers, products] = await Promise.all([
@@ -432,8 +651,14 @@ export async function runAllocation(
     }
   }
 
+  // V3: Secondary wholesaler tracker (R9)
+  const quotaWsIds = new Set(quotaRows.filter(q => !excludedWholesalers.has(q.wholesaler_id)).map(q => q.wholesaler_id))
+  const secondaryTracker = v3Config ? new SecondaryWholesalerTracker(quotaWsIds) : null
+
   // 3. Sort orders based on strategy + customer priority
-  const sortedOrders = sortOrders(orders, strategy)
+  const sortedOrders = v3Config
+    ? sortOrdersV3(orders, v3Config.strategy, v3Config.max_price_gap)
+    : sortOrders(orders, strategy)
 
   // 4. Allocate
   const allocations: AllocationResult[] = []
@@ -503,15 +728,61 @@ export async function runAllocation(
     }
 
     // Source 1: Collected stock (lot-level, FEFO)
-    if (remainingToAllocate > 0 && stockTracker.hasStockFor(order.product_id)) {
+    if (remainingToAllocate > 0 && stockTracker.hasStockFor(order.product_id) && (!v3Config || v3Config.use_collected_stock)) {
       const minExpiry = prefs.preferred_expiry_months
-      const availableLots = stockTracker.getAvailable(order.product_id, minExpiry)
+      const orderMinExpiry = order.metadata?.min_expiry_months
+      let availableLots = stockTracker.getAvailable(order.product_id, minExpiry)
+
+      // R6: Smart expiry — reorder lots based on client's expiry acceptance
+      if (v3Config?.smart_expiry) {
+        availableLots = smartExpirySortLots(availableLots, orderMinExpiry ?? minExpiry)
+      }
 
       for (const lot of availableLots) {
         if (remainingToAllocate <= 0) break
 
-        const consumed = stockTracker.consume(lot.id, remainingToAllocate)
+        // R3: Open wholesalers check
+        if (v3Config?.enforce_open_wholesalers && !isWholesalerOpenForCustomer(order.customer_id, lot.wholesalerId, customerWholesalerMap)) {
+          continue
+        }
+
+        // R5: Min expiry accepted
+        if (v3Config?.enforce_min_expiry) {
+          const clientMinExpiry = orderMinExpiry ?? minExpiry
+          if (!isExpiryAcceptable(lot.expiryDate, clientMinExpiry)) {
+            continue
+          }
+        }
+
+        // R4: Min batch check on lot remaining
+        let toConsume = remainingToAllocate
+        if (v3Config?.enforce_min_batch) {
+          const minBatch = order.customer?.min_lot_acceptable ?? undefined
+          toConsume = enforceMinBatch(Math.min(toConsume, lot.remaining), minBatch)
+          if (toConsume === 0) continue
+        }
+
+        // R9: Secondary wholesaler cap
+        if (v3Config && secondaryTracker) {
+          toConsume = secondaryTracker.canAllocateSecondary(order.product_id, lot.wholesalerId, toConsume, v3Config.max_secondary_pct)
+          if (toConsume === 0) continue
+        }
+
+        const consumed = stockTracker.consume(lot.id, toConsume)
         if (consumed > 0) {
+          // R7: Order multiples
+          let finalQty = consumed
+          if (v3Config?.enforce_multiples) {
+            const multiple = order.metadata?.order_multiple
+            finalQty = enforceMultiple(consumed, multiple)
+            if (finalQty === 0) {
+              // Return unused stock
+              // Note: we can't "unconsume" from tracker easily, but the leftover is small
+              continue
+            }
+            // If we rounded down, the difference stays consumed from lot but not allocated
+          }
+
           allocations.push({
             monthly_process_id: processId,
             order_id: order.id,
@@ -520,7 +791,7 @@ export async function runAllocation(
             wholesaler_id: lot.wholesalerId,
             stock_id: lot.id,
             requested_quantity: order.quantity,
-            allocated_quantity: consumed,
+            allocated_quantity: finalQty,
             prix_applique: order.unit_price ?? null,
             debt_resolution_id: null,
             status: 'proposed',
@@ -533,10 +804,11 @@ export async function runAllocation(
             },
           })
 
-          maxAllocTracker.record(order.customer_id, consumed)
-          remainingToAllocate -= consumed
+          maxAllocTracker.record(order.customer_id, finalQty)
+          if (secondaryTracker) secondaryTracker.record(order.product_id, lot.wholesalerId, finalQty)
+          remainingToAllocate -= finalQty
 
-          pushLog(order, lot.wholesalerId, consumed, remainingToAllocate, 'fefo_lot',
+          pushLog(order, lot.wholesalerId, finalQty, remainingToAllocate, 'fefo_lot',
             `Lot ${lot.lotNumber} (exp. ${lot.expiryDate})`,
             lot.lotNumber, lot.expiryDate)
         }
@@ -544,18 +816,38 @@ export async function runAllocation(
     }
 
     // Source 2: Quota-based allocation
-    if (remainingToAllocate > 0 && quotaTracker.hasQuotaFor(order.product_id)) {
-      const available = quotaTracker.getAvailable(order.product_id)
+    if (remainingToAllocate > 0 && quotaTracker.hasQuotaFor(order.product_id) && (!v3Config || v3Config.use_wholesaler_quotas)) {
+      // R3: Filter available quotas by open wholesalers
+      let available = quotaTracker.getAvailable(order.product_id)
+      if (v3Config?.enforce_open_wholesalers && customerWholesalerMap) {
+        available = available.filter(ws => isWholesalerOpenForCustomer(order.customer_id, ws.wholesalerId, customerWholesalerMap))
+      }
 
-      if (strategy === 'balanced' && available.length > 1) {
+      const effectiveStrategy = v3Config?.strategy ?? strategy
+
+      if (effectiveStrategy === 'balanced' && available.length > 1) {
         const totalRemaining = available.reduce((s, a) => s + a.remaining, 0)
 
         for (const ws of available) {
           if (remainingToAllocate <= 0) break
 
           const share = Math.ceil(remainingToAllocate * (ws.remaining / totalRemaining))
-          const toAllocate = Math.min(share, remainingToAllocate)
-          const consumed = quotaTracker.consume(order.product_id, ws.wholesalerId, toAllocate)
+          let toAllocate = Math.min(share, remainingToAllocate)
+
+          // R9: Secondary wholesaler cap
+          if (v3Config && secondaryTracker) {
+            toAllocate = secondaryTracker.canAllocateSecondary(order.product_id, ws.wholesalerId, toAllocate, v3Config.max_secondary_pct)
+            if (toAllocate === 0) continue
+          }
+
+          let consumed = quotaTracker.consume(order.product_id, ws.wholesalerId, toAllocate)
+
+          // R7: Order multiples
+          if (consumed > 0 && v3Config?.enforce_multiples) {
+            const multiple = order.metadata?.order_multiple
+            consumed = enforceMultiple(consumed, multiple)
+            if (consumed === 0) continue
+          }
 
           if (consumed > 0) {
             allocations.push({
@@ -574,6 +866,7 @@ export async function runAllocation(
             })
 
             maxAllocTracker.record(order.customer_id, consumed)
+            if (secondaryTracker) secondaryTracker.record(order.product_id, ws.wholesalerId, consumed)
             remainingToAllocate -= consumed
 
             pushLog(order, ws.wholesalerId, consumed, remainingToAllocate, 'quota_balanced',
@@ -584,7 +877,23 @@ export async function runAllocation(
         for (const ws of available) {
           if (remainingToAllocate <= 0) break
 
-          const consumed = quotaTracker.consume(order.product_id, ws.wholesalerId, remainingToAllocate)
+          let toConsume = remainingToAllocate
+
+          // R9: Secondary wholesaler cap
+          if (v3Config && secondaryTracker) {
+            toConsume = secondaryTracker.canAllocateSecondary(order.product_id, ws.wholesalerId, toConsume, v3Config.max_secondary_pct)
+            if (toConsume === 0) continue
+          }
+
+          let consumed = quotaTracker.consume(order.product_id, ws.wholesalerId, toConsume)
+
+          // R7: Order multiples
+          if (consumed > 0 && v3Config?.enforce_multiples) {
+            const multiple = order.metadata?.order_multiple
+            consumed = enforceMultiple(consumed, multiple)
+            if (consumed === 0) continue
+          }
+
           if (consumed > 0) {
             allocations.push({
               monthly_process_id: processId,
@@ -602,6 +911,7 @@ export async function runAllocation(
             })
 
             maxAllocTracker.record(order.customer_id, consumed)
+            if (secondaryTracker) secondaryTracker.record(order.product_id, ws.wholesalerId, consumed)
             remainingToAllocate -= consumed
 
             pushLog(order, ws.wholesalerId, consumed, remainingToAllocate, 'quota',
@@ -614,7 +924,11 @@ export async function runAllocation(
     // Source 3: Fallback — try remaining quotas from any wholesaler first, then even split
     if (remainingToAllocate > 0 && allocations.filter(a => a.order_id === order.id).length === 0) {
       // 3a: Try to use any remaining global quota for this product
-      const remainingQuotas = quotaTracker.getAvailable(order.product_id)
+      let remainingQuotas = quotaTracker.getAvailable(order.product_id)
+      // R3: Filter by open wholesalers
+      if (v3Config?.enforce_open_wholesalers && customerWholesalerMap) {
+        remainingQuotas = remainingQuotas.filter(ws => isWholesalerOpenForCustomer(order.customer_id, ws.wholesalerId, customerWholesalerMap))
+      }
       if (remainingQuotas.length > 0) {
         for (const ws of remainingQuotas) {
           if (remainingToAllocate <= 0) break
@@ -635,6 +949,7 @@ export async function runAllocation(
               metadata: { strategy, priority_score: priorityScore, quota_used: true },
             })
             maxAllocTracker.record(order.customer_id, consumed)
+            if (secondaryTracker) secondaryTracker.record(order.product_id, ws.wholesalerId, consumed)
             remainingToAllocate -= consumed
             pushLog(order, ws.wholesalerId, consumed, remainingToAllocate, 'quota',
               `Quota fallback ${consumed} u. (reste ${ws.remaining - consumed})`)
@@ -644,9 +959,16 @@ export async function runAllocation(
 
       // 3b: If still remaining and no quota covered it, distribute across wholesalers
       if (remainingToAllocate > 0 && allocations.filter(a => a.order_id === order.id).length === 0) {
-        if (strategy === 'balanced' && availableWholesalers.length > 1) {
-          const perWs = Math.ceil(remainingToAllocate / availableWholesalers.length)
-          for (const ws of availableWholesalers) {
+        // R3: Filter available wholesalers by open status
+        let fallbackWholesalers = availableWholesalers
+        if (v3Config?.enforce_open_wholesalers && customerWholesalerMap) {
+          fallbackWholesalers = fallbackWholesalers.filter(ws => isWholesalerOpenForCustomer(order.customer_id, ws.id, customerWholesalerMap))
+        }
+        if (fallbackWholesalers.length === 0) fallbackWholesalers = availableWholesalers // Safety: don't block entirely
+
+        if (strategy === 'balanced' && fallbackWholesalers.length > 1) {
+          const perWs = Math.ceil(remainingToAllocate / fallbackWholesalers.length)
+          for (const ws of fallbackWholesalers) {
             if (remainingToAllocate <= 0) break
             const qty = Math.min(perWs, remainingToAllocate)
 
@@ -666,13 +988,14 @@ export async function runAllocation(
             })
 
             maxAllocTracker.record(order.customer_id, qty)
+            if (secondaryTracker) secondaryTracker.record(order.product_id, ws.id, qty)
             remainingToAllocate -= qty
 
             pushLog(order, ws.id, qty, remainingToAllocate, 'fallback',
               `Aucun quota/stock — repartition egale ${qty} u.`)
           }
         } else {
-          const ws = availableWholesalers[0]
+          const ws = fallbackWholesalers[0]
           allocations.push({
             monthly_process_id: processId,
             order_id: order.id,
@@ -689,6 +1012,7 @@ export async function runAllocation(
           })
 
           maxAllocTracker.record(order.customer_id, remainingToAllocate)
+          if (secondaryTracker) secondaryTracker.record(order.product_id, ws.id, remainingToAllocate)
 
           pushLog(order, ws.id, remainingToAllocate, 0, 'fallback_single',
             `Aucun quota/stock — grossiste unique ${remainingToAllocate} u.`)

@@ -3,7 +3,11 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
 import { motion } from 'framer-motion'
 import GaugeChart from '@/components/ui/gauge-chart'
 import MonthSelector, { type MonthValue, type MonthOption } from '@/components/ui/month-selector'
@@ -13,7 +17,7 @@ import {
 } from 'recharts'
 import {
   Play, ArrowRight, CalendarRange, TrendingUp, TrendingDown,
-  Package, Euro, BarChart3, Pill, Truck, ClipboardList,
+  Package, Euro, BarChart3, Pill, Truck, ClipboardList, Users, CheckCircle2,
 } from 'lucide-react'
 
 const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
@@ -129,8 +133,8 @@ export default function DashboardPage() {
     queryKey: ['allocations', 'dashboard-financials'],
     staleTime: 1000 * 60 * 10,
     queryFn: async () => {
-      return fetchAllPaginated<{ monthly_process_id: string; allocated_quantity: number; prix_applique: number | null; product: { pfht: number | null } | null }>(() =>
-        supabase.from('allocations').select('monthly_process_id, allocated_quantity, prix_applique, product:products(pfht)')
+      return fetchAllPaginated<{ monthly_process_id: string; customer_id: string; product_id: string; allocated_quantity: number; prix_applique: number | null; product: { pfht: number | null } | null }>(() =>
+        supabase.from('allocations').select('monthly_process_id, customer_id, product_id, allocated_quantity, prix_applique, product:products(pfht)')
       )
     },
   })
@@ -264,7 +268,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 mb-0.5">
                         <h3 className="ivory-heading text-[15px]">{MONTH_NAMES[activeProcess.month - 1]} {activeProcess.year}</h3>
                         <span className="ivory-badge" style={{ background: 'rgba(13,148,136,0.08)', color: 'var(--ivory-accent)' }}>
-                          Etape {activeProcess.current_step}/10
+                          Etape {activeProcess.current_step}/12
                         </span>
                       </div>
                       <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
@@ -512,6 +516,210 @@ export default function DashboardPage() {
             </Card>
           </motion.div>
         </div>
+      )}
+
+      {/* Annual KPIs */}
+      {completedFinancials.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
+          <div className="flex items-center gap-2 mb-3.5">
+            <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
+              Bilan annuel {completedFinancials[completedFinancials.length - 1]?.year ?? ''}
+            </span>
+            <div className="flex-1 h-px" style={{ background: 'rgba(0,0,0,0.04)' }} />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(() => {
+              const currentYear = completedFinancials[completedFinancials.length - 1]?.year
+              const yearData = completedFinancials.filter(p => p.year === currentYear)
+              const totalCA = yearData.reduce((s, p) => s + p.chiffreAffaires, 0)
+              const totalOrders = yearData.reduce((s, p) => s + p.ordersCount, 0)
+              const avgCoverage = allProcesses
+                ? (() => {
+                    const yearProcs = allProcesses.filter(p => p.year === currentYear && p.status === 'completed')
+                    if (yearProcs.length === 0) return 0
+                    const totalAllocs = yearProcs.reduce((s, p) => s + (p.allocations_count ?? 0), 0)
+                    const totalOrd = yearProcs.reduce((s, p) => s + (p.orders_count ?? 0), 0)
+                    return totalOrd > 0 ? Math.round((totalAllocs / totalOrd) * 100) : 0
+                  })()
+                : 0
+              const totalMarge = yearData.reduce((s, p) => s + p.margeBrute, 0)
+              return [
+                { label: 'CA annuel', value: formatEur(totalCA), icon: Euro, color: 'var(--ivory-accent)' },
+                { label: 'Commandes traitees', value: totalOrders.toLocaleString('fr-FR'), icon: Package, color: '#3b82f6' },
+                { label: 'Couverture moy.', value: `${avgCoverage}%`, icon: CheckCircle2, color: '#16a34a' },
+                { label: 'Marge annuelle', value: formatEur(totalMarge), icon: TrendingUp, color: '#f59e0b' },
+              ]
+            })().map((kpi, i) => (
+              <Card key={kpi.label}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{kpi.label}</span>
+                    <kpi.icon className="h-4 w-4" style={{ color: kpi.color }} />
+                  </div>
+                  <p className="text-xl font-bold tabular-nums">{kpi.value}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Monthly process history table */}
+      {completedFinancials.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <div className="flex items-center gap-2 mb-3.5">
+            <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
+              Historique des processus
+            </span>
+            <div className="flex-1 h-px" style={{ background: 'rgba(0,0,0,0.04)' }} />
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-[11px]">Mois</TableHead>
+                      <TableHead className="text-[11px] text-right">Commandes</TableHead>
+                      <TableHead className="text-[11px] text-right">Allocations</TableHead>
+                      <TableHead className="text-[11px] text-right">Volume d'affaires</TableHead>
+                      <TableHead className="text-[11px] text-right">CA</TableHead>
+                      <TableHead className="text-[11px] text-right">Marge</TableHead>
+                      <TableHead className="text-[11px] text-right">Couverture</TableHead>
+                      <TableHead className="text-[11px]">Statut</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...processFinancials].reverse().map((pf) => {
+                      const proc = allProcesses?.find(p => p.id === pf.processId)
+                      const coverage = pf.ordersCount > 0 && proc
+                        ? Math.round(((proc.allocations_count ?? 0) / Math.max(pf.ordersCount, 1)) * 100)
+                        : 0
+                      const isCompleted = proc?.status === 'completed'
+                      return (
+                        <TableRow key={pf.processId}>
+                          <TableCell className="text-xs font-medium">
+                            <Link to={`/monthly-processes/${pf.processId}`} className="hover:underline" style={{ color: 'var(--ivory-accent)' }}>
+                              {pf.label}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="text-xs text-right tabular-nums">{pf.ordersCount.toLocaleString('fr-FR')}</TableCell>
+                          <TableCell className="text-xs text-right tabular-nums">{(proc?.allocations_count ?? 0).toLocaleString('fr-FR')}</TableCell>
+                          <TableCell className="text-xs text-right tabular-nums">{formatEur(pf.volumeAffaires)}</TableCell>
+                          <TableCell className="text-xs text-right tabular-nums font-medium">{formatEur(pf.chiffreAffaires)}</TableCell>
+                          <TableCell className={`text-xs text-right tabular-nums ${pf.margeBrute < 0 ? 'text-red-500' : ''}`}>{formatEur(pf.margeBrute)}</TableCell>
+                          <TableCell className="text-xs text-right tabular-nums">
+                            <span style={{ color: coverage >= 80 ? '#16a34a' : coverage >= 50 ? '#f59e0b' : '#ef4444' }}>
+                              {coverage}%
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={isCompleted ? 'default' : 'secondary'}
+                              className="text-[10px] rounded-lg"
+                            >
+                              {isCompleted ? 'Cloture' : 'En cours'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Top 5 products & clients */}
+      {allAllocations && allAllocations.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Top 5 products by allocated volume */}
+            <Card>
+              <CardContent className="p-4">
+                <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                  <Pill className="h-4 w-4" style={{ color: 'var(--ivory-accent)' }} /> Top 5 produits (volume alloue)
+                </h4>
+                {(() => {
+                  const volByProduct = new Map<string, number>()
+                  for (const a of allAllocations) {
+                    const pid = (a as { product_id?: string }).product_id ?? (a.product as { id?: string } | null)?.id ?? ''
+                    if (!pid) continue
+                    volByProduct.set(pid, (volByProduct.get(pid) ?? 0) + (a.allocated_quantity ?? 0))
+                  }
+                  // We don't have product names in allocations query — show IDs shortened
+                  const sorted = [...volByProduct.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+                  if (sorted.length === 0) return <p className="text-xs text-muted-foreground">Aucune donnee</p>
+                  const maxVol = sorted[0][1]
+                  return (
+                    <div className="space-y-2.5">
+                      {sorted.map(([, vol], idx) => (
+                        <div key={idx} className="flex items-center gap-3">
+                          <span className="text-[10px] font-bold w-5 text-center" style={{ color: 'var(--ivory-text-muted)' }}>#{idx + 1}</span>
+                          <div className="flex-1">
+                            <div className="h-5 rounded-lg overflow-hidden" style={{ background: 'rgba(0,0,0,0.04)' }}>
+                              <div
+                                className="h-full rounded-lg transition-all duration-700 flex items-center px-2"
+                                style={{ width: `${(vol / maxVol) * 100}%`, background: `rgba(13,148,136,${0.15 + idx * 0.03})` }}
+                              >
+                                <span className="text-[10px] font-semibold truncate" style={{ color: 'var(--ivory-accent)' }}>
+                                  {vol.toLocaleString('fr-FR')} unites
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </CardContent>
+            </Card>
+
+            {/* Top 5 clients by CA */}
+            <Card>
+              <CardContent className="p-4">
+                <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                  <Users className="h-4 w-4" style={{ color: '#3b82f6' }} /> Top 5 clients (CA)
+                </h4>
+                {(() => {
+                  const caByCustomer = new Map<string, number>()
+                  for (const a of allAllocations) {
+                    const cid = (a as { customer_id?: string }).customer_id ?? ''
+                    if (!cid) continue
+                    caByCustomer.set(cid, (caByCustomer.get(cid) ?? 0) + (a.allocated_quantity ?? 0) * (a.prix_applique ?? 0))
+                  }
+                  const sorted = [...caByCustomer.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+                  if (sorted.length === 0) return <p className="text-xs text-muted-foreground">Aucune donnee</p>
+                  const maxCA = sorted[0][1]
+                  return (
+                    <div className="space-y-2.5">
+                      {sorted.map(([, ca], idx) => (
+                        <div key={idx} className="flex items-center gap-3">
+                          <span className="text-[10px] font-bold w-5 text-center" style={{ color: 'var(--ivory-text-muted)' }}>#{idx + 1}</span>
+                          <div className="flex-1">
+                            <div className="h-5 rounded-lg overflow-hidden" style={{ background: 'rgba(0,0,0,0.04)' }}>
+                              <div
+                                className="h-full rounded-lg transition-all duration-700 flex items-center px-2"
+                                style={{ width: `${(ca / maxCA) * 100}%`, background: `rgba(59,130,246,${0.12 + idx * 0.03})` }}
+                              >
+                                <span className="text-[10px] font-semibold truncate" style={{ color: '#3b82f6' }}>
+                                  {formatEur(ca)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </CardContent>
+            </Card>
+          </div>
+        </motion.div>
       )}
 
       {/* Quick actions */}

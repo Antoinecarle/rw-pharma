@@ -1,14 +1,17 @@
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { Check, FileUp, ClipboardCheck, Cpu, SearchCheck, Flag, BarChart3, Send, PackageCheck, ChevronLeft, ChevronRight, Layers } from 'lucide-react'
+import { Check, FileUp, ClipboardCheck, Cpu, SearchCheck, Flag, BarChart3, Send, PackageCheck, ChevronLeft, ChevronRight, Layers, GitMerge, MessageSquare, RefreshCw } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { MonthlyProcessPhase } from '@/types/database'
 
 export const STEPS = [
-  { label: 'Import Quotas', shortLabel: 'Quotas', icon: BarChart3, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Import Dispos', shortLabel: 'Dispos', icon: BarChart3, phase: 'commandes' as MonthlyProcessPhase },
   { label: 'Import Commandes', shortLabel: 'Commandes', icon: FileUp, phase: 'commandes' as MonthlyProcessPhase },
   { label: 'Revue Commandes', shortLabel: 'Revue', icon: ClipboardCheck, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Attribution Macro', shortLabel: 'Attribution', icon: GitMerge, phase: 'commandes' as MonthlyProcessPhase },
   { label: 'Export Grossistes', shortLabel: 'Export', icon: Send, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Negociation', shortLabel: 'Nego', icon: MessageSquare, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Re-export', shortLabel: 'Re-export', icon: RefreshCw, phase: 'commandes' as MonthlyProcessPhase },
   { label: 'Reception Stocks', shortLabel: 'Stocks', icon: PackageCheck, phase: 'collecte' as MonthlyProcessPhase },
   { label: 'Aggregation Stock', shortLabel: 'Agregation', icon: Layers, phase: 'collecte' as MonthlyProcessPhase },
   { label: 'Allocation', shortLabel: 'Allocation', icon: Cpu, phase: 'allocation' as MonthlyProcessPhase },

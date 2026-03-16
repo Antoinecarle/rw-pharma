@@ -20,6 +20,7 @@ const AllocationDashboardPage = lazy(() => import('@/pages/AllocationDashboardPa
 const AnsmPage = lazy(() => import('@/pages/AnsmPage'))
 const StockPage = lazy(() => import('@/pages/StockPage'))
 const ClientDebtsPage = lazy(() => import('@/pages/ClientDebtsPage'))
+const InvoicesPage = lazy(() => import('@/pages/InvoicesPage'))
 const PortalLayout = lazy(() => import('@/components/portal/PortalLayout'))
 const PortalOrdersPage = lazy(() => import('@/pages/portal/PortalOrdersPage'))
 const PortalAllocationsPage = lazy(() => import('@/pages/portal/PortalAllocationsPage'))
@@ -129,6 +130,7 @@ function AppRoutes() {
           <Route path="stock" element={<LazyPage><StockPage /></LazyPage>} />
           <Route path="debts" element={<LazyPage><ClientDebtsPage /></LazyPage>} />
           <Route path="ansm" element={<LazyPage><AnsmPage /></LazyPage>} />
+          <Route path="facturation" element={<LazyPage><InvoicesPage /></LazyPage>} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
 

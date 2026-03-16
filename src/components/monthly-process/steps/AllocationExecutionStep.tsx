@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { runAllocation, computeStats, type AllocationStrategy, type AllocationLog, type DryRunStats } from '@/lib/allocation-engine'
+import { runAllocation, computeStats, type AllocationStrategy, type AllocationLog, type DryRunStats, type AllocationV3Config, type CustomerWholesalerMap, DEFAULT_V3_CONFIG } from '@/lib/allocation-engine'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -16,10 +16,14 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip'
 import GaugeChart from '@/components/ui/gauge-chart'
+import { Switch } from '@/components/ui/switch'
+import { Slider } from '@/components/ui/slider'
+import { Label } from '@/components/ui/label'
 import {
   Cpu, ArrowRight, ArrowLeft, CheckCircle, AlertTriangle, Truck, Zap,
   Users, BarChart3, Eye, Settings2, Boxes, ShieldCheck, Play, ChevronRight,
   Package, Warehouse, Calendar, Pencil, Check, X, RotateCcw, AlertCircle,
+  SlidersHorizontal, Shield, Clock, Hash, DollarSign, Percent,
 } from 'lucide-react'
 import AllocationVisualizer from '@/components/allocations/AllocationVisualizer'
 import { toast } from 'sonner'
@@ -98,6 +102,15 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [editingCell, setEditingCell] = useState<{ productId: string; customerId: string; lotId: string } | null>(null)
   const [editValue, setEditValue] = useState('')
+
+  // V3 config state
+  const [v3Enabled, setV3Enabled] = useState(false)
+  const [v3Config, setV3Config] = useState<AllocationV3Config>({ ...DEFAULT_V3_CONFIG })
+
+  const updateV3 = (partial: Partial<AllocationV3Config>) => {
+    setV3Config(prev => ({ ...prev, ...partial }))
+    setDryRunResult(null)
+  }
 
   const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
 

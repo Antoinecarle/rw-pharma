@@ -51,7 +51,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
     let score = 0
 
     // When process is completed, all steps that were passed are implicitly done
-    if (process.status === 'completed' && step <= (process.current_step ?? 10)) {
+    if (process.status === 'completed' && step <= (process.current_step ?? 12)) {
       return { score: 100, label: 'Excellent', details: ['Etape completee'] }
     }
 
