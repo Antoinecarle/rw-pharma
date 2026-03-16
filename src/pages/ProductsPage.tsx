@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Product, ProductInsert } from '@/types/database'
+import type { Product, ProductInsert, ProductAuditLog } from '@/types/database'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,12 +15,32 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog'
-import { Plus, Search, Pencil, Trash2, ShieldAlert, FileSpreadsheet, Pill, Package, TrendingUp, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, ShieldAlert, FileSpreadsheet, Pill, Package, TrendingUp, AlertTriangle, History, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import ExcelImport from '@/components/ExcelImport'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
 const PAGE_SIZE = 50
+
+const AUDIT_FIELD_LABELS: Record<string, string> = {
+  is_ansm_blocked: 'Statut ANSM',
+  is_discontinued: 'Discontinue',
+  pfht: 'Prix',
+  name: 'Nom',
+}
+
+interface LatestExpiry {
+  product_id: string
+  latest_expiry: string
+  latest_lot: string | null
+}
+
+interface BestPrice {
+  product_id: string
+  best_price: number
+  best_price_customer: string
+  best_price_month: string | null
+}
 
 const emptyProduct: ProductInsert = {
   cip13: '',
@@ -46,6 +66,8 @@ function TableSkeleton() {
           <TableCell><Skeleton className="h-4 w-40 rounded-md" /></TableCell>
           <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-24 rounded-md" /></TableCell>
           <TableCell><Skeleton className="h-4 w-16 rounded-md" /></TableCell>
+          <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-16 rounded-md" /></TableCell>
+          <TableCell className="hidden xl:table-cell"><Skeleton className="h-4 w-24 rounded-md" /></TableCell>
           <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-20 rounded-md" /></TableCell>
           <TableCell><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
           <TableCell><Skeleton className="h-4 w-14 rounded-md" /></TableCell>
@@ -74,6 +96,38 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductInsert>(emptyProduct)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [auditOpen, setAuditOpen] = useState(false)
+
+  // ── Latest Expiry view ──────────────────────────────────────
+  const { data: expiryMap } = useQuery({
+    queryKey: ['product-latest-expiry'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('product_latest_expiry').select('*')
+      if (error) throw error
+      const map = new Map<string, LatestExpiry>()
+      for (const row of (data as LatestExpiry[])) {
+        map.set(row.product_id, row)
+      }
+      return map
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // ── Best Price view ─────────────────────────────────────────
+  const { data: bestPriceMap } = useQuery({
+    queryKey: ['product-best-price'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('product_best_price').select('*')
+      if (error) throw error
+      const map = new Map<string, BestPrice>()
+      for (const row of (data as BestPrice[])) {
+        map.set(row.product_id, row)
+      }
+      return map
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
   const { data: products, isLoading } = useQuery({
     queryKey: ['products', search, statusFilter, page],
     queryFn: async () => {
@@ -144,9 +198,27 @@ export default function ProductsPage() {
     onError: (err: Error) => toast.error(err.message),
   })
 
+  // ── Audit log for current product ────────────────────────────
+  const { data: auditLog, isLoading: auditLoading } = useQuery({
+    queryKey: ['product-audit-log', editing?.id],
+    queryFn: async () => {
+      if (!editing) return []
+      const { data, error } = await supabase
+        .from('product_audit_log')
+        .select('*')
+        .eq('product_id', editing.id)
+        .order('changed_at', { ascending: false })
+        .limit(20)
+      if (error) throw error
+      return data as ProductAuditLog[]
+    },
+    enabled: !!editing && dialogOpen,
+  })
+
   const openCreate = () => {
     setEditing(null)
     setForm(emptyProduct)
+    setAuditOpen(false)
     setDialogOpen(true)
   }
 
@@ -166,6 +238,7 @@ export default function ProductsPage() {
       expiry_dates: p.expiry_dates,
       metadata: p.metadata,
     })
+    setAuditOpen(false)
     setDialogOpen(true)
   }
 
@@ -173,6 +246,23 @@ export default function ProductsPage() {
     e.preventDefault()
     upsert.mutate(editing ? { ...form, id: editing.id } : form)
   }
+
+  const formatExpiry = useMemo(() => (dateStr: string) => {
+    const d = new Date(dateStr)
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const yyyy = d.getFullYear()
+    return `${mm}/${yyyy}`
+  }, [])
+
+  const getExpiryColor = useMemo(() => (dateStr: string) => {
+    const now = new Date()
+    const expiry = new Date(dateStr)
+    if (expiry < now) return '#DC4A4A' // red - expired
+    const sixMonths = new Date()
+    sixMonths.setMonth(sixMonths.getMonth() + 6)
+    if (expiry < sixMonths) return '#D97706' // amber - <6 months
+    return 'var(--ivory-text-muted)' // normal
+  }, [])
 
   const totalPages = Math.ceil((products?.count ?? 0) / PAGE_SIZE)
   const catalogProgress = products?.count ? Math.min((products.count / 1760) * 100, 100) : 0
@@ -337,6 +427,8 @@ export default function ProductsPage() {
               <TableHead className="ivory-table-head py-3.5">Nom</TableHead>
               <TableHead className="ivory-table-head py-3.5 hidden md:table-cell">Laboratoire</TableHead>
               <TableHead className="ivory-table-head py-3.5">PFHT</TableHead>
+              <TableHead className="ivory-table-head py-3.5 hidden lg:table-cell">Dern. Exp.</TableHead>
+              <TableHead className="ivory-table-head py-3.5 hidden xl:table-cell">Best Prix</TableHead>
               <TableHead className="ivory-table-head py-3.5 hidden lg:table-cell">EUNB</TableHead>
               <TableHead className="ivory-table-head py-3.5">Statut</TableHead>
               <TableHead className="w-20"></TableHead>
@@ -347,7 +439,7 @@ export default function ProductsPage() {
               <TableSkeleton />
             ) : !products?.data.length ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-20">
+                <TableCell colSpan={9} className="text-center py-20">
                   <motion.div
                     className="flex flex-col items-center gap-3"
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -418,6 +510,30 @@ export default function ProductsPage() {
                         <span className="text-[12px] font-semibold tabular-nums" style={{ color: 'var(--ivory-text-heading)' }}>
                           {p.pfht.toFixed(2)}
                           <span className="ml-0.5 font-normal" style={{ color: 'var(--ivory-text-muted)' }}>EUR</span>
+                        </span>
+                      ) : (
+                        <span style={{ color: 'rgba(0,0,0,0.15)' }}>-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      {expiryMap?.get(p.id) ? (
+                        <span
+                          className="text-[12px] font-medium tabular-nums"
+                          style={{ color: getExpiryColor(expiryMap.get(p.id)!.latest_expiry) }}
+                        >
+                          {formatExpiry(expiryMap.get(p.id)!.latest_expiry)}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'rgba(0,0,0,0.15)' }}>-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden xl:table-cell">
+                      {bestPriceMap?.get(p.id) ? (
+                        <span className="text-[12px] tabular-nums" style={{ color: 'var(--ivory-text-heading)' }}>
+                          <span className="font-semibold">{bestPriceMap.get(p.id)!.best_price.toFixed(2)}&euro;</span>
+                          <span className="ml-1 font-normal text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>
+                            ({bestPriceMap.get(p.id)!.best_price_customer})
+                          </span>
                         </span>
                       ) : (
                         <span style={{ color: 'rgba(0,0,0,0.15)' }}>-</span>
@@ -641,6 +757,61 @@ export default function ProductsPage() {
                 />
               </div>
             </div>
+            {/* Audit Log (edit mode only) */}
+            {editing && (
+              <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+                <button
+                  type="button"
+                  onClick={() => setAuditOpen(!auditOpen)}
+                  className="w-full flex items-center justify-between px-3.5 py-3 text-[13px] font-medium transition-colors hover:bg-[rgba(248,247,244,0.8)]"
+                  style={{ background: 'rgba(248,247,244,0.5)', color: 'var(--ivory-text-heading)' }}
+                >
+                  <span className="flex items-center gap-2">
+                    <History className="h-3.5 w-3.5" style={{ color: 'var(--ivory-accent)' }} />
+                    Historique des modifications
+                    {auditLog && auditLog.length > 0 && (
+                      <span className="text-[11px] font-normal px-1.5 py-0.5 rounded-full"
+                        style={{ background: 'rgba(13,148,136,0.08)', color: 'var(--ivory-accent)' }}>
+                        {auditLog.length}
+                      </span>
+                    )}
+                  </span>
+                  {auditOpen ? <ChevronUp className="h-4 w-4" style={{ color: 'var(--ivory-text-muted)' }} /> : <ChevronDown className="h-4 w-4" style={{ color: 'var(--ivory-text-muted)' }} />}
+                </button>
+                {auditOpen && (
+                  <div className="px-3.5 py-3 space-y-2.5 max-h-[200px] overflow-y-auto" style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
+                    {auditLoading ? (
+                      <div className="space-y-2">
+                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-4 w-full rounded-md" />)}
+                      </div>
+                    ) : !auditLog || auditLog.length === 0 ? (
+                      <p className="text-[12px] py-2 text-center" style={{ color: 'var(--ivory-text-muted)' }}>
+                        Aucune modification enregistree
+                      </p>
+                    ) : (
+                      auditLog.map((entry) => (
+                        <div key={entry.id} className="flex items-start gap-2.5">
+                          <div className="mt-1.5 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: 'var(--ivory-accent)' }} />
+                          <div className="min-w-0">
+                            <p className="text-[12px]" style={{ color: 'var(--ivory-text-heading)' }}>
+                              <span className="font-medium">{AUDIT_FIELD_LABELS[entry.field_changed] ?? entry.field_changed}</span>
+                              {' : '}
+                              <span style={{ color: '#DC4A4A' }}>{entry.old_value || '(vide)'}</span>
+                              {' → '}
+                              <span style={{ color: 'var(--ivory-teal)' }}>{entry.new_value || '(vide)'}</span>
+                            </p>
+                            <p className="text-[11px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>
+                              {new Date(entry.changed_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">
                 Annuler

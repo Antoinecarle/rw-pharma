@@ -20,7 +20,7 @@ import {
 import {
   Cpu, ArrowRight, CheckCircle, AlertTriangle,
   BarChart3, Users, Zap, Package, Boxes,
-  Calendar, Pencil, Check, X, RotateCcw, AlertCircle,
+  Pencil, Check, X, RotateCcw,
   Lock, Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -843,7 +843,6 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                 {demand.customers.map(cust => {
                                   const custAttributed = getCustomerAttributed(demand.productId, cust.id)
                                   const custRemaining = cust.quantity - custAttributed
-                                  const custPct = cust.quantity > 0 ? Math.min(Math.round((custAttributed / cust.quantity) * 100), 100) : 0
                                   const isFull = custRemaining <= 0
 
                                   return (

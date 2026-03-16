@@ -1,26 +1,25 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Checkbox } from '@/components/ui/checkbox'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip'
 import {
-  ArrowRight, ArrowLeft, Package, Users, CheckCircle, MessageSquare,
-  Filter, Ban, AlertTriangle, Pencil, X, Check, TrendingDown,
+  ArrowRight, ArrowLeft, Package, Search, CheckCircle, Circle,
+  Ban, AlertTriangle, Pencil, X, Check, TrendingDown, Star,
+  ChevronLeft, ChevronRight, Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { MonthlyProcess, Order, Customer, Product } from '@/types/database'
+import type { MonthlyProcess, Order, Product } from '@/types/database'
 
 // --------------- Types ---------------
 
@@ -42,6 +41,7 @@ interface ProductGroup {
   bestPrice: number | null
   totalQty: number
   negoStatus: 'pending' | 'in_progress' | 'validated' | 'mixed'
+  clientCount: number
 }
 
 interface EditingCell {
@@ -50,14 +50,28 @@ interface EditingCell {
   value: string
 }
 
+interface WholesalerInfo {
+  id: string
+  code: string
+  name: string
+}
+
+interface QuotaForProduct {
+  wholesalerId: string
+  quotaQuantity: number
+  extraAvailable: number
+}
+
 // --------------- Component ---------------
 
 export default function NegotiationStep({ process, onNext, onBack }: NegotiationStepProps) {
   const queryClient = useQueryClient()
   const [negoFilter, setNegoFilter] = useState<NegoFilter>('all')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('all')
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [editing, setEditing] = useState<EditingCell | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const listRef = useRef<HTMLDivElement>(null)
 
   // ── Fetch orders with joins ──
   const { data: orders, isLoading } = useQuery({
@@ -69,7 +83,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
       while (true) {
         const { data, error } = await supabase
           .from('orders')
-          .select('*, customer:customers(id, name, code, country, is_top_client), product:products(id, cip13, name, is_ansm_blocked, is_discontinued, pfht)')
+          .select('*, customer:customers(id, name, code, country, is_top_client, min_lot_acceptable), product:products(id, cip13, name, is_ansm_blocked, is_discontinued, pfht)')
           .eq('monthly_process_id', process.id)
           .neq('status', 'rejected')
           .order('created_at', { ascending: false })
@@ -84,18 +98,70 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     },
   })
 
-  // ── Fetch customers for filter ──
-  const { data: customers } = useQuery({
-    queryKey: ['customers-list'],
+  // customers for filter chips are derived from orders (see orderCustomers memo below)
+
+  // ── Fetch wholesalers ──
+  const { data: wholesalers } = useQuery({
+    queryKey: ['wholesalers-list-nego'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('customers')
+        .from('wholesalers')
         .select('id, name, code')
         .order('code')
       if (error) throw error
-      return data as Pick<Customer, 'id' | 'name' | 'code'>[]
+      return (data ?? []) as WholesalerInfo[]
     },
   })
+
+  // ── Fetch quotas for this month ──
+  const monthDate = `${process.year}-${String(process.month).padStart(2, '0')}-01`
+  const { data: quotas } = useQuery({
+    queryKey: ['wholesaler-quotas', monthDate, 'nego'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('wholesaler_quotas')
+        .select('wholesaler_id, product_id, quota_quantity, extra_available')
+        .eq('month', monthDate)
+      if (error) throw error
+      return (data ?? []) as { wholesaler_id: string; product_id: string; quota_quantity: number; extra_available: number }[]
+    },
+  })
+
+  // ── Fetch customer-wholesaler links ──
+  const { data: cwLinks } = useQuery({
+    queryKey: ['customer_wholesalers', 'all', 'nego'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('customer_wholesalers').select('*')
+      if (error) throw error
+      return data as { id: string; customer_id: string; wholesaler_id: string; is_open: boolean }[]
+    },
+  })
+
+  // ── Macro attributions from process metadata ──
+  const macroMap = (process.metadata?.macro_attributions as Record<string, Record<string, number>>) ?? {}
+
+  // ── Build quota lookup: productId -> QuotaForProduct[] ──
+  const quotasByProduct = useMemo(() => {
+    if (!quotas) return new Map<string, QuotaForProduct[]>()
+    const map = new Map<string, QuotaForProduct[]>()
+    for (const q of quotas) {
+      const existing = map.get(q.product_id) ?? []
+      existing.push({
+        wholesalerId: q.wholesaler_id,
+        quotaQuantity: q.quota_quantity,
+        extraAvailable: q.extra_available,
+      })
+      map.set(q.product_id, existing)
+    }
+    return map
+  }, [quotas])
+
+  // ── Wholesalers that have quotas (to show as columns) ──
+  const activeWholesalers = useMemo(() => {
+    if (!wholesalers || !quotas) return []
+    const wsIdsWithQuotas = new Set(quotas.map(q => q.wholesaler_id))
+    return wholesalers.filter(w => wsIdsWithQuotas.has(w.id))
+  }, [wholesalers, quotas])
 
   // ── Group orders by product ──
   const productGroups = useMemo(() => {
@@ -111,6 +177,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
       if (existing) {
         existing.orders.push(order)
         existing.totalQty += order.quantity
+        existing.clientCount = new Set(existing.orders.map(o => o.customer_id)).size
         if (order.unit_price != null && (existing.bestPrice == null || order.unit_price < existing.bestPrice)) {
           existing.bestPrice = order.unit_price
         }
@@ -125,6 +192,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
           bestPrice: order.unit_price,
           totalQty: order.quantity,
           negoStatus: 'pending',
+          clientCount: 1,
         })
       }
     }
@@ -144,18 +212,26 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     return [...groupMap.values()].sort((a, b) => b.totalQty - a.totalQty)
   }, [orders])
 
-  // ── Filter groups ──
+  // ── Unique customers that appear in orders (for filter chips) ──
+  const orderCustomers = useMemo(() => {
+    if (!orders) return []
+    const custMap = new Map<string, { id: string; code: string; name: string }>()
+    for (const o of orders) {
+      const c = o.customer as unknown as { id: string; code: string; name: string } | undefined
+      if (c && !custMap.has(c.id)) {
+        custMap.set(c.id, { id: c.id, code: c.code, name: c.name })
+      }
+    }
+    return [...custMap.values()].sort((a, b) => a.code.localeCompare(b.code))
+  }, [orders])
+
+  // ── Filter groups (for left panel list) ──
   const filteredGroups = useMemo(() => {
     let result = productGroups
 
-    // Filter by client
+    // Filter by client — show only products that this client ordered
     if (selectedCustomerId !== 'all') {
-      result = result
-        .map(g => ({
-          ...g,
-          orders: g.orders.filter(o => o.customer_id === selectedCustomerId),
-        }))
-        .filter(g => g.orders.length > 0)
+      result = result.filter(g => g.orders.some(o => o.customer_id === selectedCustomerId))
     }
 
     // Filter by nego status
@@ -180,9 +256,53 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     return result
   }, [productGroups, selectedCustomerId, negoFilter, searchQuery])
 
+  // ── Auto-select first product ──
+  useEffect(() => {
+    if (filteredGroups.length > 0 && (!selectedProductId || !filteredGroups.find(g => g.productId === selectedProductId))) {
+      setSelectedProductId(filteredGroups[0].productId)
+    }
+  }, [filteredGroups, selectedProductId])
+
   // ── Progress stats ──
   const validatedCount = productGroups.filter(g => g.negoStatus === 'validated').length
+  const pendingCount = productGroups.filter(g => g.negoStatus === 'pending' || g.negoStatus === 'mixed').length
+  const inProgressCount = productGroups.filter(g => g.negoStatus === 'in_progress' || g.negoStatus === 'mixed').length
   const totalCount = productGroups.length
+
+  // ── Selected group and its detail orders ──
+  const selectedGroup = useMemo(() => {
+    if (!selectedProductId) return null
+    // Use the full productGroups (not filtered) to get all orders for this product
+    return productGroups.find(g => g.productId === selectedProductId) ?? null
+  }, [productGroups, selectedProductId])
+
+  // ── Detail orders (filtered by selected customer if any, but show all in detail) ──
+  const detailOrders = useMemo(() => {
+    if (!selectedGroup) return []
+    return selectedGroup.orders.sort((a, b) => {
+      const ca = a.customer as unknown as { code: string; is_top_client?: boolean } | undefined
+      const cb = b.customer as unknown as { code: string; is_top_client?: boolean } | undefined
+      // Top clients first
+      if (ca?.is_top_client && !cb?.is_top_client) return -1
+      if (!ca?.is_top_client && cb?.is_top_client) return 1
+      return (ca?.code ?? '').localeCompare(cb?.code ?? '')
+    })
+  }, [selectedGroup])
+
+  // ── Navigation between products ──
+  const currentIndex = filteredGroups.findIndex(g => g.productId === selectedProductId)
+  const goToPrev = useCallback(() => {
+    if (currentIndex > 0) {
+      setSelectedProductId(filteredGroups[currentIndex - 1].productId)
+      setEditing(null)
+    }
+  }, [currentIndex, filteredGroups])
+  const goToNext = useCallback(() => {
+    if (currentIndex < filteredGroups.length - 1) {
+      setSelectedProductId(filteredGroups[currentIndex + 1].productId)
+      setEditing(null)
+    }
+  }, [currentIndex, filteredGroups])
 
   // ── Inline edit mutation ──
   const editMutation = useMutation({
@@ -197,7 +317,6 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
       if (field === 'quantity') {
         const newQty = parseInt(value, 10)
         if (isNaN(newQty) || newQty < 0) throw new Error('Quantite invalide')
-        // Save original on first edit
         if (order.nego_original_qty == null) {
           updates.nego_original_qty = order.quantity
         }
@@ -253,6 +372,24 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     onError: (err: Error) => toast.error(err.message),
   })
 
+  // ── Validate single order ──
+  const validateOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          nego_status: 'validated',
+          nego_updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders', process.id, 'negotiation'] })
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
   // ── Start editing ──
   const startEdit = useCallback((orderId: string, field: EditingCell['field'], currentValue: string) => {
     setEditing({ orderId, field, value: currentValue })
@@ -270,6 +407,25 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
   const cancelEdit = useCallback(() => {
     setEditing(null)
   }, [])
+
+  // ── Check if customer-wholesaler link is open ──
+  const isWholesalerOpenForCustomer = useCallback((customerId: string, wholesalerId: string) => {
+    if (!cwLinks) return true
+    const link = cwLinks.find(l => l.customer_id === customerId && l.wholesaler_id === wholesalerId)
+    return link ? link.is_open : true
+  }, [cwLinks])
+
+  // ── Get macro attribution qty for product-wholesaler ──
+  const getMacroQty = useCallback((productId: string, wholesalerId: string) => {
+    return macroMap[productId]?.[wholesalerId] ?? 0
+  }, [macroMap])
+
+  // ── Get quota for a product-wholesaler ──
+  const getQuota = useCallback((productId: string, wholesalerId: string) => {
+    const pq = quotasByProduct.get(productId)
+    if (!pq) return null
+    return pq.find(q => q.wholesalerId === wholesalerId) ?? null
+  }, [quotasByProduct])
 
   // ── Render ──
 
@@ -307,394 +463,567 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     )
   }
 
-  const negoStatusColor = (status: string) => {
-    switch (status) {
-      case 'validated': return 'bg-green-100 text-green-700 border-green-200'
-      case 'in_progress': return 'bg-blue-100 text-blue-700 border-blue-200'
-      case 'mixed': return 'bg-amber-100 text-amber-700 border-amber-200'
-      default: return 'bg-gray-100 text-gray-600 border-gray-200'
-    }
+  // ── Status icon for left panel ──
+  const StatusIcon = ({ status }: { status: string }) => {
+    if (status === 'validated') return <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+    if (status === 'in_progress' || status === 'mixed') return <Clock className="h-4 w-4 text-amber-500 shrink-0" />
+    return <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
   }
 
-  const negoStatusLabel = (status: string) => {
-    switch (status) {
-      case 'validated': return 'Valide'
-      case 'in_progress': return 'En cours'
-      case 'mixed': return 'Mixte'
-      default: return 'A traiter'
-    }
-  }
+  // Count validated orders in selected group
+  const selectedValidatedOrders = selectedGroup
+    ? selectedGroup.orders.filter(o => (o.nego_status || 'pending') === 'validated').length
+    : 0
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h3 className="text-lg font-semibold">Negociation</h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Negociez les quantites et prix produit par produit avec chaque client. Validez chaque produit une fois les conditions acceptees.
-        </p>
-      </div>
-
-      {/* Progress + summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="ivory-card-highlight">
-          <CardContent className="p-4 text-center">
-            <CheckCircle className="h-5 w-5 mx-auto text-green-600 mb-1" />
-            <p className="text-2xl font-bold">{validatedCount}/{totalCount}</p>
-            <p className="text-xs text-muted-foreground">Produits traites</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <Package className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
-            <p className="text-2xl font-bold">{totalCount}</p>
-            <p className="text-xs text-muted-foreground">Produits</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <Users className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
-            <p className="text-2xl font-bold">{new Set(orders.map(o => o.customer_id)).size}</p>
-            <p className="text-xs text-muted-foreground">Clients</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <MessageSquare className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
-            <p className="text-2xl font-bold">{orders.filter(o => o.nego_comment).length}</p>
-            <p className="text-xs text-muted-foreground">Commentaires</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Progress bar */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium">{validatedCount}/{totalCount} produits traites</span>
-          <span className="text-muted-foreground">{totalCount > 0 ? Math.round((validatedCount / totalCount) * 100) : 0}%</span>
+    <div className="space-y-4">
+      {/* Header + progress */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Negociation</h3>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Produit par produit : ajustez les quantites, prix, et validez.
+          </p>
         </div>
-        <div className="h-2 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-green-500 rounded-full transition-all duration-500"
-            style={{ width: `${totalCount > 0 ? (validatedCount / totalCount) * 100 : 0}%` }}
-          />
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <p className="text-sm font-medium">{validatedCount}/{totalCount} produits</p>
+            <div className="h-1.5 w-32 bg-muted rounded-full overflow-hidden mt-1">
+              <div
+                className="h-full bg-green-500 rounded-full transition-all duration-500"
+                style={{ width: `${totalCount > 0 ? (validatedCount / totalCount) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Input
-          placeholder="Rechercher CIP13 ou nom..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="w-[240px] h-8"
-        />
-        <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-          <SelectTrigger className="w-[180px] h-8">
-            <Users className="h-3.5 w-3.5 mr-1.5" />
-            <SelectValue placeholder="Client" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les clients</SelectItem>
-            {(customers ?? []).map(c => (
-              <SelectItem key={c.id} value={c.id}>{c.code} — {c.name}</SelectItem>
+      {/* Split pane */}
+      <div className="flex h-[calc(100vh-280px)] gap-0 border rounded-lg overflow-hidden bg-background">
+        {/* ── LEFT PANEL ── */}
+        <div className="w-[340px] shrink-0 border-r flex flex-col bg-muted/20">
+          {/* Search */}
+          <div className="p-3 border-b space-y-2.5">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="CIP13 ou nom..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="h-8 pl-8 text-xs"
+              />
+            </div>
+
+            {/* Client filter chips */}
+            <div className="flex flex-wrap gap-1">
+              <button
+                type="button"
+                onClick={() => setSelectedCustomerId('all')}
+                className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                  selectedCustomerId === 'all'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                Tous
+              </button>
+              {orderCustomers.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelectedCustomerId(c.id === selectedCustomerId ? 'all' : c.id)}
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                    selectedCustomerId === c.id
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  {c.code}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Status tabs */}
+          <div className="flex border-b text-xs">
+            {([
+              { key: 'all' as NegoFilter, label: 'Tous', count: totalCount },
+              { key: 'pending' as NegoFilter, label: 'A traiter', count: pendingCount },
+              { key: 'in_progress' as NegoFilter, label: 'En cours', count: inProgressCount },
+              { key: 'validated' as NegoFilter, label: 'Valides', count: validatedCount },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setNegoFilter(tab.key)}
+                className={`flex-1 py-2 text-center font-medium transition-colors border-b-2 ${
+                  negoFilter === tab.key
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab.label} ({tab.count})
+              </button>
             ))}
-          </SelectContent>
-        </Select>
-        <Select value={negoFilter} onValueChange={(v) => setNegoFilter(v as NegoFilter)}>
-          <SelectTrigger className="w-[170px] h-8">
-            <Filter className="h-3.5 w-3.5 mr-1.5" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous ({totalCount})</SelectItem>
-            <SelectItem value="pending">A traiter ({productGroups.filter(g => g.negoStatus === 'pending' || g.negoStatus === 'mixed').length})</SelectItem>
-            <SelectItem value="in_progress">En cours ({productGroups.filter(g => g.negoStatus === 'in_progress' || g.negoStatus === 'mixed').length})</SelectItem>
-            <SelectItem value="validated">Valides ({validatedCount})</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-xs text-muted-foreground ml-auto">
-          {filteredGroups.length} produits affiches
-        </span>
-      </div>
+          </div>
 
-      {/* Product groups */}
-      {filteredGroups.length === 0 ? (
-        <Card className="ivory-card-empty">
-          <CardContent className="p-8 text-center">
-            <Package className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-            <p className="font-medium">Aucun produit avec ce filtre</p>
-            <Button variant="outline" size="sm" className="mt-4" onClick={() => { setNegoFilter('all'); setSelectedCustomerId('all'); setSearchQuery('') }}>
-              Reinitialiser les filtres
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {filteredGroups.map(group => (
-            <Card
-              key={group.productId}
-              className={`transition-colors ${
-                group.negoStatus === 'validated'
-                  ? 'border-green-200 bg-green-50/30 dark:bg-green-950/20'
-                  : group.isAnsmBlocked || group.isDiscontinued
-                    ? 'border-red-200 bg-red-50/20 dark:bg-red-950/10'
-                    : ''
-              }`}
-            >
-              <CardContent className="p-4">
-                {/* Product header */}
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="flex-1 min-w-0">
+          {/* Product list */}
+          <ScrollArea className="flex-1" ref={listRef}>
+            <div className="divide-y">
+              {filteredGroups.length === 0 ? (
+                <div className="p-6 text-center text-sm text-muted-foreground">
+                  <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  Aucun produit
+                </div>
+              ) : (
+                filteredGroups.map(group => {
+                  const isSelected = group.productId === selectedProductId
+                  return (
+                    <button
+                      key={group.productId}
+                      type="button"
+                      onClick={() => { setSelectedProductId(group.productId); setEditing(null) }}
+                      className={`w-full text-left px-3 py-2.5 transition-colors hover:bg-muted/60 ${
+                        isSelected ? 'bg-blue-50 dark:bg-blue-950/30 border-l-2 border-l-blue-500' : 'border-l-2 border-l-transparent'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <StatusIcon status={group.negoStatus} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate leading-tight">{group.productName}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-[11px] text-muted-foreground">{group.cip13}</span>
+                            {group.isAnsmBlocked && (
+                              <span className="text-red-500"><Ban className="h-3 w-3" /></span>
+                            )}
+                            {group.isDiscontinued && (
+                              <span className="text-amber-500"><AlertTriangle className="h-3 w-3" /></span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-mono text-sm font-semibold">{group.totalQty.toLocaleString('fr-FR')}</p>
+                          <div className="flex items-center gap-1.5 justify-end mt-0.5">
+                            <span className="text-[11px] text-muted-foreground">{group.clientCount} client{group.clientCount > 1 ? 's' : ''}</span>
+                            {group.bestPrice != null && (
+                              <span className="text-[11px] font-mono text-green-600">{group.bestPrice.toFixed(2)}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </ScrollArea>
+
+          {/* Left panel footer */}
+          <div className="border-t px-3 py-2 text-xs text-muted-foreground">
+            {filteredGroups.length} produits affiches
+          </div>
+        </div>
+
+        {/* ── RIGHT PANEL ── */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {!selectedGroup ? (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Selectionnez un produit</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Product header */}
+              <div className="px-4 py-3 border-b bg-muted/10">
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-sm font-medium">{group.cip13}</span>
-                      <span className="text-sm text-muted-foreground truncate">{group.productName}</span>
-                      <Badge variant="outline" className={`text-[10px] ${negoStatusColor(group.negoStatus)}`}>
-                        {negoStatusLabel(group.negoStatus)}
-                      </Badge>
-                      {group.isAnsmBlocked && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1 text-red-600">
-                              <Ban className="h-3.5 w-3.5" />
-                              <span className="text-[10px] font-medium">ANSM</span>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>Produit bloque par l'ANSM</TooltipContent>
-                        </Tooltip>
+                      <Badge variant="outline" className="font-mono text-xs shrink-0">{selectedGroup.cip13}</Badge>
+                      <h4 className="text-base font-semibold truncate">{selectedGroup.productName}</h4>
+                      {selectedGroup.isAnsmBlocked && (
+                        <Badge variant="destructive" className="text-[10px]">ANSM</Badge>
                       )}
-                      {group.isDiscontinued && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1 text-amber-600">
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                              <span className="text-[10px] font-medium">Arrete</span>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>Produit arrete / discontinue</TooltipContent>
-                        </Tooltip>
+                      {selectedGroup.isDiscontinued && (
+                        <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">Arrete</Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span>{group.orders.length} client{group.orders.length > 1 ? 's' : ''}</span>
-                      <span>{group.totalQty.toLocaleString('fr-FR')} u. demandees</span>
-                      {group.bestPrice != null && (
-                        <span className="flex items-center gap-0.5">
+                    <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Package className="h-3 w-3" />
+                        Demande : <strong className="text-foreground">{selectedGroup.totalQty.toLocaleString('fr-FR')}</strong>
+                      </span>
+                      {selectedGroup.bestPrice != null && (
+                        <span className="flex items-center gap-1">
                           <TrendingDown className="h-3 w-3 text-green-600" />
-                          Meilleur prix : {group.bestPrice.toFixed(2)} EUR
+                          Best : <strong className="text-green-700">{selectedGroup.bestPrice.toFixed(2)} EUR</strong>
                         </span>
                       )}
+                      <span>{selectedGroup.clientCount} client{selectedGroup.clientCount > 1 ? 's' : ''}</span>
                     </div>
                   </div>
-                  {group.negoStatus !== 'validated' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 shrink-0 text-green-700 border-green-200 hover:bg-green-50"
-                      onClick={() => validateProductMutation.mutate(group.productId)}
-                      disabled={validateProductMutation.isPending}
-                    >
-                      <CheckCircle className="h-3.5 w-3.5" />
-                      Valider
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {selectedGroup.negoStatus !== 'validated' && (
+                      <Button
+                        size="sm"
+                        className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => validateProductMutation.mutate(selectedGroup.productId)}
+                        disabled={validateProductMutation.isPending}
+                      >
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        Valider ({selectedValidatedOrders}/{detailOrders.length})
+                      </Button>
+                    )}
+                    {selectedGroup.negoStatus === 'validated' && (
+                      <Badge className="bg-green-100 text-green-700 border-green-200">Valide</Badge>
+                    )}
+                  </div>
                 </div>
 
-                {/* Client orders table */}
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Client</TableHead>
-                        <TableHead className="text-xs text-right">Quantite</TableHead>
-                        <TableHead className="text-xs text-right">Prix unitaire</TableHead>
-                        <TableHead className="text-xs">Statut</TableHead>
-                        <TableHead className="text-xs">Commentaire</TableHead>
-                        <TableHead className="text-xs w-10"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {group.orders.map(order => {
-                        const cust = order.customer as unknown as { code: string; name: string; is_top_client?: boolean } | undefined
-                        const isEditingQty = editing?.orderId === order.id && editing.field === 'quantity'
-                        const isEditingPrice = editing?.orderId === order.id && editing.field === 'unit_price'
-                        const isEditingComment = editing?.orderId === order.id && editing.field === 'nego_comment'
-                        const qtyModified = order.nego_original_qty != null && order.quantity !== order.nego_original_qty
-                        const priceModified = order.nego_original_price != null && order.unit_price !== order.nego_original_price
-                        const isBestPrice = group.bestPrice != null && order.unit_price != null && order.unit_price === group.bestPrice && group.orders.length > 1
+                {/* Summary bar: pre-allocation by wholesaler */}
+                {activeWholesalers.length > 0 && (
+                  <div className="flex items-center gap-3 mt-2 text-[11px]">
+                    <span className="text-muted-foreground shrink-0">Pre-alloc :</span>
+                    {activeWholesalers.map(ws => {
+                      const macroQty = getMacroQty(selectedGroup.productId, ws.id)
+                      const quota = getQuota(selectedGroup.productId, ws.id)
+                      if (!quota && macroQty === 0) return null
+                      return (
+                        <span key={ws.id} className="flex items-center gap-1">
+                          <span className="font-medium">{ws.code}</span>
+                          <span className="font-mono">{macroQty}</span>
+                          {quota && (
+                            <span className="text-muted-foreground">/{quota.quotaQuantity + quota.extraAvailable}</span>
+                          )}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
 
+              {/* Detail table */}
+              <div className="flex-1 overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableRow>
+                      <TableHead className="text-[11px] w-10 text-center px-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild><span>V</span></TooltipTrigger>
+                          <TooltipContent>Valider ce client</TooltipContent>
+                        </Tooltip>
+                      </TableHead>
+                      <TableHead className="text-[11px]">Client</TableHead>
+                      <TableHead className="text-[11px] text-right">Prix</TableHead>
+                      <TableHead className="text-[11px] text-right">Qte</TableHead>
+                      <TableHead className="text-[11px] text-right">Lot min</TableHead>
+                      {/* Wholesaler columns */}
+                      {activeWholesalers.map(ws => (
+                        <TableHead key={ws.id} className="text-[11px] text-center px-1.5 min-w-[50px]">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="font-medium">{ws.code?.substring(0, 4) ?? ws.name.substring(0, 4)}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>{ws.name}</TooltipContent>
+                          </Tooltip>
+                        </TableHead>
+                      ))}
+                      <TableHead className="text-[11px] text-right">Attr.</TableHead>
+                      <TableHead className="text-[11px]">Commentaire</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detailOrders.map(order => {
+                      const cust = order.customer as unknown as {
+                        id: string; code: string; name: string; is_top_client?: boolean; min_lot_acceptable?: number | null
+                      } | undefined
+                      const isEditingQty = editing?.orderId === order.id && editing.field === 'quantity'
+                      const isEditingPrice = editing?.orderId === order.id && editing.field === 'unit_price'
+                      const isEditingComment = editing?.orderId === order.id && editing.field === 'nego_comment'
+                      const qtyModified = order.nego_original_qty != null && order.quantity !== order.nego_original_qty
+                      const priceModified = order.nego_original_price != null && order.unit_price !== order.nego_original_price
+                      const isBestPrice = selectedGroup.bestPrice != null && order.unit_price != null && order.unit_price === selectedGroup.bestPrice && detailOrders.length > 1
+                      const isValidated = (order.nego_status || 'pending') === 'validated'
+                      // Count how many orders this customer has across all products
+                      const customerOrderCount = orders?.filter(o => o.customer_id === order.customer_id).length ?? 0
+
+                      return (
+                        <TableRow
+                          key={order.id}
+                          className={`${isValidated ? 'bg-green-50/40 dark:bg-green-950/10' : ''} ${qtyModified || priceModified ? 'bg-blue-50/30 dark:bg-blue-950/10' : ''}`}
+                        >
+                          {/* Validate checkbox */}
+                          <TableCell className="text-center px-2">
+                            <Checkbox
+                              checked={isValidated}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  validateOrderMutation.mutate(order.id)
+                                }
+                              }}
+                              disabled={isValidated || validateOrderMutation.isPending}
+                              className="h-4 w-4"
+                            />
+                          </TableCell>
+
+                          {/* Client */}
+                          <TableCell className="text-sm">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-semibold text-xs">{cust?.code ?? '?'}</span>
+                              {cust?.is_top_client && (
+                                <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+                              )}
+                              {customerOrderCount > 1 && (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                                  x{customerOrderCount}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+
+                          {/* Price */}
+                          <TableCell className="text-right">
+                            {isEditingPrice ? (
+                              <div className="flex items-center gap-1 justify-end">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={editing.value}
+                                  onChange={e => setEditing({ ...editing, value: e.target.value })}
+                                  className="w-20 h-6 text-[11px] text-right"
+                                  autoFocus
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') confirmEdit()
+                                    if (e.key === 'Escape') cancelEdit()
+                                  }}
+                                />
+                                <button type="button" onClick={confirmEdit} className="text-green-600 hover:text-green-800">
+                                  <Check className="h-3 w-3" />
+                                </button>
+                                <button type="button" onClick={cancelEdit} className="text-muted-foreground">
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 hover:bg-muted/60 rounded px-1 py-0.5 transition-colors group"
+                                onClick={() => startEdit(order.id, 'unit_price', order.unit_price != null ? String(order.unit_price) : '')}
+                              >
+                                <span className={`font-mono text-xs ${isBestPrice ? 'text-green-700 font-bold' : priceModified ? 'text-blue-700 font-medium' : ''}`}>
+                                  {order.unit_price != null ? order.unit_price.toFixed(2) : '-'}
+                                </span>
+                                {isBestPrice && (
+                                  <Badge className="text-[8px] px-1 py-0 h-3.5 bg-green-100 text-green-700 border-green-200">BEST</Badge>
+                                )}
+                                <Pencil className="h-2.5 w-2.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                              </button>
+                            )}
+                          </TableCell>
+
+                          {/* Quantity */}
+                          <TableCell className="text-right">
+                            {isEditingQty ? (
+                              <div className="flex items-center gap-1 justify-end">
+                                <Input
+                                  type="number"
+                                  value={editing.value}
+                                  onChange={e => setEditing({ ...editing, value: e.target.value })}
+                                  className="w-16 h-6 text-[11px] text-right font-bold"
+                                  autoFocus
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') confirmEdit()
+                                    if (e.key === 'Escape') cancelEdit()
+                                  }}
+                                />
+                                <button type="button" onClick={confirmEdit} className="text-green-600 hover:text-green-800">
+                                  <Check className="h-3 w-3" />
+                                </button>
+                                <button type="button" onClick={cancelEdit} className="text-muted-foreground">
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 hover:bg-muted/60 rounded px-1 py-0.5 transition-colors group"
+                                onClick={() => startEdit(order.id, 'quantity', String(order.quantity))}
+                              >
+                                <span className={`font-mono text-xs font-bold ${qtyModified ? 'text-blue-700' : ''}`}>
+                                  {order.quantity.toLocaleString('fr-FR')}
+                                </span>
+                                {qtyModified && (
+                                  <span className="text-[9px] text-blue-400 line-through font-mono">
+                                    {order.nego_original_qty?.toLocaleString('fr-FR')}
+                                  </span>
+                                )}
+                                <Pencil className="h-2.5 w-2.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                              </button>
+                            )}
+                          </TableCell>
+
+                          {/* Min lot */}
+                          <TableCell className="text-right">
+                            <span className="font-mono text-[11px] text-muted-foreground">
+                              {cust?.min_lot_acceptable != null ? cust.min_lot_acceptable.toLocaleString('fr-FR') : '-'}
+                            </span>
+                          </TableCell>
+
+                          {/* Wholesaler columns (pre-allocation indicator) */}
+                          {activeWholesalers.map(ws => {
+                            const macroQty = getMacroQty(selectedGroup.productId, ws.id)
+                            const isOpen = isWholesalerOpenForCustomer(order.customer_id, ws.id)
+                            const quota = getQuota(selectedGroup.productId, ws.id)
+                            const hasQuota = quota != null && (quota.quotaQuantity + quota.extraAvailable) > 0
+
+                            return (
+                              <TableCell key={ws.id} className="text-center px-1.5">
+                                {!isOpen ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex items-center justify-center h-5 w-5 rounded bg-muted text-muted-foreground/40">
+                                        <X className="h-3 w-3" />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Grossiste non ouvert pour {cust?.code}</TooltipContent>
+                                  </Tooltip>
+                                ) : !hasQuota ? (
+                                  <span className="text-[10px] text-muted-foreground/30">-</span>
+                                ) : macroQty > 0 ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="font-mono text-[11px] font-medium text-blue-700 bg-blue-50 dark:bg-blue-950/30 rounded px-1.5 py-0.5 inline-block">
+                                        {macroQty}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      Pre-alloue {macroQty} via {ws.code} (dispo: {quota.quotaQuantity + quota.extraAvailable})
+                                    </TooltipContent>
+                                  </Tooltip>
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground/50 font-mono">0</span>
+                                )}
+                              </TableCell>
+                            )
+                          })}
+
+                          {/* Attr. total */}
+                          <TableCell className="text-right">
+                            <span className="font-mono text-xs font-medium">
+                              {order.allocated_quantity > 0
+                                ? order.allocated_quantity.toLocaleString('fr-FR')
+                                : <span className="text-muted-foreground/40">0</span>
+                              }
+                            </span>
+                          </TableCell>
+
+                          {/* Comment */}
+                          <TableCell>
+                            {isEditingComment ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={editing.value}
+                                  onChange={e => setEditing({ ...editing, value: e.target.value })}
+                                  className="h-6 text-[11px] min-w-[120px]"
+                                  placeholder="Commentaire..."
+                                  autoFocus
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') confirmEdit()
+                                    if (e.key === 'Escape') cancelEdit()
+                                  }}
+                                />
+                                <button type="button" onClick={confirmEdit} className="text-green-600">
+                                  <Check className="h-3 w-3" />
+                                </button>
+                                <button type="button" onClick={cancelEdit} className="text-muted-foreground">
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 hover:bg-muted/60 rounded px-1 py-0.5 transition-colors group text-[11px] text-muted-foreground max-w-[140px]"
+                                onClick={() => startEdit(order.id, 'nego_comment', order.nego_comment ?? '')}
+                              >
+                                <span className="truncate">{order.nego_comment || 'Ajouter...'}</span>
+                                <Pencil className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover:opacity-100" />
+                              </button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+
+                {/* Footer totals per wholesaler */}
+                {activeWholesalers.length > 0 && selectedGroup && (
+                  <div className="border-t bg-muted/20 px-4 py-2">
+                    <div className="flex items-center gap-4 text-[11px]">
+                      <span className="text-muted-foreground font-medium w-[200px] shrink-0">Total pre-alloue / dispo :</span>
+                      {activeWholesalers.map(ws => {
+                        const macroQty = getMacroQty(selectedGroup.productId, ws.id)
+                        const quota = getQuota(selectedGroup.productId, ws.id)
+                        const total = quota ? quota.quotaQuantity + quota.extraAvailable : 0
+                        if (total === 0 && macroQty === 0) return null
+                        const pct = total > 0 ? Math.round((macroQty / total) * 100) : 0
                         return (
-                          <TableRow key={order.id} className={qtyModified || priceModified ? 'bg-blue-50/40 dark:bg-blue-950/10' : ''}>
-                            <TableCell className="text-sm">
-                              <span className="font-mono font-medium">{cust?.code ?? '?'}</span>
-                              {cust?.is_top_client && <span className="ml-1 text-primary text-[9px]">TOP</span>}
-                            </TableCell>
-
-                            {/* Quantity cell */}
-                            <TableCell className="text-right">
-                              {isEditingQty ? (
-                                <div className="flex items-center gap-1 justify-end">
-                                  <Input
-                                    type="number"
-                                    value={editing.value}
-                                    onChange={e => setEditing({ ...editing, value: e.target.value })}
-                                    className="w-20 h-7 text-xs text-right"
-                                    autoFocus
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter') confirmEdit()
-                                      if (e.key === 'Escape') cancelEdit()
-                                    }}
-                                  />
-                                  <button type="button" onClick={confirmEdit} className="text-green-600 hover:text-green-800">
-                                    <Check className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button type="button" onClick={cancelEdit} className="text-muted-foreground hover:text-foreground">
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-1 hover:bg-muted/60 rounded px-1.5 py-0.5 transition-colors group"
-                                  onClick={() => startEdit(order.id, 'quantity', String(order.quantity))}
-                                >
-                                  <span className={`tabular-nums text-sm font-medium ${qtyModified ? 'text-blue-700' : ''}`}>
-                                    {order.quantity.toLocaleString('fr-FR')}
-                                  </span>
-                                  {qtyModified && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span className="text-[10px] text-blue-500 line-through">
-                                          {order.nego_original_qty?.toLocaleString('fr-FR')}
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent>Quantite originale</TooltipContent>
-                                    </Tooltip>
-                                  )}
-                                  <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </button>
-                              )}
-                            </TableCell>
-
-                            {/* Price cell */}
-                            <TableCell className="text-right">
-                              {isEditingPrice ? (
-                                <div className="flex items-center gap-1 justify-end">
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={editing.value}
-                                    onChange={e => setEditing({ ...editing, value: e.target.value })}
-                                    className="w-24 h-7 text-xs text-right"
-                                    autoFocus
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter') confirmEdit()
-                                      if (e.key === 'Escape') cancelEdit()
-                                    }}
-                                  />
-                                  <button type="button" onClick={confirmEdit} className="text-green-600 hover:text-green-800">
-                                    <Check className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button type="button" onClick={cancelEdit} className="text-muted-foreground hover:text-foreground">
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-1 hover:bg-muted/60 rounded px-1.5 py-0.5 transition-colors group"
-                                  onClick={() => startEdit(order.id, 'unit_price', order.unit_price != null ? String(order.unit_price) : '')}
-                                >
-                                  <span className={`tabular-nums text-sm ${priceModified ? 'text-blue-700 font-medium' : 'text-muted-foreground'} ${isBestPrice ? 'text-green-700 font-semibold' : ''}`}>
-                                    {order.unit_price != null ? `${order.unit_price.toFixed(2)} EUR` : '-'}
-                                  </span>
-                                  {priceModified && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span className="text-[10px] text-blue-500 line-through">
-                                          {order.nego_original_price?.toFixed(2)}
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent>Prix original</TooltipContent>
-                                    </Tooltip>
-                                  )}
-                                  {isBestPrice && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <TrendingDown className="h-3 w-3 text-green-600" />
-                                      </TooltipTrigger>
-                                      <TooltipContent>Meilleur prix</TooltipContent>
-                                    </Tooltip>
-                                  )}
-                                  <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </button>
-                              )}
-                            </TableCell>
-
-                            {/* Nego status */}
-                            <TableCell>
-                              <Badge variant="outline" className={`text-[10px] ${negoStatusColor(order.nego_status || 'pending')}`}>
-                                {negoStatusLabel(order.nego_status || 'pending')}
-                              </Badge>
-                            </TableCell>
-
-                            {/* Comment */}
-                            <TableCell>
-                              {isEditingComment ? (
-                                <div className="flex items-center gap-1">
-                                  <Input
-                                    value={editing.value}
-                                    onChange={e => setEditing({ ...editing, value: e.target.value })}
-                                    className="h-7 text-xs"
-                                    placeholder="Commentaire nego..."
-                                    autoFocus
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter') confirmEdit()
-                                      if (e.key === 'Escape') cancelEdit()
-                                    }}
-                                  />
-                                  <button type="button" onClick={confirmEdit} className="text-green-600 hover:text-green-800">
-                                    <Check className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button type="button" onClick={cancelEdit} className="text-muted-foreground hover:text-foreground">
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-1 hover:bg-muted/60 rounded px-1.5 py-0.5 transition-colors group text-xs text-muted-foreground max-w-[180px]"
-                                  onClick={() => startEdit(order.id, 'nego_comment', order.nego_comment ?? '')}
-                                >
-                                  <span className="truncate">{order.nego_comment || 'Ajouter...'}</span>
-                                  <Pencil className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </button>
-                              )}
-                            </TableCell>
-
-                            {/* Actions */}
-                            <TableCell>
-                              {(qtyModified || priceModified) && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="inline-flex items-center justify-center h-5 w-5 rounded bg-blue-100 text-blue-700 border border-blue-200">
-                                      <Pencil className="h-3 w-3" />
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Modifie en nego</TooltipContent>
-                                </Tooltip>
-                              )}
-                            </TableCell>
-                          </TableRow>
+                          <span key={ws.id} className="flex items-center gap-1">
+                            <span className="font-medium">{ws.code}:</span>
+                            <span className="font-mono">{macroQty}/{total}</span>
+                            <span className={`text-[10px] ${pct > 90 ? 'text-red-600' : pct > 60 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                              ({pct}%)
+                            </span>
+                          </span>
                         )
                       })}
-                    </TableBody>
-                  </Table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right panel footer: navigation + validate */}
+              <div className="border-t px-4 py-2.5 flex items-center justify-between bg-muted/10">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToPrev}
+                    disabled={currentIndex <= 0}
+                    className="gap-1 h-7 text-xs"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" /> Precedent
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {currentIndex + 1} / {filteredGroups.length}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToNext}
+                    disabled={currentIndex >= filteredGroups.length - 1}
+                    className="gap-1 h-7 text-xs"
+                  >
+                    Suivant <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+                {selectedGroup.negoStatus !== 'validated' && (
+                  <Button
+                    size="sm"
+                    className="gap-1.5 h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => validateProductMutation.mutate(selectedGroup.productId)}
+                    disabled={validateProductMutation.isPending}
+                  >
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    Valider ce medicament ({selectedValidatedOrders}/{detailOrders.length} clients)
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Navigation */}
       <div className="flex items-center justify-between">
