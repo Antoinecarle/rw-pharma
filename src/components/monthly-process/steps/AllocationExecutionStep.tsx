@@ -37,11 +37,11 @@ const STRATEGIES: { value: AllocationStrategy; label: string; icon: typeof Zap }
 
 const SHORT_EXPIRY_MONTHS = 10
 const LOT_GROUP_COLORS = [
-  { bg: 'bg-blue-50/50', border: 'border-l-blue-300', header: 'bg-blue-50' },
-  { bg: 'bg-green-50/50', border: 'border-l-green-300', header: 'bg-green-50' },
-  { bg: 'bg-amber-50/50', border: 'border-l-amber-300', header: 'bg-amber-50' },
-  { bg: 'bg-purple-50/50', border: 'border-l-purple-300', header: 'bg-purple-50' },
-  { bg: 'bg-rose-50/50', border: 'border-l-rose-300', header: 'bg-rose-50' },
+  { bg: 'bg-blue-50', border: 'border-l-blue-300', header: 'bg-blue-50' },
+  { bg: 'bg-green-50', border: 'border-l-green-300', header: 'bg-green-50' },
+  { bg: 'bg-yellow-50', border: 'border-l-yellow-300', header: 'bg-yellow-50' },
+  { bg: 'bg-purple-50', border: 'border-l-purple-300', header: 'bg-purple-50' },
+  { bg: 'bg-rose-50', border: 'border-l-rose-300', header: 'bg-rose-50' },
 ]
 
 interface AllocationExecutionStepProps {
@@ -753,19 +753,27 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                   return (
                     <Card key={demand.productId} className="overflow-hidden">
                       {/* Product header */}
-                      <div className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between">
+                      <div className="px-5 py-3 bg-muted/30 border-b flex items-center justify-between gap-5">
                         <div className="flex items-center gap-3">
-                          <Badge variant="outline" className="font-mono text-xs">{demand.cip13}</Badge>
-                          <span className="text-sm font-semibold truncate max-w-[300px]">{demand.productName}</span>
+                          <span className="font-mono text-[11px] bg-muted border border-border rounded-md px-2 py-1 text-muted-foreground tracking-wider">{demand.cip13}</span>
+                          <span className="text-[17px] font-bold tracking-tight truncate max-w-[350px]">{demand.productName}</span>
                         </div>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          <span>Demande: <strong className="text-foreground">{demand.totalQuantity.toLocaleString('fr-FR')}</strong></span>
+                        <div className="flex items-center gap-6">
+                          <div className="text-right">
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Demande</div>
+                            <div className="text-xl font-bold tabular-nums text-blue-700">{demand.totalQuantity.toLocaleString('fr-FR')}</div>
+                          </div>
                           {groupedLots.length > 0 && (
                             <>
-                              <span className="text-muted-foreground/40">|</span>
-                              <span>Stock: <strong className="text-foreground">{totalStock.toLocaleString('fr-FR')}</strong></span>
-                              <span className="text-muted-foreground/40">|</span>
-                              <span>{groupedLots.length} lot{groupedLots.length > 1 ? 's' : ''}</span>
+                              <div className="text-right">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Lots</div>
+                                <div className="text-xl font-bold tabular-nums">{groupedLots.length}</div>
+                                <div className="text-[11px] text-muted-foreground">{groupedLots.reduce((s, gl) => s + gl.sources.length, 0)} grossistes</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Stock</div>
+                                <div className="text-xl font-bold tabular-nums">{totalStock.toLocaleString('fr-FR')}</div>
+                              </div>
                             </>
                           )}
                         </div>
@@ -778,7 +786,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                             Pas de lot disponible — allocation par disponibilites uniquement
                           </div>
                         ) : (
-                          <div className="overflow-x-auto">
+                          <div className="overflow-x-auto" style={{ fontSize: '12px' }}>
                             <Table>
                               <TableHeader>
                                 {/* Row 1: grouped lot headers */}
@@ -846,36 +854,56 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                   const isFull = custRemaining <= 0
 
                                   return (
-                                    <TableRow key={cust.id} className={isFull ? 'bg-green-50/20 dark:bg-green-950/10' : ''}>
+                                    <TableRow key={cust.id} className={`transition-colors duration-100 ${isFull ? 'bg-green-50/20 dark:bg-green-950/10' : 'hover:bg-gray-50/60'}`}>
                                       {/* Client name cell */}
-                                      <TableCell className="sticky left-0 bg-background z-10 py-2 text-left">
-                                        <div className="flex items-center gap-1.5">
-                                          {cust.is_top && <span className="w-[3px] h-3.5 bg-amber-400 rounded-sm shrink-0" />}
-                                          <span className="text-[13px] font-bold tracking-wide">{cust.code}</span>
+                                      <TableCell className="sticky left-0 bg-background z-10 py-1.5 text-left min-w-[130px] px-2.5">
+                                        <div className="flex items-center gap-1.5 mb-0.5">
+                                          {cust.is_top && <span className="w-[5px] h-3.5 bg-amber-400 rounded-sm shrink-0" />}
+                                          <span className="text-[13px] font-bold tracking-wide whitespace-nowrap">{cust.code}</span>
                                           {cust.is_top && <span className="text-amber-500 text-[10px]">★</span>}
-                                          {cust.order_multiple != null && <span className="text-[8px] font-bold bg-purple-600 text-white px-1 py-0 rounded">×{cust.order_multiple}</span>}
+                                          {cust.order_multiple != null && <span className="text-[8px] font-bold bg-purple-600 text-white px-1 py-0 rounded tracking-wide whitespace-nowrap">×{cust.order_multiple}</span>}
+                                        </div>
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                          {cust.unit_price != null && (
+                                            <span className="inline-flex items-center text-[11px] font-bold text-green-800 bg-green-50 border border-green-200 px-1.5 py-0 rounded whitespace-nowrap">
+                                              {Math.round(cust.unit_price)}&nbsp;€
+                                            </span>
+                                          )}
+                                          {cust.min_batch != null && (
+                                            <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-muted-foreground bg-gray-100 px-1 py-0 rounded whitespace-nowrap">
+                                              <span className="text-[8px] uppercase opacity-65 tracking-wide">lot≥</span>{cust.min_batch}
+                                            </span>
+                                          )}
+                                          {cust.min_expiry_months != null && (
+                                            <span className={`inline-flex items-center gap-0.5 text-[9px] font-semibold px-1 py-0 rounded whitespace-nowrap ${
+                                              cust.min_expiry_months > 6 ? 'text-amber-700 bg-amber-50' : 'text-green-700 bg-green-50'
+                                            }`}>
+                                              <span className="text-[8px] uppercase opacity-65 tracking-wide">exp≥</span>
+                                              {`${String(new Date(Date.now() + cust.min_expiry_months * 30 * 86400000).getMonth() + 1).padStart(2, '0')}/${String(new Date(Date.now() + cust.min_expiry_months * 30 * 86400000).getFullYear()).slice(2)}`}
+                                            </span>
+                                          )}
                                         </div>
                                       </TableCell>
                                       {/* Prix */}
-                                      <TableCell className="text-center py-2 font-mono text-xs font-bold text-green-700 bg-green-50/30">
+                                      <TableCell className="text-center py-1.5 font-mono text-xs font-bold text-green-800 bg-green-50 border-r border-r-gray-100 whitespace-nowrap">
                                         {cust.unit_price != null ? `${Math.round(cust.unit_price)} €` : '—'}
                                       </TableCell>
                                       {/* Lot≥ */}
-                                      <TableCell className="text-center py-2 font-mono text-[11px] text-muted-foreground">
+                                      <TableCell className={`text-center py-1.5 font-mono text-[11px] font-semibold ${cust.min_batch != null ? 'text-muted-foreground' : 'text-muted-foreground/40'}`}>
                                         {cust.min_batch ?? '—'}
                                       </TableCell>
                                       {/* Exp≥ */}
-                                      <TableCell className={`text-center py-2 text-[11px] font-semibold ${cust.min_expiry_months && cust.min_expiry_months > 6 ? 'text-amber-600' : 'text-green-700'}`}>
+                                      <TableCell className={`text-center py-1.5 text-[11px] font-semibold whitespace-nowrap ${cust.min_expiry_months && cust.min_expiry_months > 6 ? 'text-amber-600' : 'text-green-700'}`}>
                                         {cust.min_expiry_months ? `${String(new Date(Date.now() + cust.min_expiry_months * 30 * 86400000).getMonth() + 1).padStart(2, '0')}/${String(new Date(Date.now() + cust.min_expiry_months * 30 * 86400000).getFullYear()).slice(2)}` : '—'}
                                       </TableCell>
                                       {/* Dem. */}
-                                      <TableCell className="text-center py-2 border-r-2 border-r-border">
+                                      <TableCell className="text-center py-1.5 border-r-2 border-r-border">
                                         <span className="text-[13px] font-bold tabular-nums">{cust.quantity.toLocaleString('fr-FR')}</span>
                                       </TableCell>
 
                                       {/* Lot cells */}
                                       {groupedLots.map((gl, glIdx) => {
-                                        const lotColor = LOT_GROUP_COLORS[glIdx % LOT_GROUP_COLORS.length]
+                                        void glIdx // lot index used for header colors only
                                         // Check expiry refused for this client × this lot
                                         const expiryRefused = cust.min_expiry_months
                                           ? monthsUntilExpiry(gl.expiry_date) < cust.min_expiry_months
@@ -891,11 +919,11 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                           // Disabled: not open
                                           if (!isOpen) {
                                             return (
-                                              <TableCell key={src.stock_id} className={`text-center p-1 border-l ${lotColor.bg}`}
+                                              <TableCell key={src.stock_id} className="text-center p-1 border-l min-w-[68px]"
                                                 style={{ background: 'repeating-linear-gradient(-45deg, #f3f4f6, #f3f4f6 3px, #eaebee 3px, #eaebee 6px)' }}>
                                                 <Tooltip>
                                                   <TooltipTrigger asChild>
-                                                    <span className="text-muted-foreground/30 text-xs font-semibold">✕</span>
+                                                    <span className="text-gray-300 text-xs font-semibold">✕</span>
                                                   </TooltipTrigger>
                                                   <TooltipContent>{cust.code} non ouvert chez {src.wholesaler_code}</TooltipContent>
                                                 </Tooltip>
@@ -906,10 +934,10 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                           // Blocked: expiry refused
                                           if (expiryRefused && assignedQty === 0) {
                                             return (
-                                              <TableCell key={src.stock_id} className={`text-center p-1 border-l bg-red-50`}>
+                                              <TableCell key={src.stock_id} className="text-center p-1 border-l bg-red-50 min-w-[68px]">
                                                 <Tooltip>
                                                   <TooltipTrigger asChild>
-                                                    <span className="text-[8px] font-bold text-red-600 uppercase leading-tight block">exp.<br/>refusee</span>
+                                                    <span className="text-[8px] font-bold text-red-600 uppercase leading-tight block tracking-wide">exp.<br/>refusee</span>
                                                   </TooltipTrigger>
                                                   <TooltipContent>{formatExpiry(gl.expiry_date)} &lt; exp. min {cust.min_expiry_months} mois</TooltipContent>
                                                 </Tooltip>
@@ -918,14 +946,14 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                           }
 
                                           return (
-                                            <TableCell key={src.stock_id} className={`text-center p-1 border-l ${expiryRefused && assignedQty > 0 ? 'bg-amber-50/40' : ''}`}>
+                                            <TableCell key={src.stock_id} className={`text-center p-1 border-l min-w-[68px] ${expiryRefused && assignedQty > 0 ? 'bg-amber-50/40' : ''}`}>
                                               {isEditing ? (
                                                 <div className="flex items-center gap-0.5 justify-center">
                                                   <Input
                                                     type="number"
                                                     value={editValue}
                                                     onChange={e => setEditValue(e.target.value)}
-                                                    className="h-7 w-14 text-xs text-center font-mono"
+                                                    className="h-7 w-14 text-xs text-center font-mono border-blue-500 focus:ring-blue-200"
                                                     autoFocus
                                                     min={0}
                                                     onKeyDown={e => {
@@ -939,19 +967,23 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                               ) : (
                                                 <button
                                                   type="button"
-                                                  className={`w-full text-center py-1 rounded transition-colors group ${isProcessLocked ? 'cursor-default' : 'hover:bg-primary/5 cursor-pointer'}`}
+                                                  className={`w-14 mx-auto text-center py-1 rounded-md transition-all group ${
+                                                    assignedQty > 0
+                                                      ? `bg-blue-50 border border-blue-500 ${assignedQty > src.quantity ? '' : ''}`
+                                                      : `bg-white border border-gray-200 ${isProcessLocked ? 'cursor-default' : 'hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer'}`
+                                                  } ${isProcessLocked ? 'cursor-default' : 'cursor-pointer'}`}
                                                   onClick={() => !isProcessLocked && startEdit(demand.productId, cust.id, src.stock_id, assignedQty)}
                                                   disabled={isProcessLocked}
                                                 >
                                                   {assignedQty > 0 ? (
-                                                    <span className={`font-mono text-sm font-bold tabular-nums ${
+                                                    <span className={`font-mono text-xs font-bold tabular-nums ${
                                                       assignedQty > src.quantity ? 'text-red-600' :
                                                       'text-blue-700'
                                                     }`}>
                                                       {assignedQty.toLocaleString('fr-FR')}
                                                     </span>
                                                   ) : (
-                                                    <span className="text-muted-foreground/30">&mdash;</span>
+                                                    <span className="text-muted-foreground/30 text-xs">&mdash;</span>
                                                   )}
                                                   {!isProcessLocked && assignedQty === 0 && (
                                                     <Pencil className="h-2.5 w-2.5 mx-auto opacity-0 group-hover:opacity-40 transition-opacity" />
@@ -964,11 +996,11 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                       })}
 
                                       {/* Attr. */}
-                                      <TableCell className="text-center tabular-nums font-bold text-[13px] border-l-2 border-l-border text-blue-700">
+                                      <TableCell className="text-center tabular-nums font-bold text-[13px] border-l-2 border-l-border text-blue-700 py-1.5">
                                         {custAttributed.toLocaleString('fr-FR')}
                                       </TableCell>
                                       {/* Reste */}
-                                      <TableCell className="text-center tabular-nums font-bold text-[13px]">
+                                      <TableCell className="text-center tabular-nums font-bold text-[13px] py-1.5">
                                         <span className={custRemaining > cust.quantity * 0.5 ? 'text-red-600' : custRemaining > 0 ? 'text-amber-600' : 'text-green-600'}>
                                           {custRemaining > 0 ? custRemaining.toLocaleString('fr-FR') : custRemaining === 0 ? '0' : `+${Math.abs(custRemaining).toLocaleString('fr-FR')}`}
                                         </span>
@@ -987,8 +1019,8 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                   )
                                 })}
                                 {/* ═══ FOOTER ROW ═══ */}
-                                <TableRow className="border-t-2 border-t-border bg-muted/40">
-                                  <TableCell className="sticky left-0 bg-muted/40 z-10 text-[9px] uppercase tracking-wider font-semibold text-muted-foreground" colSpan={5}>
+                                <TableRow className="border-t-2 border-t-border bg-muted/50">
+                                  <TableCell className="sticky left-0 bg-muted/50 z-10 text-[10px] uppercase tracking-wider font-bold text-muted-foreground border-r-2 border-r-border" colSpan={5}>
                                     Total / dispo
                                   </TableCell>
                                   {groupedLots.map(gl =>
@@ -996,7 +1028,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                       const srcUsed = Object.values(allocMap).reduce((sum, custMap) =>
                                         sum + Object.values(custMap).reduce((s2, stockMap) => s2 + (stockMap[src.stock_id] ?? 0), 0), 0)
                                       return (
-                                        <TableCell key={`footer-${src.stock_id}`} className="text-center font-mono text-[11px] font-bold border-l">
+                                        <TableCell key={`footer-${src.stock_id}`} className="text-center font-mono text-[11px] font-bold border-l py-2">
                                           <span className={srcUsed > src.quantity ? 'text-red-600' : srcUsed === src.quantity ? 'text-green-700' : 'text-muted-foreground'}>
                                             {srcUsed}
                                           </span>
@@ -1005,12 +1037,22 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                       )
                                     })
                                   )}
-                                  <TableCell className="text-center font-bold text-[14px] text-blue-700 border-l-2 border-l-border">
-                                    {demand.customers.reduce((s, c) => s + getCustomerAttributed(demand.productId, c.id), 0).toLocaleString('fr-FR')}
-                                  </TableCell>
-                                  <TableCell className="text-center font-bold text-[14px] text-red-600">
-                                    {(demand.totalQuantity - demand.customers.reduce((s, c) => s + getCustomerAttributed(demand.productId, c.id), 0)).toLocaleString('fr-FR')}
-                                  </TableCell>
+                                  {(() => {
+                                    const totalAttr = demand.customers.reduce((s, c) => s + getCustomerAttributed(demand.productId, c.id), 0)
+                                    const totalReste = demand.totalQuantity - totalAttr
+                                    return (
+                                      <>
+                                        <TableCell className="text-center font-bold text-[14px] text-blue-700 border-l-2 border-l-border py-2">
+                                          {totalAttr.toLocaleString('fr-FR')}
+                                        </TableCell>
+                                        <TableCell className="text-center font-bold text-[14px] py-2">
+                                          <span className={totalReste > 0 ? 'text-red-600' : 'text-green-600'}>
+                                            {totalReste.toLocaleString('fr-FR')}
+                                          </span>
+                                        </TableCell>
+                                      </>
+                                    )
+                                  })()}
                                   <TableCell />
                                 </TableRow>
                               </TableBody>

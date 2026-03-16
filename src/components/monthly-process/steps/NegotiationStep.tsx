@@ -83,7 +83,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
       while (true) {
         const { data, error } = await supabase
           .from('orders')
-          .select('*, customer:customers(id, name, code, country, is_top_client, min_lot_acceptable), product:products(id, cip13, name, is_ansm_blocked, is_discontinued, pfht)')
+          .select('*, customer:customers(id, name, code, country, is_top_client, min_lot_acceptable, allocation_preferences), product:products(id, cip13, name, is_ansm_blocked, is_discontinued, pfht)')
           .eq('monthly_process_id', process.id)
           .neq('status', 'rejected')
           .order('created_at', { ascending: false })
@@ -730,9 +730,10 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                       <TableHead className="text-[11px] text-right">Prix</TableHead>
                       <TableHead className="text-[11px] text-right">Qte</TableHead>
                       <TableHead className="text-[11px] text-right">Lot min</TableHead>
+                      <TableHead className="text-[11px] text-right border-r-2">Exp&ge;</TableHead>
                       {/* Wholesaler columns */}
                       {activeWholesalers.map(ws => (
-                        <TableHead key={ws.id} className="text-[11px] text-center px-1.5 min-w-[50px]">
+                        <TableHead key={ws.id} className="text-[11px] text-center px-1.5 min-w-[52px]">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span className="font-medium">{ws.code?.substring(0, 4) ?? ws.name.substring(0, 4)}</span>
@@ -741,14 +742,15 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                           </Tooltip>
                         </TableHead>
                       ))}
-                      <TableHead className="text-[11px] text-right">Attr.</TableHead>
+                      <TableHead className="text-[11px] text-center">Attr.</TableHead>
+                      <TableHead className="text-[11px] text-center">Aj. prix</TableHead>
                       <TableHead className="text-[11px]">Commentaire</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {detailOrders.map(order => {
                       const cust = order.customer as unknown as {
-                        id: string; code: string; name: string; is_top_client?: boolean; min_lot_acceptable?: number | null
+                        id: string; code: string; name: string; is_top_client?: boolean; min_lot_acceptable?: number | null; allocation_preferences?: { preferred_expiry_months?: number } | null
                       } | undefined
                       const isEditingQty = editing?.orderId === order.id && editing.field === 'quantity'
                       const isEditingPrice = editing?.orderId === order.id && editing.field === 'unit_price'
@@ -759,11 +761,26 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                       const isValidated = (order.nego_status || 'pending') === 'validated'
                       // Count how many orders this customer has across all products
                       const customerOrderCount = orders?.filter(o => o.customer_id === order.customer_id).length ?? 0
+                      // Preferred expiry months
+                      const prefExpMonths = cust?.allocation_preferences?.preferred_expiry_months ?? null
+                      const expDate = prefExpMonths != null ? (() => {
+                        const d = new Date()
+                        d.setMonth(d.getMonth() + prefExpMonths)
+                        return d
+                      })() : null
+                      const expLabel = expDate ? `${String(expDate.getMonth() + 1).padStart(2, '0')}/${String(expDate.getFullYear()).slice(2)}` : null
+                      const expColorClass = prefExpMonths != null ? (prefExpMonths >= 6 ? 'text-green-600' : prefExpMonths >= 3 ? 'text-amber-600' : 'text-red-600') : 'text-muted-foreground'
+                      // Sum of macro attributions across all wholesalers for this order's customer
+                      const rowAttrTotal = activeWholesalers.reduce((sum, ws) => {
+                        const isOpen = isWholesalerOpenForCustomer(order.customer_id, ws.id)
+                        if (!isOpen) return sum
+                        return sum + getMacroQty(selectedGroup.productId, ws.id)
+                      }, 0)
 
                       return (
                         <TableRow
                           key={order.id}
-                          className={`${isValidated ? 'bg-green-50/40 dark:bg-green-950/10' : ''} ${qtyModified || priceModified ? 'bg-blue-50/30 dark:bg-blue-950/10' : ''}`}
+                          className={`${isValidated ? 'bg-green-50 dark:bg-green-950/20' : ''} ${qtyModified || priceModified ? 'bg-blue-50/30 dark:bg-blue-950/10' : ''}`}
                         >
                           {/* Validate checkbox */}
                           <TableCell className="text-center px-2">
@@ -884,7 +901,14 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                             </span>
                           </TableCell>
 
-                          {/* Wholesaler columns (pre-allocation indicator) */}
+                          {/* Exp>= (preferred expiry as MM/YY) */}
+                          <TableCell className="text-right border-r-2">
+                            <span className={`font-mono text-[11px] ${expColorClass}`}>
+                              {expLabel ?? '-'}
+                            </span>
+                          </TableCell>
+
+                          {/* Wholesaler columns (allocation inputs - read-only) */}
                           {activeWholesalers.map(ws => {
                             const macroQty = getMacroQty(selectedGroup.productId, ws.id)
                             const isOpen = isWholesalerOpenForCustomer(order.customer_id, ws.id)
@@ -892,44 +916,77 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                             const hasQuota = quota != null && (quota.quotaQuantity + quota.extraAvailable) > 0
 
                             return (
-                              <TableCell key={ws.id} className="text-center px-1.5">
+                              <TableCell key={ws.id} className="text-center px-1">
                                 {!isOpen ? (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className="inline-flex items-center justify-center h-5 w-5 rounded bg-muted text-muted-foreground/40">
-                                        <X className="h-3 w-3" />
-                                      </span>
+                                      <span
+                                        className="inline-flex items-center justify-center w-[52px] h-7 rounded text-[11px] font-mono text-muted-foreground/40"
+                                        style={{ background: 'repeating-linear-gradient(-45deg, #f3f4f6, #f3f4f6 3px, #eaebee 3px, #eaebee 6px)' }}
+                                      />
                                     </TooltipTrigger>
                                     <TooltipContent>Grossiste non ouvert pour {cust?.code}</TooltipContent>
                                   </Tooltip>
                                 ) : !hasQuota ? (
-                                  <span className="text-[10px] text-muted-foreground/30">-</span>
+                                  <input
+                                    readOnly
+                                    value=""
+                                    placeholder="\u2014"
+                                    className="w-[52px] h-7 text-center font-mono text-[11px] border rounded bg-background text-muted-foreground/30 placeholder:text-muted-foreground/30 cursor-default"
+                                    tabIndex={-1}
+                                  />
                                 ) : macroQty > 0 ? (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className="font-mono text-[11px] font-medium text-blue-700 bg-blue-50 dark:bg-blue-950/30 rounded px-1.5 py-0.5 inline-block">
-                                        {macroQty}
-                                      </span>
+                                      <input
+                                        readOnly
+                                        value={macroQty}
+                                        className="w-[52px] h-7 text-center font-mono text-[11px] border rounded bg-blue-50 border-blue-500 text-blue-700 font-bold cursor-default dark:bg-blue-950/30"
+                                        tabIndex={-1}
+                                      />
                                     </TooltipTrigger>
                                     <TooltipContent>
                                       Pre-alloue {macroQty} via {ws.code} (dispo: {quota.quotaQuantity + quota.extraAvailable})
                                     </TooltipContent>
                                   </Tooltip>
                                 ) : (
-                                  <span className="text-[10px] text-muted-foreground/50 font-mono">0</span>
+                                  <input
+                                    readOnly
+                                    value=""
+                                    placeholder="\u2014"
+                                    className="w-[52px] h-7 text-center font-mono text-[11px] border rounded bg-background text-muted-foreground/30 placeholder:text-muted-foreground/30 cursor-default"
+                                    tabIndex={-1}
+                                  />
                                 )}
                               </TableCell>
                             )
                           })}
 
-                          {/* Attr. total */}
-                          <TableCell className="text-right">
-                            <span className="font-mono text-xs font-medium">
-                              {order.allocated_quantity > 0
-                                ? order.allocated_quantity.toLocaleString('fr-FR')
-                                : <span className="text-muted-foreground/40">0</span>
-                              }
+                          {/* Attr. total (sum of wholesaler inputs for this row) */}
+                          <TableCell className="text-center">
+                            <span className={`font-mono text-[11px] ${rowAttrTotal > 0 ? 'text-blue-700 font-bold' : 'text-muted-foreground/40'}`}>
+                              {rowAttrTotal > 0 ? rowAttrTotal.toLocaleString('fr-FR') : '0'}
                             </span>
+                          </TableCell>
+
+                          {/* Aj. prix (adjusted price input) */}
+                          <TableCell className="text-center">
+                            <input
+                              type="number"
+                              step="0.01"
+                              defaultValue={order.unit_price != null ? order.unit_price.toFixed(2) : ''}
+                              placeholder="\u2014"
+                              className="w-[52px] h-7 text-center font-mono text-[11px] border rounded bg-background"
+                              onBlur={(e) => {
+                                const newVal = e.target.value
+                                if (newVal && order.unit_price != null && parseFloat(newVal) !== order.unit_price) {
+                                  editMutation.mutate({ orderId: order.id, field: 'unit_price', value: newVal })
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                              }}
+                            />
                           </TableCell>
 
                           {/* Comment */}
@@ -969,33 +1026,43 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                         </TableRow>
                       )
                     })}
+                    {/* Footer row: totals per wholesaler */}
+                    {activeWholesalers.length > 0 && selectedGroup && (
+                      <TableRow className="bg-muted/30 border-t-2 font-medium">
+                        <TableCell colSpan={6} className="text-[11px] text-muted-foreground font-semibold text-right pr-2">
+                          Total / dispo
+                        </TableCell>
+                        {activeWholesalers.map(ws => {
+                          const macroQty = getMacroQty(selectedGroup.productId, ws.id)
+                          const quota = getQuota(selectedGroup.productId, ws.id)
+                          const total = quota ? quota.quotaQuantity + quota.extraAvailable : 0
+                          const isOver = total > 0 && macroQty > total
+                          const isAtLimit = total > 0 && macroQty === total
+                          return (
+                            <TableCell key={ws.id} className="text-center px-1">
+                              <span className={`font-mono text-[11px] font-semibold ${isOver ? 'text-red-600' : isAtLimit ? 'text-amber-600' : 'text-green-600'}`}>
+                                {total > 0 || macroQty > 0 ? `${macroQty}/${total}` : '-'}
+                              </span>
+                            </TableCell>
+                          )
+                        })}
+                        <TableCell className="text-center">
+                          <span className="font-mono text-[11px] font-bold text-blue-700">
+                            {detailOrders.reduce((sum, o) => {
+                              return sum + activeWholesalers.reduce((ws_sum, ws) => {
+                                const isOpen = isWholesalerOpenForCustomer(o.customer_id, ws.id)
+                                if (!isOpen) return ws_sum
+                                return ws_sum + getMacroQty(selectedGroup.productId, ws.id)
+                              }, 0)
+                            }, 0).toLocaleString('fr-FR')}
+                          </span>
+                        </TableCell>
+                        <TableCell />
+                        <TableCell />
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
-
-                {/* Footer totals per wholesaler */}
-                {activeWholesalers.length > 0 && selectedGroup && (
-                  <div className="border-t bg-muted/20 px-4 py-2">
-                    <div className="flex items-center gap-4 text-[11px]">
-                      <span className="text-muted-foreground font-medium w-[200px] shrink-0">Total pre-alloue / dispo :</span>
-                      {activeWholesalers.map(ws => {
-                        const macroQty = getMacroQty(selectedGroup.productId, ws.id)
-                        const quota = getQuota(selectedGroup.productId, ws.id)
-                        const total = quota ? quota.quotaQuantity + quota.extraAvailable : 0
-                        if (total === 0 && macroQty === 0) return null
-                        const pct = total > 0 ? Math.round((macroQty / total) * 100) : 0
-                        return (
-                          <span key={ws.id} className="flex items-center gap-1">
-                            <span className="font-medium">{ws.code}:</span>
-                            <span className="font-mono">{macroQty}/{total}</span>
-                            <span className={`text-[10px] ${pct > 90 ? 'text-red-600' : pct > 60 ? 'text-amber-600' : 'text-muted-foreground'}`}>
-                              ({pct}%)
-                            </span>
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Right panel footer: navigation + validate */}
