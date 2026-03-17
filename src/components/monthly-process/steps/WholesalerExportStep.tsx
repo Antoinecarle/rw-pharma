@@ -155,6 +155,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
   })
 
   const handleExportExcel = (ws: WholesalerNeed) => {
+    const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
     const rows = ws.items.map(item => ({
       'CIP13': item.cip13,
       'Produit': item.productName,
@@ -163,6 +164,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
       'Demande totale': item.totalDemand,
       'A collecter': item.toCollect,
       'Nb clients': item.customerCount,
+      'Date demande': today,
     }))
 
     const worksheet = XLSX.utils.json_to_sheet(rows)
@@ -177,6 +179,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
       { wch: 14 }, // Demande
       { wch: 12 }, // A collecter
       { wch: 12 }, // Nb clients
+      { wch: 14 }, // Date demande
     ]
 
     const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}`

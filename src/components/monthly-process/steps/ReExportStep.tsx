@@ -207,7 +207,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
         row['Prix original'] = ''
       }
       row['Commentaire nego'] = item.negoComment ?? ''
-      row['Date ajout'] = item.isNewOrder ? new Date(item.createdAt).toLocaleDateString('fr-FR') : ''
+      row['Date demande'] = new Date(item.createdAt).toLocaleDateString('fr-FR')
       row['Modifie'] = item.isQtyModified || item.isPriceModified ? 'OUI' : ''
       return row
     })
@@ -226,7 +226,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
       { wch: 10 }, // Diff qty
       { wch: 14 }, // Prix original
       { wch: 30 }, // Commentaire
-      { wch: 12 }, // Date ajout
+      { wch: 14 }, // Date demande
       { wch: 10 }, // Modifie
     ]
 
