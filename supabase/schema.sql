@@ -290,6 +290,34 @@ CREATE TABLE IF NOT EXISTS offered_stock_claims (
 );
 
 -- =============================================
+-- Table: manual_attributions (editions manuelles datees)
+-- =============================================
+CREATE TABLE IF NOT EXISTS manual_attributions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  monthly_process_id UUID NOT NULL REFERENCES monthly_processes(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  wholesaler_id UUID NOT NULL REFERENCES wholesalers(id) ON DELETE CASCADE,
+  requested_quantity INTEGER NOT NULL DEFAULT 0,
+  supplier_quantity INTEGER NOT NULL DEFAULT 0,
+  edited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  edited_by UUID,
+  note TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_manual_attr_process ON manual_attributions(monthly_process_id);
+CREATE INDEX IF NOT EXISTS idx_manual_attr_product_customer ON manual_attributions(product_id, customer_id);
+CREATE INDEX IF NOT EXISTS idx_manual_attr_wholesaler ON manual_attributions(wholesaler_id);
+CREATE INDEX IF NOT EXISTS idx_manual_attr_edited_at ON manual_attributions(edited_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_manual_attr_unique_active
+  ON manual_attributions(monthly_process_id, product_id, customer_id, wholesaler_id)
+  WHERE is_active = true;
+
+-- =============================================
 -- Trigger: updated_at automatique
 -- =============================================
 CREATE OR REPLACE FUNCTION update_updated_at()

@@ -17,10 +17,12 @@ import GaugeChart from '@/components/ui/gauge-chart'
 import {
   ArrowRight, ArrowLeft, Zap, Users, Package, Warehouse,
   AlertTriangle, Check, Pencil, X, RotateCcw, BarChart3, TrendingUp,
-  AlertCircle, Info, Loader2,
+  AlertCircle, Info, Loader2, History,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { MonthlyProcess } from '@/types/database'
+import { useManualAttributions } from '@/hooks/useManualAttributions'
+import ManualAttributionEditor from '@/components/monthly-process/ManualAttributionEditor'
 
 interface MacroAttributionStepProps {
   process: MonthlyProcess
@@ -73,8 +75,19 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
   const existingMacro = (process.metadata?.macro_attributions as MacroMap) ?? {}
   const [macroMap, setMacroMap] = useState<MacroMap>(existingMacro)
 
-  // Track manual edits count
+  // Track manual edits count (macro inline edits)
   const [manualEditsCount, setManualEditsCount] = useState(0)
+
+  // Manual attributions (per-client, persisted in DB)
+  const {
+    manualAttrs, isLoading: manualLoading, upsert, isUpserting,
+    deactivate, getForCell, getTotalManual,
+  } = useManualAttributions(process.id)
+  const [manualEditingCell, setManualEditingCell] = useState<{ productId: string; wholesalerId: string } | null>(null)
+  const [showManualHistory, setShowManualHistory] = useState(false)
+
+  // Are we in manual-per-client mode? (client selected + not locked)
+  const isManualMode = !!selectedCustomerId && !isProcessLocked
 
   // Fetch orders
   const { data: orders, isLoading: ordersLoading } = useQuery({
@@ -398,7 +411,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
 
   const cancelEdit = () => setEditingCell(null)
 
-  const isLoading = ordersLoading || quotasLoading
+  const isLoading = ordersLoading || quotasLoading || manualLoading
   const hasAttribution = Object.keys(macroMap).length > 0
 
   if (isLoading) {
@@ -559,6 +572,87 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
             </Card>
           )}
         </div>
+      )}
+
+      {/* Manual mode indicator */}
+      {isManualMode && (
+        <Card className="border-blue-200 bg-blue-50/30 dark:bg-blue-950/20">
+          <CardContent className="p-3 flex items-center gap-3">
+            <Pencil className="h-4 w-4 text-blue-600 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                Mode edition manuelle — {customers.find(c => c.id === selectedCustomerId)?.code}
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                Cliquez sur une cellule pour attribuer manuellement une quantite a ce client. Chaque edition cree une ligne datee dans l'export.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {manualAttrs.length > 0 && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  <History className="h-3 w-3" /> {manualAttrs.length} edition{manualAttrs.length > 1 ? 's' : ''}
+                </Badge>
+              )}
+              {manualAttrs.length > 0 && (
+                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => setShowManualHistory(!showManualHistory)}>
+                  <History className="h-3 w-3" /> {showManualHistory ? 'Masquer' : 'Historique'}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Manual attribution history panel */}
+      {showManualHistory && manualAttrs.length > 0 && (
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+              Historique des editions manuelles ({manualAttrs.length})
+            </p>
+            <div className="border rounded-lg overflow-x-auto max-h-[250px] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Date</TableHead>
+                    <TableHead className="text-xs">CIP13</TableHead>
+                    <TableHead className="text-xs">Produit</TableHead>
+                    <TableHead className="text-xs">Client</TableHead>
+                    <TableHead className="text-xs">Grossiste</TableHead>
+                    <TableHead className="text-xs text-right">Demandee</TableHead>
+                    <TableHead className="text-xs text-right">Fournisseur</TableHead>
+                    <TableHead className="text-xs">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {manualAttrs.map(attr => (
+                    <TableRow key={attr.id}>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {new Date(attr.edited_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{attr.product?.cip13 ?? '?'}</TableCell>
+                      <TableCell className="text-xs truncate max-w-[150px]">{attr.product?.name ?? '?'}</TableCell>
+                      <TableCell className="text-xs font-medium">{attr.customer?.code ?? '?'}</TableCell>
+                      <TableCell className="text-xs">{attr.wholesaler?.code ?? '?'}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums">{attr.requested_quantity.toLocaleString('fr-FR')}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums font-medium">{attr.supplier_quantity.toLocaleString('fr-FR')}</TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={() => deactivate(attr.id)}
+                          className="text-xs text-red-500 hover:text-red-700 flex items-center gap-0.5"
+                          title="Desactiver cette edition"
+                        >
+                          <X className="h-3 w-3" /> Retirer
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Over-quota warnings */}
@@ -725,6 +819,17 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                       const hasQuota = quota && quota.total > 0
                       const isOverQuota = hasQuota && assignedQty > quota.total
 
+                      // Manual attribution for this cell (when client selected)
+                      const manualAttr = selectedCustomerId ? getForCell(demand.productId, ws.id, selectedCustomerId) : null
+                      const manualTotalForCell = getTotalManual(demand.productId, ws.id)
+                      const hasManualAttr = !!manualAttr
+                      const isManualEditing = manualEditingCell?.productId === demand.productId && manualEditingCell?.wholesalerId === ws.id
+
+                      // Customer demand for the selected customer on this product
+                      const customerDemandQty = selectedCustomerId
+                        ? (demand.customers.find(c => c.id === selectedCustomerId)?.quantity ?? 0)
+                        : 0
+
                       if (!hasQuota) {
                         return (
                           <TableCell key={ws.id} className="text-center text-muted-foreground/30 text-xs">
@@ -733,9 +838,38 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                         )
                       }
 
+                      // ── Manual mode (client selected): show ManualAttributionEditor ──
+                      if (isManualMode && isManualEditing) {
+                        return (
+                          <TableCell key={ws.id} className="p-1 bg-blue-50/40 dark:bg-blue-950/20">
+                            <ManualAttributionEditor
+                              existing={manualAttr}
+                              maxRequested={customerDemandQty}
+                              maxSupplier={quota.total}
+                              isSaving={isUpserting}
+                              onSave={(reqQty, supQty) => {
+                                upsert({
+                                  productId: demand.productId,
+                                  customerId: selectedCustomerId!,
+                                  wholesalerId: ws.id,
+                                  requestedQuantity: reqQty,
+                                  supplierQuantity: supQty,
+                                })
+                                setManualEditingCell(null)
+                              }}
+                              onCancel={() => setManualEditingCell(null)}
+                            />
+                          </TableCell>
+                        )
+                      }
+
                       return (
-                        <TableCell key={ws.id} className={`text-center p-1 ${isOverQuota ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
-                          {isEditing ? (
+                        <TableCell key={ws.id} className={`text-center p-1 ${
+                          isOverQuota ? 'bg-red-50/50 dark:bg-red-950/20'
+                          : hasManualAttr ? 'bg-blue-50/30 dark:bg-blue-950/10'
+                          : ''
+                        }`}>
+                          {isEditing && !isManualMode ? (
                             <div className="flex items-center gap-0.5 justify-center">
                               <Input
                                 type="number"
@@ -762,9 +896,25 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                               className={`w-full text-center py-1 rounded transition-colors group ${
                                 isProcessLocked ? 'cursor-default' : 'hover:bg-primary/5 cursor-pointer'
                               }`}
-                              onClick={() => !isProcessLocked && startEdit(demand.productId, ws.id, assignedQty)}
+                              onClick={() => {
+                                if (isProcessLocked) return
+                                if (isManualMode) {
+                                  setManualEditingCell({ productId: demand.productId, wholesalerId: ws.id })
+                                  setEditingCell(null)
+                                } else {
+                                  startEdit(demand.productId, ws.id, assignedQty)
+                                  setManualEditingCell(null)
+                                }
+                              }}
                               disabled={isProcessLocked}
                             >
+                              {/* Manual attribution badge (when client selected and manual attr exists) */}
+                              {hasManualAttr && (
+                                <div className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 flex items-center justify-center gap-0.5">
+                                  <Pencil className="h-2 w-2" />
+                                  {manualAttr.supplier_quantity.toLocaleString('fr-FR')}
+                                </div>
+                              )}
                               <div className="tabular-nums text-sm font-medium">
                                 {assignedQty > 0 ? (
                                   <span className={isOverQuota ? 'text-red-600 font-bold' : 'text-green-700 dark:text-green-400'}>
@@ -776,11 +926,16 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                               </div>
                               <div className="text-[9px] text-muted-foreground">
                                 /{quota.total.toLocaleString('fr-FR')}
+                                {manualTotalForCell > 0 && !hasManualAttr && (
+                                  <span className="text-blue-500 ml-0.5" title="Total editions manuelles sur cette cellule">
+                                    ({manualTotalForCell})
+                                  </span>
+                                )}
                               </div>
                               {isOverQuota && (
                                 <AlertCircle className="h-2.5 w-2.5 mx-auto text-red-500 mt-0.5" />
                               )}
-                              {!isProcessLocked && assignedQty === 0 && !isOverQuota && (
+                              {!isProcessLocked && assignedQty === 0 && !hasManualAttr && !isOverQuota && (
                                 <Pencil className="h-2.5 w-2.5 mx-auto opacity-0 group-hover:opacity-40 transition-opacity" />
                               )}
                             </button>

@@ -8,9 +8,10 @@ import { Badge } from '@/components/ui/badge'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Download, Send, ArrowRight, Package, Warehouse, FileSpreadsheet, Check, AlertTriangle } from 'lucide-react'
+import { Download, Send, ArrowRight, Package, Warehouse, FileSpreadsheet, Check, AlertTriangle, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
-import type { MonthlyProcess } from '@/types/database'
+import type { MonthlyProcess, ManualAttribution } from '@/types/database'
+import { mergeAttributionsForExport } from '@/lib/export-utils'
 
 // --------------- Types ---------------
 
@@ -30,6 +31,7 @@ interface WholesalerNeed {
   }[]
   totalToCollect: number
   totalProducts: number
+  manualCount: number
 }
 
 interface WholesalerExportStepProps {
@@ -39,6 +41,28 @@ interface WholesalerExportStepProps {
 
 export default function WholesalerExportStep({ process, onNext }: WholesalerExportStepProps) {
   const [exportedWholesalers, setExportedWholesalers] = useState<Set<string>>(new Set())
+
+  // Fetch manual attributions for this process
+  const { data: allManualAttrs = [] } = useQuery({
+    queryKey: ['manual-attributions-export', process.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('manual_attributions')
+        .select('*, customer:customers(id, name, code), product:products(id, cip13, name), wholesaler:wholesalers(id, name, code)')
+        .eq('monthly_process_id', process.id)
+        .eq('is_active', true)
+      if (error) throw error
+      return (data ?? []) as ManualAttribution[]
+    },
+  })
+
+  // Index manual attrs by wholesaler_id
+  const manualByWholesaler = new Map<string, ManualAttribution[]>()
+  for (const attr of allManualAttrs) {
+    const list = manualByWholesaler.get(attr.wholesaler_id) ?? []
+    list.push(attr)
+    manualByWholesaler.set(attr.wholesaler_id, list)
+  }
 
   const { data: needs, isLoading } = useQuery({
     queryKey: ['wholesaler-needs', process.id],
@@ -140,6 +164,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
       for (const [wsId, items] of byWholesaler.entries()) {
         const ws = wsMap.get(wsId)
         items.sort((a, b) => b.toCollect - a.toCollect)
+        const wsManualCount = (manualByWholesaler.get(wsId) ?? []).length
         result.push({
           wholesalerId: wsId,
           wholesalerCode: ws?.code ?? '?',
@@ -147,6 +172,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
           items,
           totalToCollect: items.reduce((s, i) => s + i.toCollect, 0),
           totalProducts: items.length,
+          manualCount: wsManualCount,
         })
       }
 
@@ -156,17 +182,51 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
 
   const handleExportExcel = (ws: WholesalerNeed) => {
     const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    const rows = ws.items.map(item => ({
-      'CIP13': item.cip13,
-      'Produit': item.productName,
-      'Quota': item.quotaQuantity,
-      'Extra dispo': item.extraAvailable,
-      'Demande totale': item.totalDemand,
-      'A collecter': item.toCollect,
-      'Nb clients': item.customerCount,
-      'Date demande': today,
-    }))
+    const wsManualAttrs = manualByWholesaler.get(ws.wholesalerId) ?? []
 
+    if (wsManualAttrs.length === 0) {
+      // No manual attributions: classic export
+      const rows = ws.items.map(item => ({
+        'CIP13': item.cip13,
+        'Produit': item.productName,
+        'Client': 'TOUS',
+        'Qte demandee': item.totalDemand,
+        'Qte fournisseur': item.toCollect,
+        'Source': 'MACRO',
+        'Date edition': today,
+      }))
+
+      writeExcel(rows, ws.wholesalerCode)
+    } else {
+      // Merge macro + manual attributions
+      const macroItems = ws.items.map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        cip13: item.cip13,
+        toCollect: item.toCollect,
+        totalDemand: item.totalDemand,
+      }))
+
+      const merged = mergeAttributionsForExport(macroItems, wsManualAttrs, today)
+
+      const rows = merged.map(row => ({
+        'CIP13': row.cip13,
+        'Produit': row.productName,
+        'Client': row.client,
+        'Qte demandee': row.requestedQty,
+        'Qte fournisseur': row.supplierQty,
+        'Source': row.source,
+        'Date edition': row.editedAt,
+      }))
+
+      writeExcel(rows, ws.wholesalerCode)
+    }
+
+    setExportedWholesalers(prev => new Set([...prev, ws.wholesalerId]))
+    toast.success(`Export ${ws.wholesalerCode} telecharge`)
+  }
+
+  const writeExcel = (rows: Record<string, unknown>[], wholesalerCode: string) => {
     const worksheet = XLSX.utils.json_to_sheet(rows)
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Besoins')
@@ -174,20 +234,16 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
     worksheet['!cols'] = [
       { wch: 16 }, // CIP13
       { wch: 40 }, // Produit
-      { wch: 10 }, // Quota
-      { wch: 12 }, // Extra
-      { wch: 14 }, // Demande
-      { wch: 12 }, // A collecter
-      { wch: 12 }, // Nb clients
-      { wch: 14 }, // Date demande
+      { wch: 12 }, // Client
+      { wch: 14 }, // Qte demandee
+      { wch: 14 }, // Qte fournisseur
+      { wch: 10 }, // Source
+      { wch: 18 }, // Date edition
     ]
 
     const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}`
-    const filename = `besoins_${ws.wholesalerCode}_${monthStr}.xlsx`
+    const filename = `besoins_${wholesalerCode}_${monthStr}.xlsx`
     XLSX.writeFile(workbook, filename)
-
-    setExportedWholesalers(prev => new Set([...prev, ws.wholesalerId]))
-    toast.success(`Export ${ws.wholesalerCode} telecharge`)
   }
 
   const handleExportAll = () => {
@@ -241,6 +297,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
   }
   const sumDemand = [...totalDemand.values()].reduce((s, v) => s + v, 0)
   const coverageRate = sumDemand > 0 ? Math.round((totalToCollect / sumDemand) * 100) : 0
+  const totalManualEdits = allManualAttrs.length
 
   return (
     <div className="space-y-5">
@@ -248,6 +305,9 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
         <h3 className="text-lg font-semibold">Export vers Grossistes</h3>
         <p className="text-sm text-muted-foreground mt-1">
           Fichiers de besoins consolides a envoyer a chaque grossiste pour la collecte, bases sur les quotas et la demande client.
+          {totalManualEdits > 0 && (
+            <span className="text-blue-600 font-medium"> {totalManualEdits} edition{totalManualEdits > 1 ? 's' : ''} manuelle{totalManualEdits > 1 ? 's' : ''} incluse{totalManualEdits > 1 ? 's' : ''} dans l'export.</span>
+          )}
         </p>
       </div>
 
@@ -265,6 +325,12 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
           <div className="flex items-center gap-2">
             <span className="text-sm"><strong>{totalToCollect.toLocaleString('fr-FR')}</strong> u. a collecter</span>
           </div>
+          {totalManualEdits > 0 && (
+            <div className="flex items-center gap-1.5 text-blue-600">
+              <Pencil className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">{totalManualEdits} edition{totalManualEdits > 1 ? 's' : ''} manuelle{totalManualEdits > 1 ? 's' : ''}</span>
+            </div>
+          )}
           {coverageRate < 100 && (
             <div className="flex items-center gap-1.5 text-amber-600">
               <AlertTriangle className="h-3.5 w-3.5" />
@@ -299,6 +365,11 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm">{ws.wholesalerCode}</span>
                       <span className="text-sm text-muted-foreground">— {ws.wholesalerName}</span>
+                      {ws.manualCount > 0 && (
+                        <Badge variant="outline" className="text-[10px] border-blue-200 text-blue-600 gap-0.5">
+                          <Pencil className="h-2.5 w-2.5" /> {ws.manualCount} manuelle{ws.manualCount > 1 ? 's' : ''}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                       <span>{ws.totalProducts} produits</span>
@@ -323,28 +394,53 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
                       <TableRow>
                         <TableHead className="text-xs">CIP13</TableHead>
                         <TableHead className="text-xs">Produit</TableHead>
-                        <TableHead className="text-xs text-right">Quota</TableHead>
-                        <TableHead className="text-xs text-right">Demande</TableHead>
-                        <TableHead className="text-xs text-right">A collecter</TableHead>
-                        <TableHead className="text-xs">Date demande</TableHead>
+                        <TableHead className="text-xs">Client</TableHead>
+                        <TableHead className="text-xs text-right">Qte fournisseur</TableHead>
+                        <TableHead className="text-xs">Source</TableHead>
+                        <TableHead className="text-xs">Date</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {ws.items.slice(0, 5).map(item => (
-                        <TableRow key={item.productId}>
-                          <TableCell className="font-mono text-xs">{item.cip13}</TableCell>
-                          <TableCell className="text-xs truncate max-w-[200px]">{item.productName}</TableCell>
-                          <TableCell className="text-xs text-right tabular-nums">
-                            {item.quotaQuantity.toLocaleString('fr-FR')}
-                            {item.extraAvailable > 0 && (
-                              <span className="text-muted-foreground"> +{item.extraAvailable}</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-xs text-right tabular-nums">{item.totalDemand.toLocaleString('fr-FR')}</TableCell>
-                          <TableCell className="text-xs text-right font-medium tabular-nums">{item.toCollect.toLocaleString('fr-FR')}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{new Date().toLocaleDateString('fr-FR')}</TableCell>
-                        </TableRow>
-                      ))}
+                      {(() => {
+                        const wsManualAttrs = manualByWholesaler.get(ws.wholesalerId) ?? []
+                        if (wsManualAttrs.length === 0) {
+                          // Classic preview (no manual attrs)
+                          return ws.items.slice(0, 5).map(item => (
+                            <TableRow key={item.productId}>
+                              <TableCell className="font-mono text-xs">{item.cip13}</TableCell>
+                              <TableCell className="text-xs truncate max-w-[200px]">{item.productName}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">TOUS</TableCell>
+                              <TableCell className="text-xs text-right font-medium tabular-nums">{item.toCollect.toLocaleString('fr-FR')}</TableCell>
+                              <TableCell><Badge variant="secondary" className="text-[9px]">MACRO</Badge></TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{new Date().toLocaleDateString('fr-FR')}</TableCell>
+                            </TableRow>
+                          ))
+                        }
+                        // Merged preview
+                        const macroItems = ws.items.map(item => ({
+                          productId: item.productId,
+                          productName: item.productName,
+                          cip13: item.cip13,
+                          toCollect: item.toCollect,
+                          totalDemand: item.totalDemand,
+                        }))
+                        const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                        const merged = mergeAttributionsForExport(macroItems, wsManualAttrs, today)
+                        return merged.slice(0, 5).map((row, idx) => (
+                          <TableRow key={idx} className={row.source === 'MANUEL' ? 'bg-blue-50/30 dark:bg-blue-950/10' : ''}>
+                            <TableCell className="font-mono text-xs">{row.cip13}</TableCell>
+                            <TableCell className="text-xs truncate max-w-[200px]">{row.productName}</TableCell>
+                            <TableCell className="text-xs font-medium">{row.client}</TableCell>
+                            <TableCell className="text-xs text-right font-medium tabular-nums">{row.supplierQty.toLocaleString('fr-FR')}</TableCell>
+                            <TableCell>
+                              <Badge variant={row.source === 'MANUEL' ? 'default' : 'secondary'} className="text-[9px]">
+                                {row.source}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{row.editedAt}</TableCell>
+                          </TableRow>
+                        ))
+                      })()}
                       {ws.items.length > 5 && (
                         <TableRow>
                           <TableCell colSpan={6} className="text-xs text-muted-foreground text-center py-2">

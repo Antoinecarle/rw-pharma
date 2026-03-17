@@ -361,3 +361,29 @@ export interface Invoice {
 
 export type InvoiceInsert = Omit<Invoice, 'id' | 'created_at' | 'updated_at' | 'wholesaler' | 'customer'>
 export type InvoiceUpdate = Partial<InvoiceInsert>
+
+// ── Manual Attributions (editions manuelles datees) ────────────
+
+export interface ManualAttribution {
+  id: string
+  monthly_process_id: string
+  product_id: string
+  customer_id: string
+  wholesaler_id: string
+  requested_quantity: number
+  supplier_quantity: number
+  edited_at: string
+  edited_by: string | null
+  note: string | null
+  version: number
+  is_active: boolean
+  metadata: Record<string, unknown>
+  created_at: string
+  // Joined fields
+  customer?: Customer
+  product?: Product
+  wholesaler?: Wholesaler
+}
+
+export type ManualAttributionInsert = Omit<ManualAttribution, 'id' | 'created_at' | 'customer' | 'product' | 'wholesaler'>
+export type ManualAttributionUpdate = Partial<ManualAttributionInsert>
