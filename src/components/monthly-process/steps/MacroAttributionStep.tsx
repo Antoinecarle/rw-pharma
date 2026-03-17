@@ -233,24 +233,30 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
       }
     }
 
-    // Used per wholesaler from macroMap
-    for (const productMap of Object.values(macroMap)) {
+    // Used per wholesaler: effective qty = max(macro, manual total) per product×wholesaler
+    // First, collect all product×wholesaler combos from both sources
+    const allCombos = new Map<string, { macroQty: number; manualQty: number; wsId: string }>()
+
+    for (const [productId, productMap] of Object.entries(macroMap)) {
       for (const [wsId, qty] of Object.entries(productMap)) {
-        const existing = summary.get(wsId) ?? { total: 0, used: 0 }
-        existing.used += qty
-        summary.set(wsId, existing)
+        const key = `${productId}::${wsId}`
+        allCombos.set(key, { macroQty: qty, manualQty: 0, wsId })
       }
     }
 
-    // Also add manual attributions (for products/wholesalers not in macroMap)
     for (const attr of manualAttrs) {
-      const macroQty = macroMap[attr.product_id]?.[attr.wholesaler_id] ?? 0
-      if (macroQty === 0) {
-        // Only add manual qty if not already counted via macroMap
-        const existing = summary.get(attr.wholesaler_id) ?? { total: 0, used: 0 }
-        existing.used += attr.supplier_quantity
-        summary.set(attr.wholesaler_id, existing)
-      }
+      const key = `${attr.product_id}::${attr.wholesaler_id}`
+      const existing = allCombos.get(key) ?? { macroQty: 0, manualQty: 0, wsId: attr.wholesaler_id }
+      existing.manualQty += attr.supplier_quantity
+      existing.wsId = attr.wholesaler_id
+      allCombos.set(key, existing)
+    }
+
+    for (const combo of allCombos.values()) {
+      const effectiveQty = Math.max(combo.macroQty, combo.manualQty)
+      const existing = summary.get(combo.wsId) ?? { total: 0, used: 0 }
+      existing.used += effectiveQty
+      summary.set(combo.wsId, existing)
     }
 
     return summary
@@ -386,10 +392,19 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
     onError: (err: Error) => toast.error(err.message),
   })
 
-  // Stats
+  // Stats — include both in-matrix and hors-matrice manual attributions
   const totalDemand = demands.reduce((s, d) => s + d.totalQuantity, 0)
-  const totalAttributed = demands.reduce((s, d) =>
+  const inMatrixAttributed = demands.reduce((s, d) =>
     s + wholesalerColumns.reduce((sum, ws) => sum + getEffectiveQty(d.productId, ws.id), 0), 0)
+  // Add hors-matrice manual attributions (products not in demands or wholesalers not in columns)
+  const demandProductIds = useMemo(() => new Set(demands.map(d => d.productId)), [demands])
+  const wsColumnIds = useMemo(() => new Set(wholesalerColumns.map(w => w.id)), [wholesalerColumns])
+  const horsMatriceTotal = useMemo(() =>
+    manualAttrs
+      .filter(a => !demandProductIds.has(a.product_id) || !wsColumnIds.has(a.wholesaler_id))
+      .reduce((s, a) => s + a.supplier_quantity, 0),
+    [manualAttrs, demandProductIds, wsColumnIds])
+  const totalAttributed = inMatrixAttributed + horsMatriceTotal
   const coverageRate = totalDemand > 0 ? (totalAttributed / totalDemand) * 100 : 0
   const productsFullyCovered = demands.filter(d => {
     const attributed = wholesalerColumns.reduce((sum, ws) => sum + getEffectiveQty(d.productId, ws.id), 0)
