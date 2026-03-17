@@ -801,7 +801,7 @@ export default function ProductsPage() {
                               <span style={{ color: 'var(--ivory-teal)' }}>{entry.new_value || '(vide)'}</span>
                             </p>
                             <p className="text-[11px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>
-                              {new Date(entry.changed_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              {new Date(entry.changed_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
                         </div>

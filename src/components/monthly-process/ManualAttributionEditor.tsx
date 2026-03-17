@@ -33,6 +33,7 @@ export default function ManualAttributionEditor({
     const req = parseInt(reqQty, 10)
     const sup = parseInt(supQty, 10)
     if (isNaN(req) || req < 0 || isNaN(sup) || sup < 0) return
+    if (req === 0 && sup === 0) return // Skip empty attributions
     onSave(req, sup)
   }
 

@@ -71,7 +71,7 @@ export function mergeAttributionsForExport(
           requestedQty: m.requested_quantity,
           supplierQty: m.supplier_quantity,
           source: 'MANUEL',
-          editedAt: new Date(m.edited_at).toLocaleDateString('fr-FR', {
+          editedAt: new Date(m.edited_at).toLocaleString('fr-FR', {
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit',
           }),

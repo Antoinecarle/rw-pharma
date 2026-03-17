@@ -628,7 +628,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                   {manualAttrs.map(attr => (
                     <TableRow key={attr.id}>
                       <TableCell className="text-xs text-muted-foreground">
-                        {new Date(attr.edited_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {new Date(attr.edited_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </TableCell>
                       <TableCell className="font-mono text-xs">{attr.product?.cip13 ?? '?'}</TableCell>
                       <TableCell className="text-xs truncate max-w-[150px]">{attr.product?.name ?? '?'}</TableCell>
@@ -994,7 +994,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
           <Info className="h-4 w-4 shrink-0 mt-0.5" />
           <p>
             <strong>Astuce :</strong> Cliquez sur n'importe quelle cellule pour modifier la quantite attribuee.
-            Les depassements de quota sont signales en rouge. L'attribution est sauvegardee uniquement quand vous cliquez "Sauvegarder et continuer".
+            Les depassements de quota sont signales en rouge. L'attribution macro est sauvegardee quand vous cliquez "Sauvegarder et continuer". Les editions manuelles (par client) sont sauvegardees immediatement.
           </p>
         </div>
       )}
@@ -1010,7 +1010,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={onNext} className="gap-1.5">
-            {hasAttribution ? 'Passer sans sauvegarder' : 'Passer'} <ArrowRight className="h-4 w-4" />
+            {hasAttribution ? 'Passer (macro non sauvegardee)' : 'Passer'} <ArrowRight className="h-4 w-4" />
           </Button>
           {hasAttribution && (
             <Button
