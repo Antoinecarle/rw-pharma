@@ -554,7 +554,6 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
         process.id, process.month, process.year, strategy, new Set(), false,
         undefined, customerWholesalerMap,
       )
-      setAllocationLogs(logs)
 
       const batchSize = 100
       let totalInserted = 0
@@ -569,19 +568,34 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
         .from('monthly_processes')
         .update({
           allocations_count: totalInserted,
-          status: process.current_step > 8 ? process.status : 'allocating_lots',
-          current_step: Math.max(8, process.current_step),
-          phase: process.current_step > 8 ? process.phase : 'allocation',
+          status: 'allocating_lots',
+          current_step: Math.max(10, process.current_step),
+          phase: 'allocation',
         })
         .eq('id', process.id)
 
-      return totalInserted
+      return { count: totalInserted, allocations, logs }
     },
-    onSuccess: (count) => {
+    onSuccess: ({ count, allocations: newAllocs, logs: newLogs }) => {
       setPhase('done')
+      setAllocationLogs(newLogs)
+
+      // Rebuild allocMap from fresh allocations so the table reflects the new strategy
+      const freshMap: Record<string, Record<string, Record<string, number>>> = {}
+      for (const a of newAllocs) {
+        if (!a.stock_id) continue
+        if (!freshMap[a.product_id]) freshMap[a.product_id] = {}
+        if (!freshMap[a.product_id][a.customer_id]) freshMap[a.product_id][a.customer_id] = {}
+        freshMap[a.product_id][a.customer_id][a.stock_id] = (freshMap[a.product_id][a.customer_id][a.stock_id] ?? 0) + a.allocated_quantity
+      }
+      setAllocMap(freshMap)
+
+      // Invalidate all related queries so UI refreshes completely
       queryClient.invalidateQueries({ queryKey: ['allocations', process.id] })
+      queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
+      queryClient.invalidateQueries({ queryKey: ['collected_stock', process.id] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      toast.success(`${count} allocations generees`)
+      toast.success(`${count} allocations generees (strategie: ${strategy})`)
       createNotification({
         type: 'info',
         title: 'Allocation terminee',
@@ -1160,7 +1174,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
           <div>
             <p className="text-xl font-semibold">Allocation terminee</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {allocateMut.data} allocations generees avec la strategie "{STRATEGIES.find(s => s.value === strategy)?.label ?? strategy}".
+              {allocateMut.data?.count ?? 0} allocations generees avec la strategie "{STRATEGIES.find(s => s.value === strategy)?.label ?? strategy}".
             </p>
           </div>
           <Button onClick={onNext} size="lg" className="gap-2">
