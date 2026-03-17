@@ -326,6 +326,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
                         <TableHead className="text-xs text-right">Quota</TableHead>
                         <TableHead className="text-xs text-right">Demande</TableHead>
                         <TableHead className="text-xs text-right">A collecter</TableHead>
+                        <TableHead className="text-xs">Date demande</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -341,11 +342,12 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
                           </TableCell>
                           <TableCell className="text-xs text-right tabular-nums">{item.totalDemand.toLocaleString('fr-FR')}</TableCell>
                           <TableCell className="text-xs text-right font-medium tabular-nums">{item.toCollect.toLocaleString('fr-FR')}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{new Date().toLocaleDateString('fr-FR')}</TableCell>
                         </TableRow>
                       ))}
                       {ws.items.length > 5 && (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-xs text-muted-foreground text-center py-2">
+                          <TableCell colSpan={6} className="text-xs text-muted-foreground text-center py-2">
                             + {ws.items.length - 5} autres produits
                           </TableCell>
                         </TableRow>
