@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/table'
 import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X, RotateCcw, Hand } from 'lucide-react'
 import { toast } from 'sonner'
-import HorizontalBarChart from '@/components/ui/horizontal-bar'
 import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
 import type { MonthlyProcess, Wholesaler } from '@/types/database'
 import {
@@ -151,6 +150,7 @@ interface QuotaImportStepProps {
 export default function QuotaImportStep({ process, onNext }: QuotaImportStepProps) {
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
+  const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
   const [queue, setQueue] = useState<QueuedQuotaFile[]>([])
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
@@ -895,51 +895,104 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       </div>
 
       {existingQuotas != null && existingQuotas > 0 && queue.length === 0 && (
-        <Card className="ivory-card-highlight">
-          <CardContent className="p-4 flex items-center gap-3">
-            <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
-            <p className="text-sm">
-              <strong>{existingQuotas}</strong> disponibilites deja importees pour ce mois.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {quotaSummary && queue.length === 0 && (
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-3">
-            <Card>
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold">{quotaSummary.wholesalerCount}</p>
-                <p className="text-xs text-muted-foreground">Grossistes</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold">{quotaSummary.totalQuotas.toLocaleString('fr-FR')}</p>
-                <p className="text-xs text-muted-foreground">Lignes de quotas</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold">{quotaSummary.totalQty.toLocaleString('fr-FR')}</p>
-                <p className="text-xs text-muted-foreground">Unites totales</p>
-              </CardContent>
-            </Card>
-          </div>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm font-semibold mb-3">Repartition par grossiste</p>
-              <HorizontalBarChart
-                items={quotaSummary.entries.map(e => ({
-                  label: e.name,
-                  code: e.code,
-                  value: e.totalQty,
-                }))}
-                formatValue={(v) => `${v.toLocaleString('fr-FR')} u.`}
-              />
+          {/* Summary header */}
+          <Card className="ivory-card-highlight">
+            <CardContent className="p-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
+                <p className="text-sm">
+                  <strong>{existingQuotas}</strong> disponibilites importees pour ce mois.
+                </p>
+              </div>
+              {!isProcessLocked && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
+                  onClick={async () => {
+                    const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}-01`
+                    const { error } = await supabase.from('wholesaler_quotas').delete().eq('month', monthStr)
+                    if (error) { toast.error(error.message); return }
+                    queryClient.invalidateQueries({ queryKey: ['wholesaler_quotas'] })
+                    toast.success('Toutes les disponibilites ont ete supprimees')
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" /> Tout supprimer
+                </Button>
+              )}
             </CardContent>
           </Card>
+
+          {/* Per-wholesaler cards */}
+          {quotaSummary && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <Card>
+                  <CardContent className="p-3 text-center">
+                    <p className="text-2xl font-bold">{quotaSummary.wholesalerCount}</p>
+                    <p className="text-xs text-muted-foreground">Grossistes</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-3 text-center">
+                    <p className="text-2xl font-bold">{quotaSummary.totalQuotas.toLocaleString('fr-FR')}</p>
+                    <p className="text-xs text-muted-foreground">Lignes de dispos</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-3 text-center">
+                    <p className="text-2xl font-bold">{quotaSummary.totalQty.toLocaleString('fr-FR')}</p>
+                    <p className="text-xs text-muted-foreground">Unites totales</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Per-wholesaler detail with delete buttons */}
+              <div className="space-y-1.5">
+                {quotaSummary.entries.map(entry => (
+                  <Card key={entry.code}>
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold">{entry.code}</span>
+                          <span className="text-xs text-muted-foreground">{entry.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <span>{entry.productCount} produits</span>
+                          <span>{entry.totalQty.toLocaleString('fr-FR')} unites</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Progress value={100} className="h-1.5 w-20" />
+                        {!isProcessLocked && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                            onClick={async () => {
+                              const ws = (wholesalers ?? []).find(w => w.code === entry.code)
+                              if (!ws) return
+                              const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}-01`
+                              const { error } = await supabase.from('wholesaler_quotas').delete().eq('month', monthStr).eq('wholesaler_id', ws.id)
+                              if (error) { toast.error(error.message); return }
+                              queryClient.invalidateQueries({ queryKey: ['wholesaler_quotas'] })
+                              toast.success(`Disponibilites ${entry.code} supprimees`)
+                            }}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
