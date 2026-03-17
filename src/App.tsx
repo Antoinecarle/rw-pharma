@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, Component } from 'react'
+import type { ErrorInfo, ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
-import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache, keepPreviousData } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { Toaster } from '@/components/ui/sonner'
@@ -51,8 +52,9 @@ const queryClient = new QueryClient({
   mutationCache: new MutationCache({ onError: handleGlobalError }),
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 2,
-      gcTime: 1000 * 60 * 10,
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 30,
+      placeholderData: keepPreviousData,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       refetchOnMount: true,
@@ -94,6 +96,50 @@ function LoadingScreen() {
   )
 }
 
+// Error boundary — catches crashes (failed chunks, runtime errors) and recovers
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[ErrorBoundary]', error, info)
+    // If it's a chunk loading error, try reloading once
+    if (error.message?.includes('Loading chunk') || error.message?.includes('dynamically imported module') || error.message?.includes('Failed to fetch')) {
+      const reloaded = sessionStorage.getItem('chunk-reload')
+      if (!reloaded) {
+        sessionStorage.setItem('chunk-reload', '1')
+        window.location.reload()
+        return
+      }
+      sessionStorage.removeItem('chunk-reload')
+    }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
+          <div className="h-16 w-16 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
+            <span className="text-2xl">!</span>
+          </div>
+          <h2 className="text-xl font-bold mb-2">Une erreur est survenue</h2>
+          <p className="text-sm text-muted-foreground mb-6">{this.state.error?.message ?? 'Erreur inconnue'}</p>
+          <button
+            onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload() }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            Recharger la page
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 function NotFoundPage() {
   return (
     <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
@@ -110,7 +156,11 @@ function NotFoundPage() {
 }
 
 function LazyPage({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<div className="flex items-center justify-center py-24"><p className="text-sm text-muted-foreground">Chargement...</p></div>}>{children}</Suspense>
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<div className="flex items-center justify-center py-24"><p className="text-sm text-muted-foreground">Chargement...</p></div>}>{children}</Suspense>
+    </ErrorBoundary>
+  )
 }
 
 function AppRoutes() {
@@ -177,15 +227,17 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={300}>
-        <BrowserRouter>
-          <AuthProvider>
-            <AppRoutes />
-            <Toaster richColors position="top-right" />
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider delayDuration={300}>
+          <BrowserRouter>
+            <AuthProvider>
+              <AppRoutes />
+              <Toaster richColors position="top-right" />
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   )
 }
