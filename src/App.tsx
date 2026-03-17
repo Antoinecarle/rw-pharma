@@ -1,12 +1,12 @@
-import { lazy, Suspense, Component } from 'react'
+import { lazy, Suspense, Component, useEffect, useState as useReactState } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
-import { QueryClient, QueryClientProvider, QueryCache, MutationCache, keepPreviousData } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache, keepPreviousData, useQueryClient } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { Toaster } from '@/components/ui/sonner'
 import Layout from '@/components/Layout'
-import { supabase, onSessionReady } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 
 // Lazy-loaded pages — split into separate chunks
@@ -55,19 +55,12 @@ const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5,
       gcTime: 1000 * 60 * 30,
       placeholderData: keepPreviousData,
-      // We handle window focus ourselves via onSessionReady (supabase.ts)
-      // to ensure session is valid BEFORE queries refetch
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       refetchOnMount: true,
       retry: 2,
     },
   },
-})
-
-// When tab regains focus AND session is confirmed valid → invalidate stale queries
-onSessionReady(() => {
-  queryClient.invalidateQueries()
 })
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -232,6 +225,37 @@ function AppRoutes() {
   )
 }
 
+// ── DEBUG PANEL (temporary) ────────────────────────────────────
+function DebugPanel() {
+  const qc = useQueryClient()
+  const [info, setInfo] = useReactState('')
+
+  useEffect(() => {
+    const update = () => {
+      const cache = qc.getQueryCache().getAll()
+      const total = cache.length
+      const fetching = cache.filter(q => q.state.fetchStatus === 'fetching').length
+      const error = cache.filter(q => q.state.status === 'error').length
+      const pending = cache.filter(q => q.state.status === 'pending').length
+      const success = cache.filter(q => q.state.status === 'success').length
+      setInfo(`Q:${total} ok:${success} pend:${pending} fetch:${fetching} err:${error}`)
+    }
+    update()
+    const unsub = qc.getQueryCache().subscribe(update)
+    return () => unsub()
+  }, [qc])
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: 8, right: 8, zIndex: 99999,
+      background: '#1a1a2e', color: '#0f0', fontSize: 11, fontFamily: 'monospace',
+      padding: '4px 8px', borderRadius: 6, opacity: 0.85, pointerEvents: 'none',
+    }}>
+      {info}
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -241,6 +265,7 @@ export default function App() {
             <AuthProvider>
               <AppRoutes />
               <Toaster richColors position="top-right" />
+              <DebugPanel />
             </AuthProvider>
           </BrowserRouter>
         </TooltipProvider>
