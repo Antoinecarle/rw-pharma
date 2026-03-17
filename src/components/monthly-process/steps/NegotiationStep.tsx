@@ -14,6 +14,9 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip'
 import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
+import {
   ArrowRight, ArrowLeft, Package, Search, CheckCircle, Circle,
   Ban, AlertTriangle, Pencil, X, Check, TrendingDown, Star,
   ChevronLeft, ChevronRight, Clock,
@@ -71,6 +74,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [editing, setEditing] = useState<EditingCell | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showNextWarning, setShowNextWarning] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
 
   // ── Fetch orders with joins ──
@@ -379,6 +383,24 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
         .from('orders')
         .update({
           nego_status: 'validated',
+          nego_updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders', process.id, 'negotiation'] })
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  // ── Unvalidate single order ──
+  const unvalidateOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          nego_status: 'pending',
           nego_updated_at: new Date().toISOString(),
         })
         .eq('id', orderId)
@@ -814,9 +836,11 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                               onCheckedChange={(checked) => {
                                 if (checked) {
                                   validateOrderMutation.mutate(order.id)
+                                } else {
+                                  unvalidateOrderMutation.mutate(order.id)
                                 }
                               }}
-                              disabled={isValidated || validateOrderMutation.isPending}
+                              disabled={validateOrderMutation.isPending || unvalidateOrderMutation.isPending}
                               className="h-4 w-4"
                             />
                           </TableCell>
@@ -1135,10 +1159,52 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
             </Button>
           )}
         </div>
-        <Button onClick={onNext} className="gap-2">
+        <Button
+          onClick={() => {
+            const notValidated = totalCount - validatedCount
+            if (notValidated > 0) {
+              setShowNextWarning(true)
+            } else {
+              onNext()
+            }
+          }}
+          className="gap-2"
+        >
           Passer a l'etape suivante <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Warning dialog when unvalidated items remain */}
+      <Dialog open={showNextWarning} onOpenChange={setShowNextWarning}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Produits non valides
+            </DialogTitle>
+            <DialogDescription>
+              {totalCount - validatedCount} produit{totalCount - validatedCount > 1 ? 's' : ''} sur {totalCount} n'{totalCount - validatedCount > 1 ? 'ont' : 'a'} pas encore ete valide{totalCount - validatedCount > 1 ? 's' : ''} en negociation.
+              <br /><br />
+              Voulez-vous continuer sans les valider ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowNextWarning(false)}>
+              Rester et valider
+            </Button>
+            <Button
+              variant="default"
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={() => {
+                setShowNextWarning(false)
+                onNext()
+              }}
+            >
+              Continuer quand meme
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
