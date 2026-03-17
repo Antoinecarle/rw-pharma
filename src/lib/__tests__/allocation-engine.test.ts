@@ -1145,7 +1145,7 @@ describe('runAllocation()', () => {
         products: makeProducts(),
       })
 
-      const { allocations, logs } = await runAllocation(
+      const { logs } = await runAllocation(
         PROCESS_ID, MONTH, YEAR, 'balanced', new Set(), true
       )
 

@@ -17,7 +17,7 @@ import GaugeChart from '@/components/ui/gauge-chart'
 import {
   ArrowRight, ArrowLeft, Zap, Users, Package, Warehouse,
   AlertTriangle, Check, Pencil, X, RotateCcw, BarChart3, TrendingUp,
-  AlertCircle, Info,
+  AlertCircle, Info, Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { MonthlyProcess } from '@/types/database'
@@ -854,18 +854,16 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
           )}
         </div>
         <div className="flex gap-2">
-          {!hasAttribution && (
-            <Button variant="outline" onClick={onNext} className="gap-1.5">
-              Passer <ArrowRight className="h-4 w-4" />
-            </Button>
-          )}
+          <Button variant="outline" onClick={onNext} className="gap-1.5">
+            {hasAttribution ? 'Passer sans sauvegarder' : 'Passer'} <ArrowRight className="h-4 w-4" />
+          </Button>
           {hasAttribution && (
             <Button
               onClick={() => saveMut.mutate()}
               disabled={saveMut.isPending}
               className="gap-1.5"
             >
-              <Check className="h-4 w-4" />
+              {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Sauvegarder et continuer
               <ArrowRight className="h-4 w-4" />
             </Button>
