@@ -577,12 +577,16 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Valider les commandes ?"
-        description={`${pendingCount} commandes seront marquees comme validees.${totalAnomalies > 0 ? ` Attention : ${totalAnomalies} anomalies detectees.` : ''} Cette action lancera l'etape d'allocation.`}
+        title={pendingCount > 0 ? 'Valider les commandes ?' : 'Confirmer et continuer ?'}
+        description={
+          pendingCount > 0
+            ? `${pendingCount} commandes seront marquees comme validees.${totalAnomalies > 0 ? ` Attention : ${totalAnomalies} anomalies detectees.` : ''} Cette action lancera l'etape suivante.`
+            : `Toutes les ${orders?.length ?? 0} commandes sont deja validees.${totalAnomalies > 0 ? ` Note : ${totalAnomalies} commandes avec anomalies (non bloquant).` : ''} Passer a l'etape suivante ?`
+        }
         onConfirm={() => validateMut.mutate()}
         loading={validateMut.isPending}
         variant="default"
-        confirmLabel="Valider les commandes"
+        confirmLabel={pendingCount > 0 ? 'Valider les commandes' : 'Continuer'}
         loadingLabel="Validation..."
       />
 
