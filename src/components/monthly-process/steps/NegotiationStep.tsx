@@ -141,27 +141,10 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     },
   })
 
-  // ── Macro attributions from process metadata (editable) ──
-  const initialMacroMap = (process.metadata?.macro_attributions as Record<string, Record<string, number>>) ?? {}
-  const [macroMap, setMacroMap] = useState(initialMacroMap)
-  const [editingMacro, setEditingMacro] = useState<{ productId: string; wholesalerId: string } | null>(null)
-  const [macroEditValue, setMacroEditValue] = useState('')
-
-  // Persist macro changes to process.metadata
-  const saveMacroMut = useMutation({
-    mutationFn: async (newMap: Record<string, Record<string, number>>) => {
-      const currentMeta = (process.metadata ?? {}) as Record<string, unknown>
-      const { error } = await supabase
-        .from('monthly_processes')
-        .update({ metadata: { ...currentMeta, macro_attributions: newMap } })
-        .eq('id', process.id)
-      if (error) throw error
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['monthly-processes', process.id] })
-    },
-    onError: (err: Error) => toast.error(`Erreur sauvegarde: ${err.message}`),
-  })
+  // ── Macro attributions from process metadata (read-only in negotiation) ──
+  const macroMap = useMemo(() => {
+    return (process.metadata?.macro_attributions as Record<string, Record<string, number>>) ?? {}
+  }, [process.metadata])
 
   // ── Build quota lookup: productId -> QuotaForProduct[] ──
   const quotasByProduct = useMemo(() => {
@@ -479,6 +462,66 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     if (!pq) return null
     return pq.find(q => q.wholesalerId === wholesalerId) ?? null
   }, [quotasByProduct])
+
+  // ── Per-client breakdown of macro attributions ──
+  // Distributes each wholesaler's macro qty across clients (priority first, then by price desc)
+  // Returns: { [customerId]: { [wholesalerId]: attributedQty } }
+  const clientBreakdown = useMemo(() => {
+    if (!selectedGroup || activeWholesalers.length === 0) return {} as Record<string, Record<string, number>>
+
+    const productId = selectedGroup.productId
+    const result: Record<string, Record<string, number>> = {}
+
+    // Sort orders: top clients first, then by price descending
+    const sortedOrders = [...selectedGroup.orders].sort((a, b) => {
+      const ca = a.customer as unknown as { is_top_client?: boolean } | undefined
+      const cb = b.customer as unknown as { is_top_client?: boolean } | undefined
+      if (ca?.is_top_client && !cb?.is_top_client) return -1
+      if (!ca?.is_top_client && cb?.is_top_client) return 1
+      // Higher price = higher priority
+      const pa = a.unit_price ?? 0
+      const pb = b.unit_price ?? 0
+      if (pb !== pa) return pb - pa
+      return 0
+    })
+
+    // Track remaining demand per customer
+    const remainingDemand: Record<string, number> = {}
+    for (const order of sortedOrders) {
+      remainingDemand[order.customer_id] = order.quantity
+      result[order.customer_id] = {}
+    }
+
+    // Track remaining stock per wholesaler (from macro allocations)
+    const remainingStock: Record<string, number> = {}
+    for (const ws of activeWholesalers) {
+      remainingStock[ws.id] = getMacroQty(productId, ws.id)
+    }
+
+    // Distribute: for each client (priority order), allocate from open wholesalers
+    for (const order of sortedOrders) {
+      const customerId = order.customer_id
+      if (remainingDemand[customerId] <= 0) continue
+
+      for (const ws of activeWholesalers) {
+        if (remainingDemand[customerId] <= 0) break
+        if (remainingStock[ws.id] <= 0) continue
+        if (!isWholesalerOpenForCustomer(customerId, ws.id)) continue
+
+        const alloc = Math.min(remainingDemand[customerId], remainingStock[ws.id])
+        result[customerId][ws.id] = alloc
+        remainingDemand[customerId] -= alloc
+        remainingStock[ws.id] -= alloc
+      }
+    }
+
+    return result
+  }, [selectedGroup, activeWholesalers, macroMap, cwLinks, getMacroQty, isWholesalerOpenForCustomer])
+
+  // Helper to get per-client per-wholesaler attribution
+  const getClientWsQty = useCallback((customerId: string, wholesalerId: string) => {
+    return clientBreakdown[customerId]?.[wholesalerId] ?? 0
+  }, [clientBreakdown])
 
   // ── Render ──
 
@@ -836,11 +879,9 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                       })() : null
                       const expLabel = expDate ? `${String(expDate.getMonth() + 1).padStart(2, '0')}/${String(expDate.getFullYear()).slice(2)}` : null
                       const expColorClass = prefExpMonths != null ? (prefExpMonths >= 6 ? 'text-green-600' : prefExpMonths >= 3 ? 'text-amber-600' : 'text-red-600') : 'text-muted-foreground'
-                      // Sum of macro attributions across all wholesalers for this order's customer
+                      // Sum of per-client wholesaler attributions for this row
                       const rowAttrTotal = activeWholesalers.reduce((sum, ws) => {
-                        const isOpen = isWholesalerOpenForCustomer(order.customer_id, ws.id)
-                        if (!isOpen) return sum
-                        return sum + getMacroQty(selectedGroup.productId, ws.id)
+                        return sum + getClientWsQty(order.customer_id, ws.id)
                       }, 0)
 
                       return (
@@ -976,13 +1017,10 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                             </span>
                           </TableCell>
 
-                          {/* Wholesaler columns (editable macro allocation) */}
+                          {/* Wholesaler columns — per-client breakdown (read-only) */}
                           {activeWholesalers.map(ws => {
-                            const macroQty = getMacroQty(selectedGroup.productId, ws.id)
+                            const clientQty = getClientWsQty(order.customer_id, ws.id)
                             const isOpen = isWholesalerOpenForCustomer(order.customer_id, ws.id)
-                            const quota = getQuota(selectedGroup.productId, ws.id)
-                            const hasQuota = quota != null && (quota.quotaQuantity + quota.extraAvailable) > 0
-                            const isEditingThis = editingMacro?.productId === selectedGroup.productId && editingMacro?.wholesalerId === ws.id
 
                             return (
                               <TableCell key={ws.id} className="text-center px-1">
@@ -996,56 +1034,16 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                                     </TooltipTrigger>
                                     <TooltipContent>Grossiste non ouvert pour {cust?.code}</TooltipContent>
                                   </Tooltip>
-                                ) : isEditingThis ? (
-                                  <input
-                                    type="number"
-                                    value={macroEditValue}
-                                    onChange={e => setMacroEditValue(e.target.value)}
-                                    className="w-[60px] h-7 text-center font-mono text-[11px] border-2 border-blue-500 rounded-md bg-white text-blue-700 font-bold shadow-md outline-none focus:ring-2 focus:ring-blue-500/20"
-                                    autoFocus
-                                    onBlur={() => {
-                                      const val = parseInt(macroEditValue, 10)
-                                      const newMap = { ...macroMap }
-                                      if (!newMap[selectedGroup.productId]) newMap[selectedGroup.productId] = {}
-                                      if (isNaN(val) || val <= 0) {
-                                        delete newMap[selectedGroup.productId][ws.id]
-                                      } else {
-                                        newMap[selectedGroup.productId] = { ...newMap[selectedGroup.productId], [ws.id]: val }
-                                      }
-                                      setMacroMap(newMap)
-                                      saveMacroMut.mutate(newMap)
-                                      setEditingMacro(null)
-                                    }}
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                                      if (e.key === 'Escape') setEditingMacro(null)
-                                    }}
-                                  />
                                 ) : (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        type="button"
-                                        className={`w-[60px] h-7 text-center font-mono text-[11px] rounded-md transition-all duration-150 ${
-                                          macroQty > 0
-                                            ? 'border border-blue-300 bg-white text-blue-700 font-bold shadow-sm hover:border-blue-500 hover:shadow-md cursor-pointer'
-                                            : 'border border-dashed border-gray-300 text-gray-300 hover:border-blue-400 hover:bg-blue-50/40 hover:text-blue-400 hover:border-solid cursor-pointer'
-                                        }`}
-                                        onClick={() => {
-                                          setEditingMacro({ productId: selectedGroup.productId, wholesalerId: ws.id })
-                                          setMacroEditValue(macroQty > 0 ? String(macroQty) : '')
-                                        }}
-                                      >
-                                        {macroQty > 0 ? macroQty.toLocaleString('fr-FR') : '\u2014'}
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      {macroQty > 0
-                                        ? `${macroQty} via ${ws.code} (dispo: ${hasQuota ? quota.quotaQuantity + quota.extraAvailable : 0}) — cliquez pour modifier`
-                                        : `Cliquez pour attribuer via ${ws.code}${hasQuota ? ` (dispo: ${quota.quotaQuantity + quota.extraAvailable})` : ''}`
-                                      }
-                                    </TooltipContent>
-                                  </Tooltip>
+                                  <span
+                                    className={`inline-flex items-center justify-center w-[60px] h-7 rounded-md font-mono text-[11px] ${
+                                      clientQty > 0
+                                        ? 'border border-blue-300 bg-white text-blue-700 font-bold shadow-sm'
+                                        : 'border border-dashed border-gray-300 text-gray-300'
+                                    }`}
+                                  >
+                                    {clientQty > 0 ? clientQty.toLocaleString('fr-FR') : '\u2014'}
+                                  </span>
                                 )}
                               </TableCell>
                             )
@@ -1115,23 +1113,25 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                         </TableRow>
                       )
                     })}
-                    {/* Footer row: totals per wholesaler */}
+                    {/* Footer row: sum of per-client attributions vs dispo */}
                     {activeWholesalers.length > 0 && selectedGroup && (
                       <TableRow className="bg-muted/30 border-t-2 font-medium">
                         <TableCell colSpan={6} className="text-[11px] text-muted-foreground font-semibold text-right pr-2">
                           Total / dispo
                         </TableCell>
                         {activeWholesalers.map(ws => {
-                          const macroQty = getMacroQty(selectedGroup.productId, ws.id)
+                          // Sum of what was actually distributed to clients from this wholesaler
+                          const distributedQty = detailOrders.reduce((sum, o) => sum + getClientWsQty(o.customer_id, ws.id), 0)
                           const quota = getQuota(selectedGroup.productId, ws.id)
                           const total = quota ? quota.quotaQuantity + quota.extraAvailable : 0
+                          const macroQty = getMacroQty(selectedGroup.productId, ws.id)
                           const isOver = total > 0 && macroQty > total
                           return (
                             <TableCell key={ws.id} className="text-center px-1">
-                              {total > 0 || macroQty > 0 ? (
+                              {total > 0 || distributedQty > 0 ? (
                                 <span className="font-mono text-[11px]">
                                   <span className={`font-bold ${isOver ? 'text-red-600' : 'text-blue-700'}`}>
-                                    {macroQty.toLocaleString('fr-FR')}
+                                    {distributedQty.toLocaleString('fr-FR')}
                                   </span>
                                   <span className="text-gray-400">/ {total.toLocaleString('fr-FR')}</span>
                                 </span>
@@ -1143,9 +1143,9 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                         })}
                         <TableCell className="text-center">
                           <span className="font-mono text-[11px] font-bold text-blue-700">
-                            {activeWholesalers.reduce((sum, ws) => {
-                              return sum + getMacroQty(selectedGroup.productId, ws.id)
-                            }, 0).toLocaleString('fr-FR')}
+                            {detailOrders.reduce((sum, o) =>
+                              sum + activeWholesalers.reduce((wsSum, ws) => wsSum + getClientWsQty(o.customer_id, ws.id), 0)
+                            , 0).toLocaleString('fr-FR')}
                           </span>
                         </TableCell>
                         <TableCell />
