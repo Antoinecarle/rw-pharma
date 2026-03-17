@@ -141,8 +141,27 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     },
   })
 
-  // ── Macro attributions from process metadata ──
-  const macroMap = (process.metadata?.macro_attributions as Record<string, Record<string, number>>) ?? {}
+  // ── Macro attributions from process metadata (editable) ──
+  const initialMacroMap = (process.metadata?.macro_attributions as Record<string, Record<string, number>>) ?? {}
+  const [macroMap, setMacroMap] = useState(initialMacroMap)
+  const [editingMacro, setEditingMacro] = useState<{ productId: string; wholesalerId: string } | null>(null)
+  const [macroEditValue, setMacroEditValue] = useState('')
+
+  // Persist macro changes to process.metadata
+  const saveMacroMut = useMutation({
+    mutationFn: async (newMap: Record<string, Record<string, number>>) => {
+      const currentMeta = (process.metadata ?? {}) as Record<string, unknown>
+      const { error } = await supabase
+        .from('monthly_processes')
+        .update({ metadata: { ...currentMeta, macro_attributions: newMap } })
+        .eq('id', process.id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['monthly-processes', process.id] })
+    },
+    onError: (err: Error) => toast.error(`Erreur sauvegarde: ${err.message}`),
+  })
 
   // ── Build quota lookup: productId -> QuotaForProduct[] ──
   const quotasByProduct = useMemo(() => {
@@ -957,12 +976,13 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                             </span>
                           </TableCell>
 
-                          {/* Wholesaler columns (allocation inputs - read-only) */}
+                          {/* Wholesaler columns (editable macro allocation) */}
                           {activeWholesalers.map(ws => {
                             const macroQty = getMacroQty(selectedGroup.productId, ws.id)
                             const isOpen = isWholesalerOpenForCustomer(order.customer_id, ws.id)
                             const quota = getQuota(selectedGroup.productId, ws.id)
                             const hasQuota = quota != null && (quota.quotaQuantity + quota.extraAvailable) > 0
+                            const isEditingThis = editingMacro?.productId === selectedGroup.productId && editingMacro?.wholesalerId === ws.id
 
                             return (
                               <TableCell key={ws.id} className="text-center px-1">
@@ -976,24 +996,56 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                                     </TooltipTrigger>
                                     <TooltipContent>Grossiste non ouvert pour {cust?.code}</TooltipContent>
                                   </Tooltip>
-                                ) : !hasQuota ? (
-                                  <span className="inline-flex items-center justify-center w-[60px] h-7 text-center font-mono text-[11px] text-gray-300 cursor-default">&mdash;</span>
-                                ) : macroQty > 0 ? (
+                                ) : isEditingThis ? (
+                                  <input
+                                    type="number"
+                                    value={macroEditValue}
+                                    onChange={e => setMacroEditValue(e.target.value)}
+                                    className="w-[60px] h-7 text-center font-mono text-[11px] border-2 border-blue-500 rounded-md bg-white text-blue-700 font-bold shadow-md outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    autoFocus
+                                    onBlur={() => {
+                                      const val = parseInt(macroEditValue, 10)
+                                      const newMap = { ...macroMap }
+                                      if (!newMap[selectedGroup.productId]) newMap[selectedGroup.productId] = {}
+                                      if (isNaN(val) || val <= 0) {
+                                        delete newMap[selectedGroup.productId][ws.id]
+                                      } else {
+                                        newMap[selectedGroup.productId] = { ...newMap[selectedGroup.productId], [ws.id]: val }
+                                      }
+                                      setMacroMap(newMap)
+                                      saveMacroMut.mutate(newMap)
+                                      setEditingMacro(null)
+                                    }}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                                      if (e.key === 'Escape') setEditingMacro(null)
+                                    }}
+                                  />
+                                ) : (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <input
-                                        readOnly
-                                        value={macroQty.toLocaleString('fr-FR')}
-                                        className="w-[60px] h-7 text-center font-mono text-[11px] border border-blue-300 rounded-md bg-white text-blue-700 font-bold cursor-default shadow-sm"
-                                        tabIndex={-1}
-                                      />
+                                      <button
+                                        type="button"
+                                        className={`w-[60px] h-7 text-center font-mono text-[11px] rounded-md transition-all duration-150 ${
+                                          macroQty > 0
+                                            ? 'border border-blue-300 bg-white text-blue-700 font-bold shadow-sm hover:border-blue-500 hover:shadow-md cursor-pointer'
+                                            : 'border border-dashed border-gray-300 text-gray-300 hover:border-blue-400 hover:bg-blue-50/40 hover:text-blue-400 hover:border-solid cursor-pointer'
+                                        }`}
+                                        onClick={() => {
+                                          setEditingMacro({ productId: selectedGroup.productId, wholesalerId: ws.id })
+                                          setMacroEditValue(macroQty > 0 ? String(macroQty) : '')
+                                        }}
+                                      >
+                                        {macroQty > 0 ? macroQty.toLocaleString('fr-FR') : '\u2014'}
+                                      </button>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      Pre-alloue {macroQty} via {ws.code} (dispo: {quota.quotaQuantity + quota.extraAvailable})
+                                      {macroQty > 0
+                                        ? `${macroQty} via ${ws.code} (dispo: ${hasQuota ? quota.quotaQuantity + quota.extraAvailable : 0}) — cliquez pour modifier`
+                                        : `Cliquez pour attribuer via ${ws.code}${hasQuota ? ` (dispo: ${quota.quotaQuantity + quota.extraAvailable})` : ''}`
+                                      }
                                     </TooltipContent>
                                   </Tooltip>
-                                ) : (
-                                  <span className="inline-flex items-center justify-center w-[60px] h-7 text-center font-mono text-[11px] text-gray-300 cursor-default">&mdash;</span>
                                 )}
                               </TableCell>
                             )
