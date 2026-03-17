@@ -689,6 +689,11 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                   )}
                 </>
               )}
+              {!isProcessLocked && Object.keys(allocMap).length > 0 && (
+                <Badge variant="outline" className="gap-1 text-amber-600 border-amber-200 bg-amber-50">
+                  <AlertTriangle className="h-3 w-3" /> Modifications non sauvegardees — lancez l'allocation pour persister
+                </Badge>
+              )}
               {isProcessLocked && (
                 <Badge variant="outline" className="gap-1 text-amber-700 border-amber-200">
                   <Lock className="h-3 w-3" /> Processus verrouille
