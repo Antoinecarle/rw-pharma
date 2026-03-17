@@ -438,6 +438,29 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         )}
       </div>
 
+      {/* Warning: all allocations are zero */}
+      {allocations && allocations.length > 0 && totalAllocated === 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <Card className="border-red-200/60 bg-red-50/30">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-600" />
+                <p className="text-sm font-semibold text-red-800">Aucune quantite allouee</p>
+              </div>
+              <p className="text-xs text-red-700">
+                Les allocations existent mais toutes les quantites sont a zero. Cela peut signifier que les CIP13 des stocks ne correspondent pas aux commandes importees. Verifiez vos fichiers de stock/quotas ou relancez l'allocation a l'etape precedente.
+              </p>
+              {onBack && (
+                <Button variant="outline" size="sm" className="mt-2 gap-1.5 text-red-700 border-red-200" onClick={onBack}>
+                  <ArrowRight className="h-4 w-4 rotate-180" />
+                  Retour a l'allocation
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Under-allocated products alert */}
       {underAllocated.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>

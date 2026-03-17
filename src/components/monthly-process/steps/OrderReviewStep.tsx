@@ -496,12 +496,23 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
                       {order.unit_price != null ? `${order.unit_price.toFixed(2)} EUR` : '-'}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-right tabular-nums text-muted-foreground">
-                      {cust?.min_lot_acceptable != null ? cust.min_lot_acceptable.toLocaleString('fr-FR') : '-'}
+                      {(() => {
+                        const meta = order.metadata as Record<string, unknown> | undefined
+                        const perOrder = meta?.min_batch_quantity != null ? Number(meta.min_batch_quantity) : null
+                        const perClient = cust?.min_lot_acceptable ?? null
+                        const val = perOrder ?? perClient
+                        return val != null ? val.toLocaleString('fr-FR') : '-'
+                      })()}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
-                      {prod?.expiry_dates && prod.expiry_dates.length > 0
-                        ? prod.expiry_dates.sort()[0]
-                        : '-'}
+                      {(() => {
+                        const meta = order.metadata as Record<string, unknown> | undefined
+                        const perOrder = meta?.min_expiry_date as string | undefined
+                        if (perOrder) return perOrder
+                        return prod?.expiry_dates && prod.expiry_dates.length > 0
+                          ? prod.expiry_dates.sort()[0]
+                          : '-'
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Badge

@@ -43,7 +43,7 @@ const FIELD_LABELS: Record<OrderField, string> = {
   productName: 'Nom produit',
   clientColumn: 'Client (multi)',
   comment: 'Commentaire',
-  preferredWholesaler: 'Grossiste prefere',
+  minLotQty: 'Lot min.',
   minExpiryDate: 'Date exp. min',
 }
 
@@ -543,7 +543,11 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
           // Build metadata from enriched fields
           const metadata: Record<string, string | null> = {}
           if (f.mapping.comment) metadata.comment = String(row[f.mapping.comment] || '').trim() || null
-          if (f.mapping.preferredWholesaler) metadata.preferred_wholesaler = String(row[f.mapping.preferredWholesaler] || '').trim() || null
+          if (f.mapping.minLotQty) {
+            const raw = String(row[f.mapping.minLotQty] || '').trim()
+            const parsed = parseInt(raw, 10)
+            metadata.min_batch_quantity = isNaN(parsed) ? null : String(parsed)
+          }
           if (f.mapping.minExpiryDate) metadata.min_expiry_date = String(row[f.mapping.minExpiryDate] || '').trim() || null
 
           return {

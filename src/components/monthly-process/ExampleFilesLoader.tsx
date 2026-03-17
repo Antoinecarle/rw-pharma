@@ -71,9 +71,14 @@ const ORDER_EXAMPLES: ExampleFileGroup[] = [
 
 const STOCK_EXAMPLES: ExampleFileGroup[] = [
   {
-    label: 'Avril 2027 (29 lots, 6 grossistes)',
+    label: 'Avril 2027 (32 lots, 5 grossistes)',
     files: [
       { name: 'stock_collecte_avril_2027.csv', storagePath: 'stock/avril2027/stock_collecte_avril_2027.csv', entity: 'Tous grossistes' },
+      { name: 'stock_epsilon_avril_2027.csv', storagePath: 'stock/avril2027/stock_epsilon_avril_2027.csv', entity: 'EPSILON' },
+      { name: 'stock_ginkgo_avril_2027.csv', storagePath: 'stock/avril2027/stock_ginkgo_avril_2027.csv', entity: "GINK'GO" },
+      { name: 'stock_sna_avril_2027.csv', storagePath: 'stock/avril2027/stock_sna_avril_2027.csv', entity: 'SNA' },
+      { name: 'stock_so_avril_2027.csv', storagePath: 'stock/avril2027/stock_so_avril_2027.csv', entity: 'SO' },
+      { name: 'stock_ocp_avril_2027.csv', storagePath: 'stock/avril2027/stock_ocp_avril_2027.csv', entity: 'OCP' },
     ],
   },
   {

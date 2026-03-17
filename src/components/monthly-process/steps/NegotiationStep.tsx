@@ -1143,12 +1143,8 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                         })}
                         <TableCell className="text-center">
                           <span className="font-mono text-[11px] font-bold text-blue-700">
-                            {detailOrders.reduce((sum, o) => {
-                              return sum + activeWholesalers.reduce((ws_sum, ws) => {
-                                const isOpen = isWholesalerOpenForCustomer(o.customer_id, ws.id)
-                                if (!isOpen) return ws_sum
-                                return ws_sum + getMacroQty(selectedGroup.productId, ws.id)
-                              }, 0)
+                            {activeWholesalers.reduce((sum, ws) => {
+                              return sum + getMacroQty(selectedGroup.productId, ws.id)
                             }, 0).toLocaleString('fr-FR')}
                           </span>
                         </TableCell>

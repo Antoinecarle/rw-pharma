@@ -68,7 +68,7 @@ export const QUOTA_PATTERNS: FieldPattern<QuotaField>[] = [
 
 // ========================= ORDER PATTERNS =========================
 
-export type OrderField = 'cip13' | 'quantity' | 'unit_price' | 'productName' | 'clientColumn' | 'comment' | 'preferredWholesaler' | 'minExpiryDate'
+export type OrderField = 'cip13' | 'quantity' | 'unit_price' | 'productName' | 'clientColumn' | 'comment' | 'minLotQty' | 'minExpiryDate'
 
 export const ORDER_PATTERNS: FieldPattern<OrderField>[] = [
   { field: 'cip13', patterns: CIP13_PATTERNS },
@@ -87,8 +87,8 @@ export const ORDER_PATTERNS: FieldPattern<OrderField>[] = [
     patterns: [/comment/i, /notes?$/i, /remarque/i, /bemerkung/i, /observation/i],
   },
   {
-    field: 'preferredWholesaler',
-    patterns: [/grossiste.*pref/i, /preferred.*wholes/i, /fournisseur/i, /preferred.*suppli/i],
+    field: 'minLotQty',
+    patterns: [/lot.*min/i, /min.*lot/i, /mindestmenge/i, /minimum.*lot/i, /^min$/i, /colisage/i],
   },
   {
     field: 'minExpiryDate',
