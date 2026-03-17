@@ -17,12 +17,13 @@ import GaugeChart from '@/components/ui/gauge-chart'
 import {
   ArrowRight, ArrowLeft, Zap, Users, Package, Warehouse,
   AlertTriangle, Check, Pencil, X, RotateCcw, BarChart3, TrendingUp,
-  AlertCircle, Info, Loader2, History,
+  AlertCircle, Info, Loader2, History, Plus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { MonthlyProcess } from '@/types/database'
 import { useManualAttributions } from '@/hooks/useManualAttributions'
 import ManualAttributionEditor from '@/components/monthly-process/ManualAttributionEditor'
+import ManualAttributionAddForm from '@/components/monthly-process/ManualAttributionAddForm'
 
 interface MacroAttributionStepProps {
   process: MonthlyProcess
@@ -85,6 +86,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
   } = useManualAttributions(process.id)
   const [manualEditingCell, setManualEditingCell] = useState<{ productId: string; wholesalerId: string } | null>(null)
   const [showManualHistory, setShowManualHistory] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
 
   // Are we in manual-per-client mode? (client selected + not locked)
   const isManualMode = !!selectedCustomerId && !isProcessLocked
@@ -240,8 +242,19 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
       }
     }
 
+    // Also add manual attributions (for products/wholesalers not in macroMap)
+    for (const attr of manualAttrs) {
+      const macroQty = macroMap[attr.product_id]?.[attr.wholesaler_id] ?? 0
+      if (macroQty === 0) {
+        // Only add manual qty if not already counted via macroMap
+        const existing = summary.get(attr.wholesaler_id) ?? { total: 0, used: 0 }
+        existing.used += attr.supplier_quantity
+        summary.set(attr.wholesaler_id, existing)
+      }
+    }
+
     return summary
-  }, [quotas, macroMap])
+  }, [quotas, macroMap, manualAttrs])
 
   // Effective attributed qty per product × wholesaler = max(macro, manual total)
   // Manual attributions may exist independently of macro, so we take the max to avoid double-counting
@@ -601,8 +614,11 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                   <History className="h-3 w-3" /> {manualAttrs.length} edition{manualAttrs.length > 1 ? 's' : ''}
                 </Badge>
               )}
+              <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => { setShowAddForm(!showAddForm); setShowManualHistory(false) }}>
+                <Plus className="h-3 w-3" /> {showAddForm ? 'Fermer' : 'Ajouter'}
+              </Button>
               {manualAttrs.length > 0 && (
-                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => setShowManualHistory(!showManualHistory)}>
+                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => { setShowManualHistory(!showManualHistory); setShowAddForm(false) }}>
                   <History className="h-3 w-3" /> {showManualHistory ? 'Masquer' : 'Historique'}
                 </Button>
               )}
@@ -662,6 +678,84 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
           </CardContent>
         </Card>
       )}
+
+      {/* Add manual attribution form */}
+      {isManualMode && showAddForm && (
+        <ManualAttributionAddForm
+          selectedCustomerCode={customers.find(c => c.id === selectedCustomerId)?.code ?? '?'}
+          isSaving={isUpserting}
+          onAdd={(productId, wholesalerId, reqQty, supQty) => {
+            upsert({
+              productId,
+              customerId: selectedCustomerId!,
+              wholesalerId,
+              requestedQuantity: reqQty,
+              supplierQuantity: supQty,
+            })
+            setShowAddForm(false)
+          }}
+          onCancel={() => setShowAddForm(false)}
+        />
+      )}
+
+      {/* Extra manual attributions (products/wholesalers NOT in the matrix) */}
+      {(() => {
+        const demandProductIds = new Set(demands.map(d => d.productId))
+        const wsColumnIds = new Set(wholesalerColumns.map(w => w.id))
+        const extraAttrs = manualAttrs.filter(
+          a => !demandProductIds.has(a.product_id) || !wsColumnIds.has(a.wholesaler_id)
+        )
+        if (extraAttrs.length === 0) return null
+        return (
+          <Card className="border-blue-200 bg-blue-50/10 dark:bg-blue-950/10">
+            <CardContent className="p-3">
+              <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+                Attributions manuelles additionnelles ({extraAttrs.length})
+              </p>
+              <div className="border rounded-lg overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">CIP13</TableHead>
+                      <TableHead className="text-xs">Produit</TableHead>
+                      <TableHead className="text-xs">Client</TableHead>
+                      <TableHead className="text-xs">Grossiste</TableHead>
+                      <TableHead className="text-xs text-right">Demandee</TableHead>
+                      <TableHead className="text-xs text-right">Fournisseur</TableHead>
+                      <TableHead className="text-xs">Date</TableHead>
+                      <TableHead className="text-xs">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {extraAttrs.map(attr => (
+                      <TableRow key={attr.id} className="bg-blue-50/20 dark:bg-blue-950/10">
+                        <TableCell className="font-mono text-xs">{attr.product?.cip13 ?? '?'}</TableCell>
+                        <TableCell className="text-xs truncate max-w-[150px]">{attr.product?.name ?? '?'}</TableCell>
+                        <TableCell className="text-xs font-medium">{attr.customer?.code ?? '?'}</TableCell>
+                        <TableCell className="text-xs">{attr.wholesaler?.code ?? '?'}</TableCell>
+                        <TableCell className="text-xs text-right tabular-nums">{attr.requested_quantity.toLocaleString('fr-FR')}</TableCell>
+                        <TableCell className="text-xs text-right tabular-nums font-medium">{attr.supplier_quantity.toLocaleString('fr-FR')}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {new Date(attr.edited_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            onClick={() => deactivate(attr.id)}
+                            className="text-xs text-red-500 hover:text-red-700 flex items-center gap-0.5"
+                          >
+                            <X className="h-3 w-3" /> Retirer
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {/* Over-quota warnings */}
       {overQuotaCells.length > 0 && (

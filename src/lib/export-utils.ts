@@ -94,6 +94,25 @@ export function mergeAttributionsForExport(
     }
   }
 
+  // Emit manual attributions that have NO corresponding macroItem (hors-matrice)
+  for (const [productId, manuals] of manualByProduct.entries()) {
+    if (processedProducts.has(productId)) continue
+    for (const m of manuals) {
+      rows.push({
+        cip13: m.product?.cip13 ?? '?',
+        productName: m.product?.name ?? '?',
+        client: m.customer?.code ?? '?',
+        requestedQty: m.requested_quantity,
+        supplierQty: m.supplier_quantity,
+        source: 'MANUEL',
+        editedAt: new Date(m.edited_at).toLocaleString('fr-FR', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        }),
+      })
+    }
+  }
+
   // Sort: by CIP13, then MACRO before MANUEL, then by editedAt
   rows.sort((a, b) => {
     const cmp = a.cip13.localeCompare(b.cip13)
