@@ -434,19 +434,17 @@ export default function StockAggregationStep({ process, onNext, onBack }: StockA
       )}
 
       {/* Actions */}
-      {aggregated.length > 0 && (
-        <div className="flex justify-between">
-          {onBack && (
-            <Button variant="outline" onClick={onBack} className="gap-1.5">
-              <ArrowLeft className="h-4 w-4" /> Retour
-            </Button>
-          )}
-          <Button onClick={onNext} className="gap-2 ml-auto">
-            Lancer l'allocation
-            <ArrowRight className="h-4 w-4" />
+      <div className="flex justify-between">
+        {onBack && (
+          <Button variant="outline" onClick={onBack} className="gap-1.5">
+            <ArrowLeft className="h-4 w-4" /> Retour
           </Button>
-        </div>
-      )}
+        )}
+        <Button onClick={onNext} className="gap-2 ml-auto" variant={aggregated.length > 0 ? 'default' : 'outline'}>
+          {aggregated.length > 0 ? 'Lancer l\'allocation' : 'Passer sans stock'}
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   )
 }

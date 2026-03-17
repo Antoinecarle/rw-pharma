@@ -1117,6 +1117,13 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 </div>
                 <div className="flex items-center gap-3">
                   <Button
+                    variant="outline"
+                    onClick={onNext}
+                    className="gap-2"
+                  >
+                    Passer <ArrowRight className="h-4 w-4" />
+                  </Button>
+                  <Button
                     size="lg"
                     onClick={() => allocateMut.mutate()}
                     disabled={allocatableCount === 0 || isProcessLocked || allocateMut.isPending}

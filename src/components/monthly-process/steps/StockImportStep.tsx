@@ -1251,7 +1251,12 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
       )}
 
       {/* Next step */}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {!hasActiveImport && !(allDone || (existingStock != null && existingStock > 0)) && (
+          <Button variant="outline" onClick={onNext} className="gap-2">
+            Passer sans stock <ArrowRight className="h-4 w-4" />
+          </Button>
+        )}
         {(allDone || (existingStock != null && existingStock > 0)) && !hasActiveImport && (
           <Button onClick={onNext} className="gap-2">
             Passer a l'allocation par lot <ArrowRight className="h-4 w-4" />

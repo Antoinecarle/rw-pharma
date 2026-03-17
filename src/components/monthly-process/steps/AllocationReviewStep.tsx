@@ -784,19 +784,25 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         </Card>
       ) : null}
 
-      {allocations && allocations.length > 0 && !isProcessLocked ? (
+      {!isProcessLocked && (
         <div className="flex justify-end gap-3">
-          <Button
-            onClick={() => setConfirmOpen(true)}
-            disabled={confirmMut.isPending}
-            className="gap-2"
-          >
-            <CheckCircle className="h-4 w-4" />
-            {proposedCount > 0 ? `Confirmer ${proposedCount} allocations` : 'Continuer'}
-            {!confirmMut.isPending && <ArrowRight className="h-4 w-4" />}
-          </Button>
+          {allocations && allocations.length > 0 ? (
+            <Button
+              onClick={() => setConfirmOpen(true)}
+              disabled={confirmMut.isPending}
+              className="gap-2"
+            >
+              <CheckCircle className="h-4 w-4" />
+              {proposedCount > 0 ? `Confirmer ${proposedCount} allocations` : 'Continuer'}
+              {!confirmMut.isPending && <ArrowRight className="h-4 w-4" />}
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={onNext} className="gap-2">
+              Passer sans allocations <ArrowRight className="h-4 w-4" />
+            </Button>
+          )}
         </div>
-      ) : null}
+      )}
 
       <FinalAllocationConfirmationModal
         open={confirmOpen}
