@@ -223,10 +223,11 @@ function AppRoutes() {
   )
 }
 
-// ── DEBUG PANEL (temporary) ────────────────────────────────────
+// ── DEBUG PANEL ────────────────────────────────────────────────
 function DebugPanel() {
   const qc = useQueryClient()
   const [lines, setLines] = useReactState<string[]>([])
+  const [open, setOpen] = useReactState(false)
 
   useEffect(() => {
     const update = () => {
@@ -235,7 +236,7 @@ function DebugPanel() {
         const key = (q.queryKey as string[]).slice(0, 2).join('/')
         const d = q.state.data
         const len = Array.isArray(d) ? d.length : d ? 1 : 0
-        const st = q.state.status[0] // s=success p=pending e=error
+        const st = q.state.status[0]
         const fs = q.state.fetchStatus === 'fetching' ? '⟳' : ''
         const ph = q.isStale() ? '○' : '●'
         return `${ph}${fs}${st} ${key}(${len})`
@@ -247,14 +248,28 @@ function DebugPanel() {
     return () => unsub()
   }, [qc])
 
+  const summary = (() => {
+    const total = lines.length
+    const ok = lines.filter(l => l.includes('s ')).length
+    const err = lines.filter(l => l.includes('e ')).length
+    const fetching = lines.filter(l => l.includes('⟳')).length
+    return `${ok}/${total}${fetching ? ` ⟳${fetching}` : ''}${err ? ` ✗${err}` : ''}`
+  })()
+
   return (
-    <div style={{
-      position: 'fixed', bottom: 8, right: 8, zIndex: 99999,
-      background: '#1a1a2e', color: '#0f0', fontSize: 10, fontFamily: 'monospace',
-      padding: '6px 10px', borderRadius: 6, opacity: 0.9, pointerEvents: 'none',
-      maxHeight: 220, overflow: 'hidden', lineHeight: 1.5,
-    }}>
-      {lines.map((l, i) => <div key={i}>{l}</div>)}
+    <div
+      onClick={() => setOpen(o => !o)}
+      style={{
+        position: 'fixed', bottom: 8, left: 8, zIndex: 99999,
+        background: '#1a1a2e', color: '#0f0', fontSize: 10, fontFamily: 'monospace',
+        padding: open ? '6px 10px' : '4px 8px', borderRadius: 6, opacity: 0.9,
+        cursor: 'pointer', userSelect: 'none',
+        maxHeight: open ? 300 : 22, overflow: 'hidden', lineHeight: 1.5,
+        transition: 'max-height 0.2s ease',
+      }}
+    >
+      {!open && <div>{summary}</div>}
+      {open && lines.map((l, i) => <div key={i}>{l}</div>)}
     </div>
   )
 }
