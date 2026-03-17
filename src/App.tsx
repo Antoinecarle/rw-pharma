@@ -6,7 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { Toaster } from '@/components/ui/sonner'
 import Layout from '@/components/Layout'
-import { supabase } from '@/lib/supabase'
+import { supabase, onTabVisible } from '@/lib/supabase'
 import { toast } from 'sonner'
 
 // Lazy-loaded pages — split into separate chunks
@@ -54,11 +54,21 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 1000 * 60 * 5,
       gcTime: 1000 * 60 * 30,
-      refetchOnWindowFocus: true,
+      // MUST be false with Supabase — refetchOnWindowFocus triggers concurrent
+      // getSession() calls that deadlock with autoRefreshToken's own
+      // visibilitychange handler. Known Supabase bug.
+      // See: https://github.com/supabase/supabase-js/issues/1594
+      refetchOnWindowFocus: false,
       refetchOnReconnect: true,
       retry: 2,
     },
   },
+})
+
+// When tab becomes visible again, invalidate stale queries
+// (runs 300ms after visibility, so Supabase token refresh is done)
+onTabVisible(() => {
+  queryClient.invalidateQueries({ stale: true })
 })
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {

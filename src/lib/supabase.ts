@@ -23,3 +23,27 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 })
 
+// ── Tab visibility handler ──────────────────────────────────────
+// Stop auto-refresh when tab is hidden, restart when visible.
+// This prevents Supabase's internal visibilitychange handler from
+// conflicting with any data-fetching that happens on tab focus.
+// After session is refreshed, we notify listeners (React Query).
+let visibilityCallbacks: Array<() => void> = []
+export function onTabVisible(cb: () => void) {
+  visibilityCallbacks.push(cb)
+  return () => { visibilityCallbacks = visibilityCallbacks.filter(c => c !== cb) }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    supabase.auth.startAutoRefresh()
+    // Small delay to let Supabase finish its token refresh before
+    // React Query refetches (which internally call getSession)
+    setTimeout(() => {
+      visibilityCallbacks.forEach(cb => cb())
+    }, 300)
+  } else {
+    supabase.auth.stopAutoRefresh()
+  }
+})
+
