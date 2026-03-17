@@ -38,7 +38,19 @@ export type ExampleCategory = 'orders' | 'stock' | 'quotas'
 
 const ORDER_EXAMPLES: ExampleFileGroup[] = [
   {
-    label: 'Notion - Janvier 2026',
+    label: 'Avril 2027 (10 produits, 7 clients)',
+    files: [
+      { name: 'commandes_ori_avril_2027.csv', storagePath: 'commandes/avril2027/commandes_ori_avril_2027.csv', entity: 'ORIFARM' },
+      { name: 'commandes_mpa_avril_2027.csv', storagePath: 'commandes/avril2027/commandes_mpa_avril_2027.csv', entity: 'MPA' },
+      { name: 'commandes_aba_avril_2027.csv', storagePath: 'commandes/avril2027/commandes_aba_avril_2027.csv', entity: 'ABACUS' },
+      { name: 'commandes_axi_avril_2027.csv', storagePath: 'commandes/avril2027/commandes_axi_avril_2027.csv', entity: 'AXICORP' },
+      { name: 'commandes_cc_avril_2027.csv', storagePath: 'commandes/avril2027/commandes_cc_avril_2027.csv', entity: 'CC PHARMA' },
+      { name: 'commandes_medcor_avril_2027.csv', storagePath: 'commandes/avril2027/commandes_medcor_avril_2027.csv', entity: 'MEDCOR' },
+      { name: 'commandes_brocacef_avril_2027.csv', storagePath: 'commandes/avril2027/commandes_brocacef_avril_2027.csv', entity: 'BROCACEF' },
+    ],
+  },
+  {
+    label: 'Janvier 2026',
     files: [
       { name: 'commande_orifarm_jan2026.csv', storagePath: 'commandes/jan2026/commande_orifarm_jan2026.csv', entity: 'ORIFARM' },
       { name: 'commande_mpa_jan2026.csv', storagePath: 'commandes/jan2026/commande_mpa_jan2026.csv', entity: 'MPA' },
@@ -59,7 +71,13 @@ const ORDER_EXAMPLES: ExampleFileGroup[] = [
 
 const STOCK_EXAMPLES: ExampleFileGroup[] = [
   {
-    label: 'Notion - Janvier 2026',
+    label: 'Avril 2027 (29 lots, 6 grossistes)',
+    files: [
+      { name: 'stock_collecte_avril_2027.csv', storagePath: 'stock/avril2027/stock_collecte_avril_2027.csv', entity: 'Tous grossistes' },
+    ],
+  },
+  {
+    label: 'Janvier 2026',
     files: [
       { name: 'stock_epsilon_jan2026.csv', storagePath: 'stock/jan2026/stock_epsilon_jan2026.csv', entity: 'EPSILON' },
       { name: 'stock_ginkgo_jan2026.csv', storagePath: 'stock/jan2026/stock_ginkgo_jan2026.csv', entity: "GINK'GO" },
@@ -77,7 +95,13 @@ const STOCK_EXAMPLES: ExampleFileGroup[] = [
 
 const QUOTA_EXAMPLES: ExampleFileGroup[] = [
   {
-    label: 'Notion - Janvier 2026',
+    label: 'Avril 2027 (29 quotas, 10 produits)',
+    files: [
+      { name: 'quotas_avril_2027.csv', storagePath: 'quotas/avril2027/quotas_avril_2027.csv', entity: 'Tous grossistes' },
+    ],
+  },
+  {
+    label: 'Janvier 2026',
     files: [
       { name: 'quotas_jan2026.csv', storagePath: 'quotas/jan2026/quotas_jan2026.csv', entity: 'Tous grossistes' },
     ],
