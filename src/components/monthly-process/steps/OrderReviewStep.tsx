@@ -62,7 +62,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
       while (true) {
         const { data, error } = await supabase
           .from('orders')
-          .select('*, customer:customers(id, name, code, country, is_top_client, documents), product:products(id, cip13, name, is_ansm_blocked)')
+          .select('*, customer:customers(id, name, code, country, is_top_client, documents, min_lot_acceptable), product:products(id, cip13, name, is_ansm_blocked, expiry_dates)')
           .eq('monthly_process_id', process.id)
           .order('created_at', { ascending: false })
           .range(from, from + pageSize - 1)
@@ -460,14 +460,16 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
                 <TableHead className="hidden md:table-cell">Produit</TableHead>
                 <TableHead className="text-right">Quantite</TableHead>
                 <TableHead className="hidden sm:table-cell text-right">Prix</TableHead>
+                <TableHead className="hidden lg:table-cell text-right">Lot min.</TableHead>
+                <TableHead className="hidden lg:table-cell">Date d'exp. min</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead className="w-20">Alertes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredOrders.map((order) => {
-                const cust = order.customer as unknown as { code: string } | undefined
-                const prod = order.product as unknown as { cip13: string; name: string; is_ansm_blocked?: boolean } | undefined
+                const cust = order.customer as unknown as { code: string; min_lot_acceptable?: number | null } | undefined
+                const prod = order.product as unknown as { cip13: string; name: string; is_ansm_blocked?: boolean; expiry_dates?: string[] | null } | undefined
                 const orderAnomalies = anomalies.get(order.id) ?? []
                 const hasAnomaly = orderAnomalies.length > 0
                 const isSelected = selectedOrders.has(order.id)
@@ -492,6 +494,14 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
                     <TableCell className="text-right tabular-nums font-medium">{order.quantity.toLocaleString('fr-FR')}</TableCell>
                     <TableCell className="hidden sm:table-cell text-right tabular-nums text-muted-foreground">
                       {order.unit_price != null ? `${order.unit_price.toFixed(2)} EUR` : '-'}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-right tabular-nums text-muted-foreground">
+                      {cust?.min_lot_acceptable != null ? cust.min_lot_acceptable.toLocaleString('fr-FR') : '-'}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
+                      {prod?.expiry_dates && prod.expiry_dates.length > 0
+                        ? prod.expiry_dates.sort()[0]
+                        : '-'}
                     </TableCell>
                     <TableCell>
                       <Badge

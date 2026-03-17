@@ -241,26 +241,66 @@ export default function ExcelImport({ open, onOpenChange }: ExcelImportProps) {
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {(Object.keys(FIELD_LABELS) as (keyof ColumnMapping)[]).map((field) => (
-                <div key={field} className="space-y-1">
-                  <Label className="text-xs">{FIELD_LABELS[field]}</Label>
-                  <Select
-                    value={mapping[field] || 'none'}
-                    onValueChange={(v) => setMapping({ ...mapping, [field]: v === 'none' ? '' : v })}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Non mappe" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">-- Non mappe --</SelectItem>
-                      {headers.map((h) => (
-                        <SelectItem key={h} value={h}>{h}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
+              {(Object.keys(FIELD_LABELS) as (keyof ColumnMapping)[]).map((field) => {
+                const isRequired = REQUIRED_FIELDS.includes(field)
+                const isOptionalUnmapped = !isRequired && !mapping[field]
+                return (
+                  <div key={field} className={`space-y-1 ${isOptionalUnmapped ? 'opacity-60' : ''}`}>
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-xs">{FIELD_LABELS[field]}</Label>
+                      {!isRequired && <span className="text-[9px] text-muted-foreground italic">(optionnel)</span>}
+                    </div>
+                    <Select
+                      value={mapping[field] || 'none'}
+                      onValueChange={(v) => setMapping({ ...mapping, [field]: v === 'none' ? '' : v })}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Non mappe" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">-- Non mappe --</SelectItem>
+                        {headers.map((h) => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {isOptionalUnmapped && (
+                      <p className="text-[10px] text-muted-foreground/50 italic">Optionnel — sera ignore</p>
+                    )}
+                  </div>
+                )
+              })}
             </div>
+
+            {(() => {
+              const reqMapped = REQUIRED_FIELDS.filter(f => mapping[f]).length
+              const reqTotal = REQUIRED_FIELDS.length
+              const allFields = Object.keys(FIELD_LABELS) as (keyof ColumnMapping)[]
+              const optFields = allFields.filter(f => !REQUIRED_FIELDS.includes(f))
+              const optMapped = optFields.filter(f => mapping[f]).length
+              const optTotal = optFields.length
+              const allReqDone = reqMapped === reqTotal
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-1.5 flex-1 rounded-full bg-muted overflow-hidden`}>
+                      <div
+                        className={`h-full rounded-full transition-all ${allReqDone ? 'bg-green-500' : 'bg-primary'}`}
+                        style={{ width: `${allReqDone ? 100 : (reqMapped / reqTotal) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      Requis : {reqMapped}/{reqTotal} {allReqDone ? '✓' : ''} · Optionnels : {optMapped}/{optTotal}
+                    </span>
+                  </div>
+                  {allReqDone && (
+                    <p className="text-[11px] text-green-600 dark:text-green-400 font-medium">
+                      Tous les champs obligatoires sont mappes — vous pouvez continuer.
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
 
             <DialogFooter>
               <Button variant="outline" onClick={reset}>Retour</Button>

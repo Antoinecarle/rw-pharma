@@ -904,10 +904,13 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                     {(ALL_FIELDS).map((field) => {
                       const samples = getSampleValues(f, field)
                       const conf = f.confidence.find(c => c.field === field)
+                      const isRequired = REQUIRED_FIELDS.includes(field)
+                      const isOptionalUnmapped = !isRequired && !f.mapping[field]
                       return (
-                        <div key={field} className="space-y-1">
+                        <div key={field} className={`space-y-1 ${isOptionalUnmapped ? 'opacity-60' : ''}`}>
                           <div className="flex items-center gap-2">
                             <Label className="text-xs">{FIELD_LABELS[field]}</Label>
+                            {!isRequired && <span className="text-[9px] text-muted-foreground italic">(optionnel)</span>}
                             {conf && getConfidenceBadge(conf)}
                             {f.mapping[field] && <Check className="h-3 w-3 text-green-500 ml-auto" />}
                           </div>
@@ -921,25 +924,44 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                               {f.headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                          {samples.length > 0 && (
+                          {samples.length > 0 ? (
                             <p className="text-[10px] text-muted-foreground font-mono truncate">
                               Ex: {samples.join(', ')}
                             </p>
-                          )}
+                          ) : isOptionalUnmapped ? (
+                            <p className="text-[10px] text-muted-foreground/50 italic">Optionnel — sera ignore</p>
+                          ) : null}
                         </div>
                       )
                     })}
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Progress
-                      value={(Object.values(f.mapping).filter(Boolean).length / Object.keys(f.mapping).length) * 100}
-                      className="h-1.5 flex-1"
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {Object.values(f.mapping).filter(Boolean).length}/{Object.keys(f.mapping).length} champs
-                    </span>
-                  </div>
+                  {(() => {
+                    const reqMapped = REQUIRED_FIELDS.filter(fld => f.mapping[fld]).length
+                    const reqTotal = REQUIRED_FIELDS.length
+                    const optFields = ALL_FIELDS.filter(fld => !REQUIRED_FIELDS.includes(fld))
+                    const optMapped = optFields.filter(fld => f.mapping[fld]).length
+                    const optTotal = optFields.length
+                    const allReqDone = reqMapped === reqTotal
+                    return (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <Progress
+                            value={allReqDone ? 100 : (reqMapped / reqTotal) * 100}
+                            className={`h-1.5 flex-1 ${allReqDone ? '[&>div]:bg-green-500' : ''}`}
+                          />
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            Requis : {reqMapped}/{reqTotal} {allReqDone ? '✓' : ''} · Optionnels : {optMapped}/{optTotal}
+                          </span>
+                        </div>
+                        {allReqDone && (
+                          <p className="text-[11px] text-green-600 dark:text-green-400 font-medium">
+                            Tous les champs obligatoires sont mappes — vous pouvez continuer.
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {/* Unmapped columns */}
                   {(() => {
