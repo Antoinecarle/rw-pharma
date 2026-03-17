@@ -1,10 +1,12 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { Toaster } from '@/components/ui/sonner'
 import Layout from '@/components/Layout'
+import { supabase } from '@/lib/supabase'
+import { toast } from 'sonner'
 
 // Lazy-loaded pages — split into separate chunks
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
@@ -28,13 +30,33 @@ const PortalStockPage = lazy(() => import('@/pages/portal/PortalStockPage'))
 const PortalDocumentsPage = lazy(() => import('@/pages/portal/PortalDocumentsPage'))
 const AcceptInvitationPage = lazy(() => import('@/pages/portal/AcceptInvitationPage'))
 
+// Handle auth errors globally — refresh session instead of showing blank pages
+function handleGlobalError(error: unknown) {
+  const msg = (error as { message?: string })?.message ?? ''
+  const code = (error as { code?: string })?.code ?? ''
+  if (msg.includes('JWT') || msg.includes('token') || code === 'PGRST301' || code === '401') {
+    supabase.auth.refreshSession().then(({ error: refreshErr }) => {
+      if (refreshErr) {
+        toast.error('Session expirée, reconnexion nécessaire')
+        supabase.auth.signOut({ scope: 'local' })
+      } else {
+        queryClient.invalidateQueries()
+      }
+    })
+  }
+}
+
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: handleGlobalError }),
+  mutationCache: new MutationCache({ onError: handleGlobalError }),
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 2,
+      gcTime: 1000 * 60 * 10,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
-      retry: 1,
+      refetchOnMount: true,
+      retry: 2,
     },
   },
 })

@@ -54,12 +54,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Use ONLY onAuthStateChange — handles INITIAL_SESSION event
     // This avoids the race condition between getSession() and the listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // TOKEN_REFRESHED: session is still valid, just skip re-resolution
+      if (event === 'TOKEN_REFRESHED') {
+        setSession(session)
+        return
+      }
+
       setSession(session)
       setUser(session?.user ?? null)
 
       if (session?.user) {
-        // Only block routing during initial auth resolution, not on token refresh
+        // Only block routing during initial auth resolution
         if (!initialDone) {
           setLoading(true)
         }
