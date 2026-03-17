@@ -13,7 +13,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, User, X, Keyboard, RotateCcw, Hand } from 'lucide-react'
+import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, User, X, Keyboard, RotateCcw, Hand, SkipForward } from 'lucide-react'
 import { toast } from 'sonner'
 import SkippedItemsReviewModal, {
   type SkippedItem, type ResolvedItem,
@@ -1292,7 +1292,29 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       )}
 
       {/* Next step */}
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-3">
+        {/* Skip warning — shown only when no orders and no active import */}
+        {!(allDone || (existingOrders != null && existingOrders > 0)) && !hasActiveImport && (
+          <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <div className="space-y-1 text-sm">
+                <p className="font-medium text-amber-800">Passer sans importer les commandes ?</p>
+                <ul className="text-amber-700 list-disc pl-4 space-y-0.5">
+                  <li>La revue commandes (etape 3) sera vide</li>
+                  <li>L'attribution macro (etape 4) n'aura aucune demande a traiter</li>
+                  <li>Aucune allocation ne pourra etre generee sans commandes</li>
+                  <li>Vous pourrez revenir importer les commandes plus tard</li>
+                </ul>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={onNext} className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-100">
+                <SkipForward className="h-4 w-4" /> Passer quand meme
+              </Button>
+            </div>
+          </div>
+        )}
         {(allDone || (existingOrders != null && existingOrders > 0)) && !hasActiveImport && (
           <Button onClick={onNext} className="gap-2">
             Passer a l'etape suivante <ArrowRight className="h-4 w-4" />

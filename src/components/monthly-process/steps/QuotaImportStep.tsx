@@ -13,7 +13,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X, RotateCcw, Hand } from 'lucide-react'
+import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, Warehouse, X, RotateCcw, Hand, SkipForward } from 'lucide-react'
 import { toast } from 'sonner'
 import ExampleFilesLoader from '@/components/monthly-process/ExampleFilesLoader'
 import type { MonthlyProcess, Wholesaler } from '@/types/database'
@@ -1103,7 +1103,28 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       )}
 
       {/* Next step */}
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-3">
+        {/* Skip warning — shown only when no quotas and no active import */}
+        {!(allDone || (existingQuotas != null && existingQuotas > 0)) && !hasActiveImport && (
+          <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <div className="space-y-1 text-sm">
+                <p className="font-medium text-amber-800">Passer sans importer les disponibilites ?</p>
+                <ul className="text-amber-700 list-disc pl-4 space-y-0.5">
+                  <li>L'attribution macro (etape 4) ne pourra pas attribuer de produits aux grossistes</li>
+                  <li>Les exports grossistes (etape 5) seront vides</li>
+                  <li>Vous pourrez revenir importer les dispos plus tard</li>
+                </ul>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={onNext} className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-100">
+                <SkipForward className="h-4 w-4" /> Passer quand meme
+              </Button>
+            </div>
+          </div>
+        )}
         {(allDone || (existingQuotas != null && existingQuotas > 0)) && !hasActiveImport && (
           <Button onClick={onNext} className="gap-2">
             Passer aux commandes <ArrowRight className="h-4 w-4" />
