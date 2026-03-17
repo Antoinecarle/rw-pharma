@@ -1,7 +1,7 @@
 import { lazy, Suspense, Component, useEffect, useState as useReactState } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
-import { QueryClient, QueryClientProvider, QueryCache, MutationCache, keepPreviousData, useQueryClient } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache, useQueryClient } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { Toaster } from '@/components/ui/sonner'
@@ -54,10 +54,8 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 1000 * 60 * 5,
       gcTime: 1000 * 60 * 30,
-      placeholderData: keepPreviousData,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
-      refetchOnMount: true,
       retry: 2,
     },
   },
