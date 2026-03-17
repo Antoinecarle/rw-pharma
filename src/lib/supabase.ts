@@ -20,3 +20,35 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     }) as any,
   },
 })
+
+// ── Visibility-based session guard ──────────────────────────────
+// When the tab regains focus, ensure the Supabase session is still
+// valid BEFORE any React Query refetch fires.
+// Listeners can register via onSessionReady() to know when it's safe.
+let sessionReadyCallbacks: Array<() => void> = []
+export function onSessionReady(cb: () => void) {
+  sessionReadyCallbacks.push(cb)
+  return () => { sessionReadyCallbacks = sessionReadyCallbacks.filter(c => c !== cb) }
+}
+
+let refreshing = false
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || refreshing) return
+  refreshing = true
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      // Check if access token is close to expiry (< 60s remaining)
+      const exp = session.expires_at ?? 0
+      const nowSec = Math.floor(Date.now() / 1000)
+      if (exp - nowSec < 60) {
+        await supabase.auth.refreshSession()
+      }
+    }
+  } catch {
+    // Ignore — auth handler will deal with failures
+  } finally {
+    refreshing = false
+    sessionReadyCallbacks.forEach(cb => cb())
+  }
+})

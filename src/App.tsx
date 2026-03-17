@@ -6,7 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { Toaster } from '@/components/ui/sonner'
 import Layout from '@/components/Layout'
-import { supabase } from '@/lib/supabase'
+import { supabase, onSessionReady } from '@/lib/supabase'
 import { toast } from 'sonner'
 
 // Lazy-loaded pages — split into separate chunks
@@ -55,12 +55,19 @@ const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5,
       gcTime: 1000 * 60 * 30,
       placeholderData: keepPreviousData,
-      refetchOnWindowFocus: true,
+      // We handle window focus ourselves via onSessionReady (supabase.ts)
+      // to ensure session is valid BEFORE queries refetch
+      refetchOnWindowFocus: false,
       refetchOnReconnect: true,
       refetchOnMount: true,
       retry: 2,
     },
   },
+})
+
+// When tab regains focus AND session is confirmed valid → invalidate stale queries
+onSessionReady(() => {
+  queryClient.invalidateQueries()
 })
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
