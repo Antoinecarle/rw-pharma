@@ -17,7 +17,7 @@ import GaugeChart from '@/components/ui/gauge-chart'
 import {
   ArrowRight, ArrowLeft, Zap, Users, Package, Warehouse,
   AlertTriangle, Check, Pencil, X, RotateCcw, BarChart3, TrendingUp,
-  AlertCircle, Info, Loader2, History, Plus,
+  AlertCircle, Info, Loader2, History, Plus, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { MonthlyProcess } from '@/types/database'
@@ -87,6 +87,8 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
   const [manualEditingCell, setManualEditingCell] = useState<{ productId: string; wholesalerId: string } | null>(null)
   const [showManualHistory, setShowManualHistory] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [expandOverQuota, setExpandOverQuota] = useState(false)
+  const [expandNoQuota, setExpandNoQuota] = useState(false)
 
   // Are we in manual-per-client mode? (client selected + not locked)
   const isManualMode = !!selectedCustomerId && !isProcessLocked
@@ -782,7 +784,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                 {overQuotaCells.length} depassement{overQuotaCells.length > 1 ? 's' : ''} de quota
               </p>
               <div className="flex flex-wrap gap-1.5 mt-1">
-                {overQuotaCells.slice(0, 5).map(c => {
+                {(expandOverQuota ? overQuotaCells : overQuotaCells.slice(0, 5)).map(c => {
                   const ws = wholesalerColumns.find(w => w.id === c.wholesalerId)
                   return (
                     <Badge key={`${c.productId}-${c.wholesalerId}`} variant="outline" className="text-xs border-red-200 text-red-700">
@@ -791,7 +793,10 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                   )
                 })}
                 {overQuotaCells.length > 5 && (
-                  <Badge variant="outline" className="text-xs border-red-200 text-red-700">+{overQuotaCells.length - 5} autres</Badge>
+                  <button type="button" onClick={() => setExpandOverQuota(!expandOverQuota)}
+                    className="inline-flex items-center gap-0.5 text-xs text-red-600 hover:text-red-800 font-medium transition-colors">
+                    {expandOverQuota ? <><ChevronUp className="h-3 w-3" /> Reduire</> : <><ChevronDown className="h-3 w-3" /> +{overQuotaCells.length - 5} autres</>}
+                  </button>
                 )}
               </div>
             </div>
@@ -850,13 +855,16 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                 Ces produits ne peuvent pas etre attribues. Verifiez les quotas a l'etape 1.
               </p>
               <div className="flex flex-wrap gap-1 mt-1.5">
-                {productsWithoutQuota.slice(0, 10).map(d => (
+                {(expandNoQuota ? productsWithoutQuota : productsWithoutQuota.slice(0, 10)).map(d => (
                   <Badge key={d.productId} variant="outline" className="text-[10px] border-amber-200 text-amber-700">
                     {d.cip13} ({d.totalQuantity} u.)
                   </Badge>
                 ))}
                 {productsWithoutQuota.length > 10 && (
-                  <Badge variant="outline" className="text-[10px] border-amber-200 text-amber-700">+{productsWithoutQuota.length - 10}</Badge>
+                  <button type="button" onClick={() => setExpandNoQuota(!expandNoQuota)}
+                    className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 hover:text-amber-800 font-medium transition-colors">
+                    {expandNoQuota ? <><ChevronUp className="h-3 w-3" /> Reduire</> : <><ChevronDown className="h-3 w-3" /> +{productsWithoutQuota.length - 10} autres</>}
+                  </button>
                 )}
               </div>
             </div>

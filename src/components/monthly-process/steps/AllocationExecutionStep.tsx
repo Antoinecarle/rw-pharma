@@ -21,11 +21,58 @@ import {
   Cpu, ArrowRight, CheckCircle, AlertTriangle,
   BarChart3, Users, Zap, Package, Boxes,
   Pencil, Check, X, RotateCcw,
-  Lock, Search,
+  Lock, Search, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createNotification } from '@/lib/notifications'
 import type { MonthlyProcess } from '@/types/database'
+
+// ── Reusable expand/collapse helpers ──────────────────────────────
+
+function ExpandableBadgeList({ items, limit }: { items: { key: string; label: string; detail: string }[]; limit: number }) {
+  const [expanded, setExpanded] = useState(false)
+  const displayed = expanded ? items : items.slice(0, limit)
+  const hasMore = items.length > limit
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {displayed.map(d => (
+        <Badge key={d.key} variant="outline" className="text-xs gap-1">
+          <span className="font-mono">{d.label}</span>
+          <span className="text-muted-foreground">{d.detail}</span>
+        </Badge>
+      ))}
+      {hasMore && (
+        <button type="button" onClick={() => setExpanded(!expanded)}
+          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground font-medium transition-colors">
+          {expanded ? <><ChevronUp className="h-3 w-3" /> Reduire</> : <><ChevronDown className="h-3 w-3" /> +{items.length - limit} autres</>}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function ExpandableLogList({ items, limit, className }: { items: { productCip13: string; productName: string; customerName: string; requested: number }[]; limit: number; className?: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const displayed = expanded ? items : items.slice(0, limit)
+  const hasMore = items.length > limit
+  return (
+    <ul className={className}>
+      {displayed.map((l, i) => (
+        <li key={i}>
+          <span className="font-mono">{l.productCip13}</span> — {l.productName} ({l.customerName}, {l.requested} u.)
+        </li>
+      ))}
+      {hasMore && (
+        <li>
+          <button type="button" onClick={() => setExpanded(!expanded)}
+            className="inline-flex items-center gap-0.5 text-xs text-amber-600 hover:text-amber-800 font-medium transition-colors">
+            {expanded ? <><ChevronUp className="h-3 w-3" /> Reduire</> : <><ChevronDown className="h-3 w-3" /> +{items.length - limit} autres</>}
+          </button>
+        </li>
+      )}
+    </ul>
+  )
+}
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -1096,17 +1143,10 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                             {noLotProducts.length} produit{noLotProducts.length > 1 ? 's' : ''} sans lot — allocation par disponibilites uniquement
                           </h4>
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {noLotProducts.slice(0, 20).map(d => (
-                            <Badge key={d.productId} variant="outline" className="text-xs gap-1">
-                              <span className="font-mono">{d.cip13}</span>
-                              <span className="text-muted-foreground">{d.totalQuantity} u.</span>
-                            </Badge>
-                          ))}
-                          {noLotProducts.length > 20 && (
-                            <Badge variant="outline" className="text-xs">+{noLotProducts.length - 20} autres</Badge>
-                          )}
-                        </div>
+                        <ExpandableBadgeList
+                          items={noLotProducts.map(d => ({ key: d.productId, label: d.cip13, detail: `${d.totalQuantity} u.` }))}
+                          limit={20}
+                        />
                       </CardContent>
                     </Card>
                   )
@@ -1200,16 +1240,11 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 <Card className="border-amber-200/60 bg-amber-50/30 max-w-lg mx-auto">
                   <CardContent className="p-4 text-left">
                     <p className="text-sm font-medium text-amber-800 mb-2">{noMatchLogs.length} commande(s) sans correspondance :</p>
-                    <ul className="text-xs text-amber-700 space-y-1 max-h-40 overflow-y-auto">
-                      {noMatchLogs.slice(0, 20).map((l, i) => (
-                        <li key={i}>
-                          <span className="font-mono">{l.productCip13}</span> — {l.productName} ({l.customerName}, {l.requested} u.)
-                        </li>
-                      ))}
-                      {noMatchLogs.length > 20 && (
-                        <li className="text-amber-500">... et {noMatchLogs.length - 20} autre(s)</li>
-                      )}
-                    </ul>
+                    <ExpandableLogList
+                      items={noMatchLogs}
+                      limit={20}
+                      className="text-xs text-amber-700 space-y-1 max-h-40 overflow-y-auto"
+                    />
                   </CardContent>
                 </Card>
               </>
@@ -1233,16 +1268,11 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                           <p className="text-sm font-medium text-amber-800">
                             {noMatchLogs.length} commande(s) non allouee(s) — aucun stock/quota correspondant
                           </p>
-                          <ul className="text-xs text-amber-700 mt-1 space-y-0.5 max-h-32 overflow-y-auto">
-                            {noMatchLogs.slice(0, 10).map((l, i) => (
-                              <li key={i}>
-                                <span className="font-mono">{l.productCip13}</span> — {l.productName} ({l.customerName}, {l.requested} u.)
-                              </li>
-                            ))}
-                            {noMatchLogs.length > 10 && (
-                              <li className="text-amber-500">... et {noMatchLogs.length - 10} autre(s)</li>
-                            )}
-                          </ul>
+                          <ExpandableLogList
+                            items={noMatchLogs}
+                            limit={10}
+                            className="text-xs text-amber-700 mt-1 space-y-0.5 max-h-32 overflow-y-auto"
+                          />
                         </div>
                       </div>
                     </CardContent>

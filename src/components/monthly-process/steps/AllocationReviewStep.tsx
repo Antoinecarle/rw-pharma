@@ -18,7 +18,7 @@ import {
 import AnimatedCounter from '@/components/ui/animated-counter'
 import GaugeChart from '@/components/ui/gauge-chart'
 import HorizontalBarChart from '@/components/ui/horizontal-bar'
-import { CheckCircle, ArrowRight, BarChart3, Truck, AlertTriangle, Pencil, Check, X, Users, Boxes, Calendar } from 'lucide-react'
+import { CheckCircle, ArrowRight, BarChart3, Truck, AlertTriangle, Pencil, Check, X, Users, Boxes, Calendar, Search, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { useState, useMemo } from 'react'
 import FinalAllocationConfirmationModal from '@/components/allocations/FinalAllocationConfirmationModal'
@@ -54,6 +54,8 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [editState, setEditState] = useState<EditState | null>(null)
   const [pendingEdits, setPendingEdits] = useState(0)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showAllUnderAllocated, setShowAllUnderAllocated] = useState(false)
 
   // Anti-regression: prevent edits on completed/finalized processes
   const isProcessLocked = process.status === 'completed' || process.status === 'finalizing'
@@ -236,8 +238,9 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
     return [...productCoverage.entries()]
       .filter(([, p]) => p.req > 0 && (p.alloc / p.req) < 0.5)
       .sort((a, b) => (a[1].alloc / a[1].req) - (b[1].alloc / b[1].req))
-      .slice(0, 5)
   }, [productCoverage])
+
+  const displayedUnderAllocated = showAllUnderAllocated ? underAllocated : underAllocated.slice(0, 5)
 
   const lotAllocCount = allocations?.filter(a => (a.metadata as Record<string, unknown>)?.lot_number).length ?? 0
   const proposedCount = allocations?.filter((a) => a.status === 'proposed').length ?? 0
@@ -301,16 +304,31 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
 
   const filteredAllocations = useMemo(() => {
     if (!allocations) return []
+    let result: typeof allocations
     switch (viewMode) {
       case 'by_lot':
         return [] // Handled separately by lotGroups
       case 'partial':
-        return allocations.filter(a => a.allocated_quantity < a.requested_quantity)
+        result = allocations.filter(a => a.allocated_quantity < a.requested_quantity)
+        break
       case 'all':
       default:
-        return allocations
+        result = allocations
     }
-  }, [allocations, viewMode])
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter(a => {
+        const cust = a.customer as unknown as { code: string; name: string } | undefined
+        const prod = a.product as unknown as { cip13: string; name: string } | undefined
+        const ws = a.wholesaler as unknown as { code: string; name: string } | undefined
+        return (cust?.code?.toLowerCase().includes(q) || cust?.name?.toLowerCase().includes(q)
+          || prod?.cip13?.includes(q) || prod?.name?.toLowerCase().includes(q)
+          || ws?.code?.toLowerCase().includes(q) || ws?.name?.toLowerCase().includes(q))
+      })
+    }
+    return result
+  }, [allocations, viewMode, searchQuery])
 
   const startEdit = (allocId: string, field: 'quantity' | 'wholesaler', currentValue: string) => {
     if (isProcessLocked) return
@@ -471,7 +489,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
                 <p className="text-sm font-semibold">{underAllocated.length} produits avec couverture &lt; 50%</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {underAllocated.map(([id, p]) => {
+                {displayedUnderAllocated.map(([id, p]) => {
                   const rate = p.req > 0 ? Math.round((p.alloc / p.req) * 100) : 0
                   return (
                     <Tooltip key={id}>
@@ -488,6 +506,16 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
                     </Tooltip>
                   )
                 })}
+                {underAllocated.length > 5 && (
+                  <button type="button" onClick={() => setShowAllUnderAllocated(!showAllUnderAllocated)}
+                    className="inline-flex items-center gap-0.5 text-xs text-amber-600 hover:text-amber-800 font-medium transition-colors">
+                    {showAllUnderAllocated ? (
+                      <><ChevronUp className="h-3 w-3" /> Reduire</>
+                    ) : (
+                      <><ChevronDown className="h-3 w-3" /> +{underAllocated.length - 5} autres</>
+                    )}
+                  </button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -556,11 +584,22 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
             </button>
           ))}
         </div>
-        {!isProcessLocked && (
-          <span className="text-xs text-muted-foreground sm:ml-auto flex items-center gap-1.5">
-            <Pencil className="h-3 w-3" /> Cliquez sur une cellule pour modifier
-          </span>
-        )}
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <div className="relative">
+            <Search className="h-3 w-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Rechercher client, produit, grossiste..."
+              className="h-7 text-xs pl-7 w-[220px]"
+            />
+          </div>
+          {!isProcessLocked && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1.5 shrink-0">
+              <Pencil className="h-3 w-3" /> Cliquez pour modifier
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Consolidated lot view */}
