@@ -92,7 +92,7 @@ export default function DashboardPage() {
   // All processes
   const { data: allProcesses } = useQuery({
     queryKey: ['monthly-processes', 'dashboard-all'],
-    staleTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 5,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('monthly_processes')
@@ -120,7 +120,7 @@ export default function DashboardPage() {
   // All orders — for volume d'affaires (qty * unit_price)
   const { data: allOrders, isLoading: loadingOrders } = useQuery({
     queryKey: ['orders', 'dashboard-financials'],
-    staleTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 5,
     queryFn: async () => {
       return fetchAllPaginated<{ monthly_process_id: string; quantity: number; unit_price: number | null }>(() =>
         supabase.from('orders').select('monthly_process_id, quantity, unit_price')
@@ -131,7 +131,7 @@ export default function DashboardPage() {
   // All allocations — for CA (allocated_qty * prix_applique) and marge (- pfht)
   const { data: allAllocations, isLoading: loadingAllocs } = useQuery({
     queryKey: ['allocations', 'dashboard-financials'],
-    staleTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 5,
     queryFn: async () => {
       return fetchAllPaginated<{ monthly_process_id: string; customer_id: string; product_id: string; allocated_quantity: number; prix_applique: number | null; product: { pfht: number | null } | null }>(() =>
         supabase.from('allocations').select('monthly_process_id, customer_id, product_id, allocated_quantity, prix_applique, product:products(pfht)')

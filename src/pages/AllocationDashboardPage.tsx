@@ -60,7 +60,7 @@ export default function AllocationDashboardPage() {
   // Fetch all processes
   const { data: processes } = useQuery({
     queryKey: ['monthly-processes', 'all-dashboard'],
-    staleTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 5,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('monthly_processes')
@@ -111,7 +111,7 @@ export default function AllocationDashboardPage() {
 
   const { data: allocations } = useQuery({
     queryKey: ['allocations', 'dashboard', activeProcess?.id],
-    staleTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 5,
     queryFn: async () => {
       if (!activeProcess) return []
       const all: AllocationRow[] = []
@@ -136,8 +136,8 @@ export default function AllocationDashboardPage() {
 
   // Fetch quota data (paginated)
   const { data: quotas } = useQuery({
-    queryKey: ['quotas', 'dashboard'],
-    staleTime: 1000 * 60 * 10,
+    queryKey: ['quotas', 'dashboard', activeProcess?.id],
+    staleTime: 1000 * 60 * 5,
     queryFn: async () => {
       const all: any[] = []
       let from = 0
@@ -159,8 +159,8 @@ export default function AllocationDashboardPage() {
 
   // Fetch stock (paginated)
   const { data: stock } = useQuery({
-    queryKey: ['collected_stock', 'dashboard'],
-    staleTime: 1000 * 60 * 10,
+    queryKey: ['collected_stock', 'dashboard', activeProcess?.id],
+    staleTime: 1000 * 60 * 5,
     queryFn: async () => {
       const all: any[] = []
       let from = 0
