@@ -228,17 +228,21 @@ function AppRoutes() {
 // ── DEBUG PANEL (temporary) ────────────────────────────────────
 function DebugPanel() {
   const qc = useQueryClient()
-  const [info, setInfo] = useReactState('')
+  const [lines, setLines] = useReactState<string[]>([])
 
   useEffect(() => {
     const update = () => {
       const cache = qc.getQueryCache().getAll()
-      const total = cache.length
-      const fetching = cache.filter(q => q.state.fetchStatus === 'fetching').length
-      const error = cache.filter(q => q.state.status === 'error').length
-      const pending = cache.filter(q => q.state.status === 'pending').length
-      const success = cache.filter(q => q.state.status === 'success').length
-      setInfo(`Q:${total} ok:${success} pend:${pending} fetch:${fetching} err:${error}`)
+      const rows = cache.map(q => {
+        const key = (q.queryKey as string[]).slice(0, 2).join('/')
+        const d = q.state.data
+        const len = Array.isArray(d) ? d.length : d ? 1 : 0
+        const st = q.state.status[0] // s=success p=pending e=error
+        const fs = q.state.fetchStatus === 'fetching' ? '⟳' : ''
+        const ph = q.isStale() ? '○' : '●'
+        return `${ph}${fs}${st} ${key}(${len})`
+      })
+      setLines(rows)
     }
     update()
     const unsub = qc.getQueryCache().subscribe(update)
@@ -248,10 +252,11 @@ function DebugPanel() {
   return (
     <div style={{
       position: 'fixed', bottom: 8, right: 8, zIndex: 99999,
-      background: '#1a1a2e', color: '#0f0', fontSize: 11, fontFamily: 'monospace',
-      padding: '4px 8px', borderRadius: 6, opacity: 0.85, pointerEvents: 'none',
+      background: '#1a1a2e', color: '#0f0', fontSize: 10, fontFamily: 'monospace',
+      padding: '6px 10px', borderRadius: 6, opacity: 0.9, pointerEvents: 'none',
+      maxHeight: 220, overflow: 'hidden', lineHeight: 1.5,
     }}>
-      {info}
+      {lines.map((l, i) => <div key={i}>{l}</div>)}
     </div>
   )
 }
