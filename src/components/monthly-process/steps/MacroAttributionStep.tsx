@@ -243,6 +243,14 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
     return summary
   }, [quotas, macroMap])
 
+  // Effective attributed qty per product × wholesaler = max(macro, manual total)
+  // Manual attributions may exist independently of macro, so we take the max to avoid double-counting
+  const getEffectiveQty = useCallback((productId: string, wholesalerId: string) => {
+    const macroQty = macroMap[productId]?.[wholesalerId] ?? 0
+    const manualQty = getTotalManual(productId, wholesalerId)
+    return Math.max(macroQty, manualQty)
+  }, [macroMap, getTotalManual])
+
   // Products with demand but no quota
   const productsWithoutQuota = useMemo(() => {
     return demands.filter(d => {
@@ -367,11 +375,11 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
 
   // Stats
   const totalDemand = demands.reduce((s, d) => s + d.totalQuantity, 0)
-  const totalAttributed = Object.values(macroMap).reduce((s, ws) =>
-    s + Object.values(ws).reduce((s2, q) => s2 + q, 0), 0)
+  const totalAttributed = demands.reduce((s, d) =>
+    s + wholesalerColumns.reduce((sum, ws) => sum + getEffectiveQty(d.productId, ws.id), 0), 0)
   const coverageRate = totalDemand > 0 ? (totalAttributed / totalDemand) * 100 : 0
   const productsFullyCovered = demands.filter(d => {
-    const attributed = Object.values(macroMap[d.productId] ?? {}).reduce((s, q) => s + q, 0)
+    const attributed = wholesalerColumns.reduce((sum, ws) => sum + getEffectiveQty(d.productId, ws.id), 0)
     return attributed >= d.totalQuantity
   }).length
 
@@ -412,7 +420,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
   const cancelEdit = () => setEditingCell(null)
 
   const isLoading = ordersLoading || quotasLoading || manualLoading
-  const hasAttribution = Object.keys(macroMap).length > 0
+  const hasAttribution = Object.keys(macroMap).length > 0 || manualAttrs.length > 0
 
   if (isLoading) {
     return (
@@ -789,7 +797,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
             <TableBody>
               {filteredDemands.map(demand => {
                 const supply = supplyByProduct.get(demand.productId) ?? []
-                const attributed = Object.values(macroMap[demand.productId] ?? {}).reduce((s, q) => s + q, 0)
+                const attributed = wholesalerColumns.reduce((sum, ws) => sum + getEffectiveQty(demand.productId, ws.id), 0)
                 const remaining = demand.totalQuantity - attributed
                 const isFull = remaining <= 0
                 const pctCovered = demand.totalQuantity > 0 ? Math.min(100, Math.round((attributed / demand.totalQuantity) * 100)) : 0
