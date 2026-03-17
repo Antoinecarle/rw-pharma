@@ -1105,14 +1105,14 @@ describe('runAllocation()', () => {
     })
   })
 
-  // ── Test 16: Fallback allocation ──────────────────────────────────
+  // ── Test 16: No-match skips allocation (no blind fallback) ────────
 
-  describe('fallback allocation', () => {
-    it('falls back to even distribution when no quota or stock is available', async () => {
+  describe('no-match behaviour', () => {
+    it('does NOT create allocations when no stock or quota exists for a product', async () => {
       const orders = [makeOrder('ord-001', CUST_ORI, PROD_DOLIPRANE, 100,
         10.0, makeCustomerBase(CUST_ORI, 'ORI', 'Orifarm'))]
 
-      // No quota, no stock — should use fallback
+      // No quota, no stock — should NOT allocate
       setupSupabaseMock({
         orders,
         quotas: [],
@@ -1125,17 +1125,18 @@ describe('runAllocation()', () => {
         PROCESS_ID, MONTH, YEAR, 'balanced', new Set(), true
       )
 
-      expect(allocations.length).toBeGreaterThan(0)
-      const totalAlloc = allocations.reduce((s, a) => s + a.allocated_quantity, 0)
-      expect(totalAlloc).toBe(100)
+      expect(allocations.length).toBe(0)
 
-      const fallbackLogs = logs.filter(l => l.reason === 'fallback' || l.reason === 'fallback_single')
-      expect(fallbackLogs.length).toBeGreaterThan(0)
+      const noMatchLogs = logs.filter(l => l.reason === 'no_match')
+      expect(noMatchLogs.length).toBe(1)
+      expect(noMatchLogs[0].requested).toBe(100)
     })
 
-    it('splits fallback evenly across wholesalers in balanced mode', async () => {
-      const orders = [makeOrder('ord-001', CUST_ORI, PROD_DOLIPRANE, 100,
-        10.0, makeCustomerBase(CUST_ORI, 'ORI', 'Orifarm'))]
+    it('logs no_match for each unmatched order in balanced mode', async () => {
+      const orders = [
+        makeOrder('ord-001', CUST_ORI, PROD_DOLIPRANE, 100, 10.0, makeCustomerBase(CUST_ORI, 'ORI', 'Orifarm')),
+        makeOrder('ord-002', CUST_ORI, PROD_EFFERALGAN, 50, 5.0, makeCustomerBase(CUST_ORI, 'ORI', 'Orifarm')),
+      ]
 
       setupSupabaseMock({
         orders,
@@ -1145,16 +1146,13 @@ describe('runAllocation()', () => {
         products: makeProducts(),
       })
 
-      const { logs } = await runAllocation(
+      const { allocations, logs } = await runAllocation(
         PROCESS_ID, MONTH, YEAR, 'balanced', new Set(), true
       )
 
-      const fallbackLogs = logs.filter(l => l.reason === 'fallback')
-      // In balanced mode with 2 wholesalers, should split between both
-      if (fallbackLogs.length === 2) {
-        const totalFallback = fallbackLogs.reduce((s, l) => s + l.allocated, 0)
-        expect(totalFallback).toBe(100)
-      }
+      expect(allocations.length).toBe(0)
+      const noMatchLogs = logs.filter(l => l.reason === 'no_match')
+      expect(noMatchLogs.length).toBe(2)
     })
   })
 

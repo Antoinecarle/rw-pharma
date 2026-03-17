@@ -29,6 +29,7 @@ const REASON_CONFIG: Record<AllocationReason, { label: string; color: string; ic
   max_pct_cap:     { label: 'Limite % max',     color: 'text-red-700',     icon: AlertTriangle,  bg: 'bg-red-50 border-red-200' },
   ansm_blocked:    { label: 'Bloque ANSM',     color: 'text-rose-700',    icon: AlertTriangle,  bg: 'bg-rose-50 border-rose-200' },
   min_lot_reject:  { label: 'Lot min refuse', color: 'text-pink-700',    icon: AlertTriangle,  bg: 'bg-pink-50 border-pink-200' },
+  no_match:        { label: 'Aucun match',    color: 'text-gray-700',    icon: AlertTriangle,  bg: 'bg-gray-50 border-gray-300' },
 }
 
 const SPEED_OPTIONS = [

@@ -1178,22 +1178,84 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       )}
 
       {/* ─── Done phase ─── */}
-      {phase === 'done' && (
-        <div className="py-8 text-center space-y-4">
-          <div className="h-16 w-16 rounded-2xl bg-green-100 dark:bg-green-950 flex items-center justify-center mx-auto">
-            <CheckCircle className="h-8 w-8 text-green-600" />
+      {phase === 'done' && (() => {
+        const noMatchLogs = allocationLogs.filter(l => l.reason === 'no_match')
+        const totalAllocated = allocateMut.data?.count ?? 0
+        const allUnmatched = totalAllocated === 0 && noMatchLogs.length > 0
+
+        return (
+          <div className="py-8 text-center space-y-4">
+            {allUnmatched ? (
+              <>
+                <div className="h-16 w-16 rounded-2xl bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto">
+                  <AlertTriangle className="h-8 w-8 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-xl font-semibold">Aucune allocation possible</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Les produits commandes ne correspondent a aucun stock ni quota disponible.
+                    <br />Verifiez que les fichiers de stock et de commande/nego contiennent les memes CIP13.
+                  </p>
+                </div>
+                <Card className="border-amber-200/60 bg-amber-50/30 max-w-lg mx-auto">
+                  <CardContent className="p-4 text-left">
+                    <p className="text-sm font-medium text-amber-800 mb-2">{noMatchLogs.length} commande(s) sans correspondance :</p>
+                    <ul className="text-xs text-amber-700 space-y-1 max-h-40 overflow-y-auto">
+                      {noMatchLogs.slice(0, 20).map((l, i) => (
+                        <li key={i}>
+                          <span className="font-mono">{l.productCip13}</span> — {l.productName} ({l.customerName}, {l.requested} u.)
+                        </li>
+                      ))}
+                      {noMatchLogs.length > 20 && (
+                        <li className="text-amber-500">... et {noMatchLogs.length - 20} autre(s)</li>
+                      )}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <>
+                <div className="h-16 w-16 rounded-2xl bg-green-100 dark:bg-green-950 flex items-center justify-center mx-auto">
+                  <CheckCircle className="h-8 w-8 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-xl font-semibold">Allocation terminee</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {totalAllocated} allocations generees avec la strategie "{STRATEGIES.find(s => s.value === strategy)?.label ?? strategy}".
+                  </p>
+                </div>
+                {noMatchLogs.length > 0 && (
+                  <Card className="border-amber-200/60 bg-amber-50/30 max-w-lg mx-auto">
+                    <CardContent className="p-4 text-left">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-amber-800">
+                            {noMatchLogs.length} commande(s) non allouee(s) — aucun stock/quota correspondant
+                          </p>
+                          <ul className="text-xs text-amber-700 mt-1 space-y-0.5 max-h-32 overflow-y-auto">
+                            {noMatchLogs.slice(0, 10).map((l, i) => (
+                              <li key={i}>
+                                <span className="font-mono">{l.productCip13}</span> — {l.productName} ({l.customerName}, {l.requested} u.)
+                              </li>
+                            ))}
+                            {noMatchLogs.length > 10 && (
+                              <li className="text-amber-500">... et {noMatchLogs.length - 10} autre(s)</li>
+                            )}
+                          </ul>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+            <Button onClick={onNext} size="lg" className="gap-2">
+              Voir les resultats <ArrowRight className="h-4 w-4" />
+            </Button>
           </div>
-          <div>
-            <p className="text-xl font-semibold">Allocation terminee</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {allocateMut.data?.count ?? 0} allocations generees avec la strategie "{STRATEGIES.find(s => s.value === strategy)?.label ?? strategy}".
-            </p>
-          </div>
-          <Button onClick={onNext} size="lg" className="gap-2">
-            Voir les resultats <ArrowRight className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

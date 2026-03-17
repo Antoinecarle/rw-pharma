@@ -136,6 +136,7 @@ export type AllocationReason =
   | 'quota_balanced'  // Quota split across multiple wholesalers
   | 'fallback'        // No quota/stock — even distribution
   | 'fallback_single' // No quota/stock — single wholesaler
+  | 'no_match'        // No stock AND no quota exist for this product — skipped
   | 'max_pct_cap'     // Quantity reduced by max_allocation_pct
   | 'ansm_blocked'    // Product blocked by ANSM — export forbidden
   | 'min_lot_reject'  // Quantity below client's minimum lot acceptable
@@ -957,68 +958,11 @@ export async function runAllocation(
         }
       }
 
-      // 3b: If still remaining and no quota covered it, distribute across wholesalers
+      // 3b: If still remaining and NO allocation was made at all → skip (no blind fallback)
       if (remainingToAllocate > 0 && allocations.filter(a => a.order_id === order.id).length === 0) {
-        // R3: Filter available wholesalers by open status
-        let fallbackWholesalers = availableWholesalers
-        if (v3Config?.enforce_open_wholesalers && customerWholesalerMap) {
-          fallbackWholesalers = fallbackWholesalers.filter(ws => isWholesalerOpenForCustomer(order.customer_id, ws.id, customerWholesalerMap))
-        }
-        if (fallbackWholesalers.length === 0) fallbackWholesalers = availableWholesalers // Safety: don't block entirely
-
-        if (strategy === 'balanced' && fallbackWholesalers.length > 1) {
-          const perWs = Math.ceil(remainingToAllocate / fallbackWholesalers.length)
-          for (const ws of fallbackWholesalers) {
-            if (remainingToAllocate <= 0) break
-            const qty = Math.min(perWs, remainingToAllocate)
-
-            allocations.push({
-              monthly_process_id: processId,
-              order_id: order.id,
-              customer_id: order.customer_id,
-              product_id: order.product_id,
-              wholesaler_id: ws.id,
-              stock_id: null,
-              requested_quantity: order.quantity,
-              allocated_quantity: qty,
-              prix_applique: order.unit_price ?? null,
-              debt_resolution_id: null,
-              status: 'proposed',
-              metadata: { strategy, priority_score: priorityScore, quota_used: false },
-            })
-
-            maxAllocTracker.record(order.customer_id, qty)
-            if (secondaryTracker) secondaryTracker.record(order.product_id, ws.id, qty)
-            remainingToAllocate -= qty
-
-            pushLog(order, ws.id, qty, remainingToAllocate, 'fallback',
-              `Aucun quota/stock — repartition egale ${qty} u.`)
-          }
-        } else {
-          const ws = fallbackWholesalers[0]
-          allocations.push({
-            monthly_process_id: processId,
-            order_id: order.id,
-            customer_id: order.customer_id,
-            product_id: order.product_id,
-            wholesaler_id: ws.id,
-            stock_id: null,
-            requested_quantity: order.quantity,
-            allocated_quantity: remainingToAllocate,
-            prix_applique: order.unit_price ?? null,
-            debt_resolution_id: null,
-            status: 'proposed',
-            metadata: { strategy, priority_score: priorityScore, quota_used: false },
-          })
-
-          maxAllocTracker.record(order.customer_id, remainingToAllocate)
-          if (secondaryTracker) secondaryTracker.record(order.product_id, ws.id, remainingToAllocate)
-
-          pushLog(order, ws.id, remainingToAllocate, 0, 'fallback_single',
-            `Aucun quota/stock — grossiste unique ${remainingToAllocate} u.`)
-
-          remainingToAllocate = 0
-        }
+        // No stock AND no quota exist for this product — do NOT create phantom allocations
+        pushLog(order, null, remainingToAllocate, remainingToAllocate, 'no_match',
+          `Aucun stock ni quota disponible pour ce produit — commande non allouee (${remainingToAllocate} u.)`)
       }
     }
   }
