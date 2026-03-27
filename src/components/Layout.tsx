@@ -35,18 +35,18 @@ import NotificationBell from '@/components/NotificationBell'
 const mainNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, description: 'Vue d\'ensemble' },
   { name: 'Allocations', href: '/monthly-processes', icon: CalendarRange, description: 'Processus mensuels' },
-  { name: 'Stock', href: '/stock', icon: Warehouse, description: 'Stock collecte par lot' },
-  { name: 'Metriques', href: '/allocation-dashboard', icon: BarChart3, description: 'Dashboard allocation' },
+  { name: 'Stock', href: '/stock', icon: Warehouse, description: 'Stock collecté par lot' },
+  { name: 'Métriques', href: '/allocation-dashboard', icon: BarChart3, description: 'Dashboard allocation' },
   { name: 'Dettes', href: '/debts', icon: Scale, description: 'Sous-allocations clients' },
-  { name: 'ANSM', href: '/ansm', icon: Shield, description: 'Produits interdits a l\'export' },
+  { name: 'ANSM', href: '/ansm', icon: Shield, description: 'Produits interdits à l\'export' },
   { name: 'Facturation', href: '/facturation', icon: Receipt, description: 'Factures commissions' },
 ]
 
 const referenceNavigation = [
   { name: 'Produits', href: '/products', icon: Pill, description: 'Catalogue pharmaceutique' },
-  { name: 'Grossistes', href: '/wholesalers', icon: Truck, description: 'Partenaires francais' },
-  { name: 'Clients', href: '/customers', icon: Users, description: 'Importateurs europeens' },
-  { name: 'Disponibilites', href: '/disponibilites', icon: ClipboardList, description: 'Disponibilites grossistes' },
+  { name: 'Grossistes', href: '/wholesalers', icon: Truck, description: 'Partenaires français' },
+  { name: 'Clients', href: '/customers', icon: Users, description: 'Importateurs européens' },
+  { name: 'Disponibilités', href: '/disponibilites', icon: ClipboardList, description: 'Disponibilités grossistes' },
 ]
 
 const navigation = [...mainNavigation, ...referenceNavigation]
@@ -127,7 +127,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         })}
 
         <p className="text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-5" style={{ color: 'var(--ivory-text-muted)', opacity: 0.6 }}>
-          Donnees de reference
+          Données de référence
         </p>
         {referenceNavigation.map((item) => {
           const isActive = location.pathname.startsWith(item.href)
@@ -163,7 +163,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <DropdownMenuContent align="start" className="w-52 rounded-xl">
             <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive text-[13px] rounded-lg">
               <LogOut className="h-3.5 w-3.5 mr-2" />
-              Se deconnecter
+              Se déconnecter
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

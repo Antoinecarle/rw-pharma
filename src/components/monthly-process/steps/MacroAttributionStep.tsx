@@ -58,8 +58,8 @@ type MacroMap = Record<string, Record<string, number>>
 type AutoStrategy = 'proportional' | 'top_first' | 'max_coverage'
 
 const AUTO_STRATEGIES: { value: AutoStrategy; label: string; description: string; icon: typeof Zap }[] = [
-  { value: 'proportional', label: 'Proportionnelle', description: 'Repartir au prorata des disponibilites', icon: BarChart3 },
-  { value: 'top_first', label: 'Top grossiste d\'abord', description: 'Remplir la plus grosse disponibilite en priorite', icon: TrendingUp },
+  { value: 'proportional', label: 'Proportionnelle', description: 'Répartir au prorata des disponibilités', icon: BarChart3 },
+  { value: 'top_first', label: 'Top grossiste d\'abord', description: 'Remplir la plus grosse disponibilité en priorité', icon: TrendingUp },
   { value: 'max_coverage', label: 'Max couverture', description: 'Couvrir un maximum de produits', icon: Zap },
 ]
 
@@ -371,7 +371,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
   const resetAttribution = () => {
     setMacroMap({})
     setManualEditsCount(0)
-    toast.info('Attribution reinitialise')
+    toast.info('Attribution réinitialisée')
   }
 
   // Save to process metadata
@@ -388,7 +388,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monthly-processes', process.id] })
-      toast.success('Attribution sauvegardee')
+      toast.success('Attribution sauvegardée')
       onNext()
     },
     onError: (err: Error) => toast.error(err.message),
@@ -429,7 +429,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
     const supply = supplyByProduct.get(editingCell.productId) ?? []
     const q = supply.find(s => s.wholesalerId === editingCell.wholesalerId)
     if (q && val > q.total) {
-      toast.warning(`Attention : ${val} depasse le quota de ${q.total} pour ${q.wholesalerCode}`)
+      toast.warning(`Attention : ${val} dépasse le quota de ${q.total} pour ${q.wholesalerCode}`)
     }
 
     setMacroMap(prev => {
@@ -455,7 +455,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Attribution Macro</h3>
+        <h3 className="text-lg font-semibold">Commande initiale</h3>
         <div className="space-y-3">
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
         </div>
@@ -467,8 +467,8 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
     return (
       <div className="space-y-5">
         <div>
-          <h3 className="text-lg font-semibold">Attribution Macro</h3>
-          <p className="text-sm text-muted-foreground mt-1">Aucune commande validee. Retournez a l'etape precedente.</p>
+          <h3 className="text-lg font-semibold">Commande initiale</h3>
+          <p className="text-sm text-muted-foreground mt-1">Aucune commande validée. Retournez à l'étape précédente.</p>
         </div>
         <div className="flex gap-3">
           {onBack && (
@@ -488,7 +488,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h3 className="text-lg font-semibold">Attribution Macro — Commandes ↔ Quotas</h3>
+        <h3 className="text-lg font-semibold">Commande initiale — Commandes ↔ Quotas</h3>
         <p className="text-sm text-muted-foreground mt-1">
           Attribuez les commandes aux quotas grossistes avant l'export.
           Cliquez sur une cellule pour modifier manuellement, ou utilisez l'auto-attribution.
@@ -571,7 +571,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
             </Button>
             {hasAttribution && (
               <Button onClick={resetAttribution} variant="outline" className="gap-1.5">
-                <RotateCcw className="h-4 w-4" /> Reinitialiser
+                <RotateCcw className="h-4 w-4" /> Réinitialiser
               </Button>
             )}
             {manualEditsCount > 0 && (
@@ -622,7 +622,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                 Mode edition manuelle — {customers.find(c => c.id === selectedCustomerId)?.code}
               </p>
               <p className="text-xs text-blue-600 dark:text-blue-400">
-                Cliquez sur une cellule pour attribuer manuellement une quantite a ce client. Chaque edition cree une ligne datee dans l'export.
+                Cliquez sur une cellule pour attribuer manuellement une quantité à ce client. Chaque édition crée une ligne datée dans l'export.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -660,7 +660,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                     <TableHead className="text-xs">Produit</TableHead>
                     <TableHead className="text-xs">Client</TableHead>
                     <TableHead className="text-xs">Grossiste</TableHead>
-                    <TableHead className="text-xs text-right">Demandee</TableHead>
+                    <TableHead className="text-xs text-right">Demandée</TableHead>
                     <TableHead className="text-xs text-right">Fournisseur</TableHead>
                     <TableHead className="text-xs">Actions</TableHead>
                   </TableRow>
@@ -737,7 +737,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                       <TableHead className="text-xs">Produit</TableHead>
                       <TableHead className="text-xs">Client</TableHead>
                       <TableHead className="text-xs">Grossiste</TableHead>
-                      <TableHead className="text-xs text-right">Demandee</TableHead>
+                      <TableHead className="text-xs text-right">Demandée</TableHead>
                       <TableHead className="text-xs text-right">Fournisseur</TableHead>
                       <TableHead className="text-xs">Date</TableHead>
                       <TableHead className="text-xs">Actions</TableHead>
@@ -781,7 +781,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
             <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-red-800">
-                {overQuotaCells.length} depassement{overQuotaCells.length > 1 ? 's' : ''} de quota
+                {overQuotaCells.length} dépassement{overQuotaCells.length > 1 ? 's' : ''} de quota
               </p>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {(expandOverQuota ? overQuotaCells : overQuotaCells.slice(0, 5)).map(c => {
@@ -795,7 +795,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
                 {overQuotaCells.length > 5 && (
                   <button type="button" onClick={() => setExpandOverQuota(!expandOverQuota)}
                     className="inline-flex items-center gap-0.5 text-xs text-red-600 hover:text-red-800 font-medium transition-colors">
-                    {expandOverQuota ? <><ChevronUp className="h-3 w-3" /> Reduire</> : <><ChevronDown className="h-3 w-3" /> +{overQuotaCells.length - 5} autres</>}
+                    {expandOverQuota ? <><ChevronUp className="h-3 w-3" /> Réduire</> : <><ChevronDown className="h-3 w-3" /> +{overQuotaCells.length - 5} autres</>}
                   </button>
                 )}
               </div>
@@ -849,10 +849,10 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-amber-800">
-                {productsWithoutQuota.length} produit{productsWithoutQuota.length > 1 ? 's' : ''} commande{productsWithoutQuota.length > 1 ? 's' : ''} sans disponibilite
+                {productsWithoutQuota.length} produit{productsWithoutQuota.length > 1 ? 's' : ''} commande{productsWithoutQuota.length > 1 ? 's' : ''} sans disponibilité
               </p>
               <p className="text-xs text-amber-700 mt-0.5">
-                Ces produits ne peuvent pas etre attribues. Verifiez les quotas a l'etape 1.
+                Ces produits ne peuvent pas être attribués. Vérifiez les quotas à l'étape 1.
               </p>
               <div className="flex flex-wrap gap-1 mt-1.5">
                 {(expandNoQuota ? productsWithoutQuota : productsWithoutQuota.slice(0, 10)).map(d => (
@@ -1107,7 +1107,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
             <div>
               <p className="text-sm font-semibold">Aucun quota disponible</p>
-              <p className="text-xs text-muted-foreground">Importez des quotas a l'etape 1 pour pouvoir faire l'attribution.</p>
+              <p className="text-xs text-muted-foreground">Importez des quotas à l'étape 1 pour pouvoir faire l'attribution.</p>
             </div>
           </CardContent>
         </Card>
@@ -1118,8 +1118,8 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
         <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-3">
           <Info className="h-4 w-4 shrink-0 mt-0.5" />
           <p>
-            <strong>Astuce :</strong> Cliquez sur n'importe quelle cellule pour modifier la quantite attribuee.
-            Les depassements de quota sont signales en rouge. L'attribution macro est sauvegardee quand vous cliquez "Sauvegarder et continuer". Les editions manuelles (par client) sont sauvegardees immediatement.
+            <strong>Astuce :</strong> Cliquez sur n'importe quelle cellule pour modifier la quantité attribuée.
+            Les dépassements de quota sont signalés en rouge. La commande initiale est sauvegardée quand vous cliquez "Sauvegarder et continuer". Les éditions manuelles (par client) sont sauvegardées immédiatement.
           </p>
         </div>
       )}
@@ -1135,7 +1135,7 @@ export default function MacroAttributionStep({ process, onNext, onBack }: MacroA
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={onNext} className="gap-1.5">
-            {hasAttribution ? 'Passer (macro non sauvegardee)' : 'Passer'} <ArrowRight className="h-4 w-4" />
+            {hasAttribution ? 'Passer (commande non sauvegardée)' : 'Passer'} <ArrowRight className="h-4 w-4" />
           </Button>
           {hasAttribution && (
             <Button

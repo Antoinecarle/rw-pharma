@@ -104,7 +104,7 @@ export default function ClientDebtsPage() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['client-debts'] })
-      toast.success(`${result.debtsCreated} dettes creees, ${result.debtsUpdated} mises a jour. Total du: ${result.totalOwed.toLocaleString('fr-FR')}`)
+      toast.success(`${result.debtsCreated} dettes créées, ${result.debtsUpdated} mises à jour. Total dû: ${result.totalOwed.toLocaleString('fr-FR')}`)
     },
     onError: (err: Error) => toast.error(`Erreur: ${err.message}`),
   })
@@ -267,8 +267,8 @@ export default function ClientDebtsPage() {
             <p className="font-medium">Aucune dette client</p>
             <p className="text-sm text-muted-foreground mt-1">
               {search || statusFilter !== 'all'
-                ? 'Aucun resultat pour ces filtres.'
-                : 'Lancez le calcul des dettes apres une allocation pour detecter les sous-allocations.'}
+                ? 'Aucun résultat pour ces filtres.'
+                : 'Lancez le calcul des dettes après une allocation pour détecter les sous-allocations.'}
             </p>
           </CardContent>
         </Card>

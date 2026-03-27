@@ -86,11 +86,11 @@ export default function AcceptInvitationPage() {
       })
       if (signInError) throw signInError
 
-      toast.success('Compte cree avec succes !')
+      toast.success('Compte créé avec succès !')
       // Full page reload to re-initialize AuthProvider with fresh session
       window.location.href = '/portal'
     } catch (err: any) {
-      toast.error(err.message || 'Erreur lors de la creation du compte')
+      toast.error(err.message || 'Erreur lors de la création du compte')
     } finally {
       setSubmitting(false)
     }
@@ -135,17 +135,17 @@ export default function AcceptInvitationPage() {
           <Card>
             <CardContent className="flex flex-col items-center py-8 text-center">
               <Info className="h-10 w-10 text-blue-500 mb-4" />
-              <p className="text-[14px] font-semibold mb-1">Vous etes deja connecte</p>
+              <p className="text-[14px] font-semibold mb-1">Vous êtes déjà connecté</p>
               <p className="text-[12px] text-muted-foreground mb-1">
                 Session active : <strong>{existingSession}</strong>
               </p>
               <p className="text-[12px] text-muted-foreground mb-6">
-                Cette invitation est destinee a <strong>{invitation.email}</strong> pour rejoindre le portail de <strong>{(invitation.customers as any)?.name}</strong>.
+                Cette invitation est destinée à <strong>{invitation.email}</strong> pour rejoindre le portail de <strong>{(invitation.customers as any)?.name}</strong>.
               </p>
               <div className="flex flex-col gap-2 w-full">
                 <Button size="sm" className="w-full gap-1.5" onClick={handleSignOutAndContinue}>
                   <LogOut className="h-3.5 w-3.5" />
-                  Me deconnecter et creer le compte client
+                  Me déconnecter et créer le compte client
                 </Button>
                 <Button size="sm" variant="outline" className="w-full" onClick={() => navigate('/')}>
                   Retour au dashboard admin
@@ -172,13 +172,13 @@ export default function AcceptInvitationPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-[16px] flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
-              Creer votre compte
+              Créer votre compte
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="mb-4 p-3 rounded-xl text-[12px]" style={{ background: 'rgba(13,148,136,0.04)', border: '1px solid rgba(13,148,136,0.1)' }}>
               <p style={{ color: 'var(--ivory-text-muted)' }}>
-                Vous etes invite a rejoindre le portail client pour
+                Vous êtes invité à rejoindre le portail client pour
               </p>
               <p className="font-semibold mt-0.5" style={{ color: 'var(--ivory-text-heading)' }}>
                 {(invitation.customers as any)?.name ?? 'Client'}
@@ -223,7 +223,7 @@ export default function AcceptInvitationPage() {
                 </div>
               </div>
               <Button type="submit" className="w-full h-10 text-[13px]" disabled={submitting}>
-                {submitting ? 'Creation...' : 'Creer mon compte'}
+                {submitting ? 'Création...' : 'Créer mon compte'}
               </Button>
             </form>
           </CardContent>

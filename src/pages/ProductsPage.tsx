@@ -181,7 +181,7 @@ export default function ProductsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] })
       setDialogOpen(false)
-      toast.success(editing ? 'Produit modifie' : 'Produit cree')
+      toast.success(editing ? 'Produit modifié' : 'Produit créé')
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -193,7 +193,7 @@ export default function ProductsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] })
-      toast.success('Produit supprime')
+      toast.success('Produit supprimé')
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -286,7 +286,7 @@ export default function ProductsPage() {
               <h2 className="ivory-heading text-xl md:text-2xl">Catalogue produits</h2>
               <div className="flex items-center gap-3 mt-0.5">
                 <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
-                  {products?.count ?? 0} references pharmaceutiques
+                  {products?.count ?? 0} références pharmaceutiques
                 </p>
                 {products?.count != null && (
                   <div className="flex items-center gap-1.5">
@@ -617,7 +617,7 @@ export default function ProductsPage() {
               disabled={page === 0}
               onClick={() => setPage(page - 1)}
             >
-              Precedent
+              Précédent
             </Button>
             {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
               let pageNum: number
@@ -736,7 +736,7 @@ export default function ProductsPage() {
                 style={{ border: '1px solid rgba(0,0,0,0.06)', background: 'rgba(248,247,244,0.5)' }}>
                 <div className="space-y-0.5">
                   <Label htmlFor="ansm-switch" className="cursor-pointer text-[13px] font-medium">Bloque ANSM</Label>
-                  <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>Interdit a l'export</p>
+                  <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>Interdit à l'export</p>
                 </div>
                 <Switch
                   id="ansm-switch"
@@ -823,7 +823,7 @@ export default function ProductsPage() {
                 className="text-[13px] rounded-xl"
                 style={{ background: 'var(--ivory-accent)', color: 'white' }}
               >
-                {upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Creer'}
+                {upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Créer'}
               </Button>
             </DialogFooter>
           </form>
@@ -836,7 +836,7 @@ export default function ProductsPage() {
         open={!!deleteId}
         onOpenChange={() => setDeleteId(null)}
         title="Supprimer le produit"
-        description="Cette action est irreversible. Le produit et ses disponibilites associees seront supprimes."
+        description="Cette action est irréversible. Le produit et ses disponibilités associées seront supprimés."
         onConfirm={() => deleteId && deleteMut.mutate(deleteId)}
         loading={deleteMut.isPending}
       />

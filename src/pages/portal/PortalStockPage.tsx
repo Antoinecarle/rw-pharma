@@ -63,7 +63,7 @@ export default function PortalStockPage() {
       queryClient.invalidateQueries({ queryKey: ['portal-offered-stock'] })
       setCart([])
       setShowCart(false)
-      toast.success('Demande envoyee avec succes')
+      toast.success('Demande envoyée avec succès')
     },
     onError: () => toast.error('Erreur lors de l\'envoi'),
   })
@@ -72,7 +72,7 @@ export default function PortalStockPage() {
     const existing = cart.find((c) => c.stockId === item.id)
     if (existing) {
       if (existing.quantity >= item.remaining_quantity) {
-        toast.info('Quantite maximum atteinte')
+        toast.info('Quantité maximum atteinte')
         return
       }
       setCart(cart.map((c) => c.stockId === item.id ? { ...c, quantity: c.quantity + 1 } : c))
@@ -149,7 +149,7 @@ export default function PortalStockPage() {
             <Package className="h-10 w-10 mb-3" style={{ color: 'var(--ivory-text-muted)', opacity: 0.3 }} />
             <p className="text-[13px] font-medium" style={{ color: 'var(--ivory-text-heading)' }}>Aucun stock disponible</p>
             <p className="text-[12px] mt-1" style={{ color: 'var(--ivory-text-muted)' }}>
-              De nouveaux produits seront proposes apres chaque allocation mensuelle.
+              De nouveaux produits seront proposés après chaque allocation mensuelle.
             </p>
           </CardContent>
         </Card>

@@ -625,7 +625,7 @@ export async function runAllocation(
     fetchProducts(),
   ])
 
-  if (orders.length === 0) throw new Error('Aucune commande a allouer')
+  if (orders.length === 0) throw new Error('Aucune commande à allouer')
 
   const availableWholesalers = wholesalers.filter(w => !excludedWholesalers.has(w.id))
   if (availableWholesalers.length === 0) throw new Error('Aucun grossiste disponible')
@@ -707,7 +707,7 @@ export async function runAllocation(
     const product = productMap.get(order.product_id)
     if (product?.is_ansm_blocked) {
       pushLog(order, null, 0, remainingToAllocate, 'ansm_blocked',
-        `Produit ${product.cip13} bloque ANSM — interdit a l'export`)
+        `Produit ${product.cip13} bloqué ANSM — interdit à l'export`)
       continue
     }
 
@@ -715,7 +715,7 @@ export async function runAllocation(
     const minLot = order.customer?.min_lot_acceptable
     if (minLot && minLot > 0 && order.quantity < minLot) {
       pushLog(order, null, 0, remainingToAllocate, 'min_lot_reject',
-        `Quantite ${order.quantity} < seuil min lot client (${minLot})`)
+        `Quantité ${order.quantity} < seuil min lot client (${minLot})`)
       continue
     }
 
@@ -962,7 +962,7 @@ export async function runAllocation(
       if (remainingToAllocate > 0 && allocations.filter(a => a.order_id === order.id).length === 0) {
         // No stock AND no quota exist for this product — do NOT create phantom allocations
         pushLog(order, null, remainingToAllocate, remainingToAllocate, 'no_match',
-          `Aucun stock ni quota disponible pour ce produit — commande non allouee (${remainingToAllocate} u.)`)
+          `Aucun stock ni quota disponible pour ce produit — commande non allouée (${remainingToAllocate} u.)`)
       }
     }
   }

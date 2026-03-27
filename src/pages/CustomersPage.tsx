@@ -164,9 +164,9 @@ export default function CustomersPage() {
       })
       if (emailError) {
         console.warn('Email send failed:', emailError)
-        toast.success('Invitation creee ! Lien copie. (Email non envoye)')
+        toast.success('Invitation créée ! Lien copié. (Email non envoyé)')
       } else {
-        toast.success('Invitation creee ! Email envoye + lien copie.')
+        toast.success('Invitation créée ! Email envoyé + lien copié.')
       }
 
       setInviteEmail('')
@@ -181,7 +181,7 @@ export default function CustomersPage() {
   const copyInviteLink = (token: string) => {
     const link = `${window.location.origin}/invite/${token}`
     navigator.clipboard.writeText(link)
-    toast.success('Lien copie !')
+    toast.success('Lien copié !')
   }
 
   const handleResendInvitation = async (inv: any) => {
@@ -207,7 +207,7 @@ export default function CustomersPage() {
     try {
       const { error } = await supabase.from('customer_invitations').delete().eq('id', invId)
       if (error) throw error
-      toast.success('Invitation supprimee')
+      toast.success('Invitation supprimée')
       refetchInvitations()
     } catch (err: any) {
       toast.error(err.message)
@@ -218,7 +218,7 @@ export default function CustomersPage() {
     try {
       const { error } = await supabase.from('customer_users').delete().eq('id', userId)
       if (error) throw error
-      toast.success(`Acces supprime pour ${email}`)
+      toast.success(`Accès supprimé pour ${email}`)
       queryClient.invalidateQueries({ queryKey: ['customer-portal-users'] })
     } catch (err: any) {
       toast.error(err.message)
@@ -231,13 +231,13 @@ export default function CustomersPage() {
       if (c.id) { const { id, ...rest } = payload; const { error } = await supabase.from('customers').update(rest).eq('id', id); if (error) throw error }
       else { const { error } = await supabase.from('customers').insert(payload); if (error) throw error }
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); setDialogOpen(false); toast.success(editing ? 'Client modifie' : 'Client cree') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); setDialogOpen(false); toast.success(editing ? 'Client modifié' : 'Client créé') },
     onError: (err: Error) => toast.error(err.message),
   })
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('customers').delete().eq('id', id); if (error) throw error },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); toast.success('Client supprime') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); toast.success('Client supprimé') },
     onError: (err: Error) => toast.error(err.message),
   })
 
@@ -471,17 +471,17 @@ export default function CustomersPage() {
               <TabsContent value="documents" className="space-y-4">
                 <div className="rounded-xl p-3.5" style={{ border: '1px dashed rgba(0,0,0,0.08)', background: 'rgba(248,247,244,0.5)' }}>
                   <p className="text-[12px] flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
-                    <FileText className="h-3.5 w-3.5" />Documents reglementaires
+                    <FileText className="h-3.5 w-3.5" />Documents réglementaires
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label className="text-[13px] font-medium">Numero WDA</Label><Input value={docs.wda_number ?? ''} onChange={(e) => setDocs({ ...docs, wda_number: e.target.value || undefined })} placeholder="WDA-XXXX" className="ivory-mono text-[13px] h-10 rounded-xl" /></div>
+                  <div className="space-y-1.5"><Label className="text-[13px] font-medium">Numéro WDA</Label><Input value={docs.wda_number ?? ''} onChange={(e) => setDocs({ ...docs, wda_number: e.target.value || undefined })} placeholder="WDA-XXXX" className="ivory-mono text-[13px] h-10 rounded-xl" /></div>
                   <div className="space-y-1.5"><Label className="text-[13px] font-medium">Expiration WDA</Label>
                     {docs.wda_expiry ? <div className="space-y-1"><ExpiryCountdown date={docs.wda_expiry} label="WDA" /><button type="button" onClick={() => setDocs({ ...docs, wda_expiry: undefined })} className="text-[10px] hover:text-red-500 transition-colors" style={{ color: 'var(--ivory-text-muted)' }}>Effacer</button></div> : <Input type="date" value="" onChange={(e) => setDocs({ ...docs, wda_expiry: e.target.value || undefined })} className="text-[13px] h-10 rounded-xl" />}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label className="text-[13px] font-medium">Numero GDP</Label><Input value={docs.gdp_number ?? ''} onChange={(e) => setDocs({ ...docs, gdp_number: e.target.value || undefined })} placeholder="GDP-XXXX" className="ivory-mono text-[13px] h-10 rounded-xl" /></div>
+                  <div className="space-y-1.5"><Label className="text-[13px] font-medium">Numéro GDP</Label><Input value={docs.gdp_number ?? ''} onChange={(e) => setDocs({ ...docs, gdp_number: e.target.value || undefined })} placeholder="GDP-XXXX" className="ivory-mono text-[13px] h-10 rounded-xl" /></div>
                   <div className="space-y-1.5"><Label className="text-[13px] font-medium">Expiration GDP</Label>
                     {docs.gdp_expiry ? <div className="space-y-1"><ExpiryCountdown date={docs.gdp_expiry} label="GDP" /><button type="button" onClick={() => setDocs({ ...docs, gdp_expiry: undefined })} className="text-[10px] hover:text-red-500 transition-colors" style={{ color: 'var(--ivory-text-muted)' }}>Effacer</button></div> : <Input type="date" value="" onChange={(e) => setDocs({ ...docs, gdp_expiry: e.target.value || undefined })} className="text-[13px] h-10 rounded-xl" />}
                   </div>
@@ -491,12 +491,12 @@ export default function CustomersPage() {
               <TabsContent value="preferences" className="space-y-4">
                 <div className="rounded-xl p-3.5" style={{ border: '1px dashed rgba(0,0,0,0.08)', background: 'rgba(248,247,244,0.5)' }}>
                   <p className="text-[12px] flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}>
-                    <Star className="h-3.5 w-3.5" />Preferences d'allocation
+                    <Star className="h-3.5 w-3.5" />Préférences d'allocation
                   </p>
                 </div>
-                <div className="space-y-1.5"><Label className="text-[13px] font-medium">Priorite</Label><StarRating value={prefs.priority_level ?? 3} onChange={(v) => setPrefs({ ...prefs, priority_level: v })} labels={['Haute', 'Elevee', 'Normal', 'Basse', 'Tres basse']} /></div>
-                <div className="space-y-1.5"><Label className="text-[13px] font-medium">% max stock</Label><GradientSlider value={prefs.max_allocation_pct ?? 30} onChange={(v) => setPrefs({ ...prefs, max_allocation_pct: v })} min={0} max={100} step={5} suffix="%" zones={[{ label: 'Conservateur', max: 20 }, { label: 'Modere', max: 50 }, { label: 'Agressif', max: 100 }]} /></div>
-                <div className="space-y-1.5"><Label className="text-[13px] font-medium">Expiry min</Label><StepperInput value={prefs.preferred_expiry_months} onChange={(v) => setPrefs({ ...prefs, preferred_expiry_months: v })} min={0} max={36} suffix=" mois" placeholder="Non defini" presets={[{ label: '3', value: 3 }, { label: '6', value: 6 }, { label: '9', value: 9 }, { label: '12', value: 12 }]} /></div>
+                <div className="space-y-1.5"><Label className="text-[13px] font-medium">Priorité</Label><StarRating value={prefs.priority_level ?? 3} onChange={(v) => setPrefs({ ...prefs, priority_level: v })} labels={['Haute', 'Élevée', 'Normal', 'Basse', 'Très basse']} /></div>
+                <div className="space-y-1.5"><Label className="text-[13px] font-medium">% max stock</Label><GradientSlider value={prefs.max_allocation_pct ?? 30} onChange={(v) => setPrefs({ ...prefs, max_allocation_pct: v })} min={0} max={100} step={5} suffix="%" zones={[{ label: 'Conservateur', max: 20 }, { label: 'Modéré', max: 50 }, { label: 'Agressif', max: 100 }]} /></div>
+                <div className="space-y-1.5"><Label className="text-[13px] font-medium">Expiry min</Label><StepperInput value={prefs.preferred_expiry_months} onChange={(v) => setPrefs({ ...prefs, preferred_expiry_months: v })} min={0} max={36} suffix=" mois" placeholder="Non défini" presets={[{ label: '3', value: 3 }, { label: '6', value: 6 }, { label: '9', value: 9 }, { label: '12', value: 12 }]} /></div>
                 <div className="space-y-1.5">
                   <Label className="text-[13px] font-medium">Lot minimum acceptable</Label>
                   <Input
@@ -508,7 +508,7 @@ export default function CustomersPage() {
                     className="text-[13px] h-10 rounded-xl"
                   />
                   <p className="text-[11px]" style={{ color: 'var(--ivory-text-muted)' }}>
-                    Quantite minimale par lot que le client accepte. Les allocations inferieures seront refusees.
+                    Quantité minimale par lot que le client accepte. Les allocations inférieures seront refusées.
                   </p>
                 </div>
                 <div className="space-y-1.5"><Label className="text-[13px] font-medium">Notes</Label><Textarea value={prefs.notes ?? ''} onChange={(e) => setPrefs({ ...prefs, notes: e.target.value || undefined })} placeholder="Notes..." rows={2} className="text-[13px] rounded-xl" /></div>
@@ -670,14 +670,14 @@ export default function CustomersPage() {
             <DialogFooter className="mt-5">
               <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">Annuler</Button>
               <Button type="submit" size="sm" disabled={upsert.isPending} className="text-[13px] rounded-xl" style={{ background: 'var(--ivory-accent)', color: 'white' }}>
-                {upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Creer'}
+                {upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Créer'}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Supprimer le client" description="Action irreversible." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
+      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Supprimer le client" description="Action irréversible." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
     </div>
   )
 }
@@ -770,7 +770,7 @@ function CustomerCard({
                 {hasDocuments(c) && (
                   <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--ivory-teal)' }}>
                     <FileText className="h-3 w-3 shrink-0" />
-                    <span>Documents conformite</span>
+                    <span>Documents conformité</span>
                   </div>
                 )}
                 {(portalAccess.users > 0 || portalAccess.pending > 0) && (
@@ -856,7 +856,7 @@ function CustomerContactsTab({ customerId }: { customerId: string }) {
       const { error } = await supabase.from('customer_contacts').insert(c)
       if (error) throw error
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customer_contacts', customerId] }); setAddOpen(false); setNewContact({}); toast.success('Contact ajoute') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customer_contacts', customerId] }); setAddOpen(false); setNewContact({}); toast.success('Contact ajouté') },
     onError: (e: Error) => toast.error(e.message),
   })
 
@@ -865,7 +865,7 @@ function CustomerContactsTab({ customerId }: { customerId: string }) {
       const { error } = await supabase.from('customer_contacts').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customer_contacts', customerId] }); toast.success('Contact supprime') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customer_contacts', customerId] }); toast.success('Contact supprimé') },
   })
 
   const setPrimaryMut = useMutation({

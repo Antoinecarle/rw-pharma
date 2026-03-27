@@ -6,7 +6,7 @@ export interface ExportRow {
   client: string
   requestedQty: number
   supplierQty: number
-  source: 'MACRO' | 'MANUEL'
+  source: 'INITIALE' | 'MANUEL'
   editedAt: string
 }
 
@@ -23,8 +23,8 @@ interface MacroItem {
  *
  * - Manual attributions produce one export row each (with client, date, qty)
  * - Macro residual = macro toCollect - sum(manual supplier_qty) for same product
- * - If residual > 0, a MACRO row is emitted (client = "TOUS")
- * - Rows are sorted: by CIP13, then MACRO first, then MANUEL by edited_at
+ * - If residual > 0, an INITIALE row is emitted (client = "TOUS")
+ * - Rows are sorted: by CIP13, then INITIALE first, then MANUEL by edited_at
  */
 export function mergeAttributionsForExport(
   macroItems: MacroItem[],
@@ -49,14 +49,14 @@ export function mergeAttributionsForExport(
     const manuals = manualByProduct.get(item.productId) ?? []
 
     if (manuals.length === 0) {
-      // No manual attributions: emit a single MACRO row
+      // No manual attributions: emit a single INITIALE row
       rows.push({
         cip13: item.cip13,
         productName: item.productName,
         client: 'TOUS',
         requestedQty: item.totalDemand,
         supplierQty: item.toCollect,
-        source: 'MACRO',
+        source: 'INITIALE',
         editedAt: today,
       })
     } else {
@@ -78,7 +78,7 @@ export function mergeAttributionsForExport(
         })
       }
 
-      // Emit residual MACRO row if macro > manual total
+      // Emit residual INITIALE row if macro > manual total
       const residual = item.toCollect - manualSupplierTotal
       if (residual > 0) {
         rows.push({
@@ -87,7 +87,7 @@ export function mergeAttributionsForExport(
           client: 'TOUS',
           requestedQty: item.totalDemand - manuals.reduce((s, m) => s + m.requested_quantity, 0),
           supplierQty: residual,
-          source: 'MACRO',
+          source: 'INITIALE',
           editedAt: today,
         })
       }
@@ -113,11 +113,11 @@ export function mergeAttributionsForExport(
     }
   }
 
-  // Sort: by CIP13, then MACRO before MANUEL, then by editedAt
+  // Sort: by CIP13, then INITIALE before MANUEL, then by editedAt
   rows.sort((a, b) => {
     const cmp = a.cip13.localeCompare(b.cip13)
     if (cmp !== 0) return cmp
-    if (a.source !== b.source) return a.source === 'MACRO' ? -1 : 1
+    if (a.source !== b.source) return a.source === 'INITIALE' ? -1 : 1
     return a.editedAt.localeCompare(b.editedAt)
   })
 

@@ -4,8 +4,8 @@ import { Calendar, ArrowRight, Package, BarChart3, Check } from 'lucide-react'
 import type { MonthlyProcess } from '@/types/database'
 
 const MONTH_NAMES = [
-  'Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre',
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ]
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -13,19 +13,19 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   importing_quotas: { label: 'Import dispos', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
   importing_orders: { label: 'Import commandes', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
   reviewing_orders: { label: 'Revue commandes', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
-  macro_attributing: { label: 'Attribution macro', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
+  macro_attributing: { label: 'Commande initiale', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
   exporting_wholesalers: { label: 'Export grossistes', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.15)' },
-  negotiating: { label: 'Negociation', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
-  reexporting: { label: 'Re-export', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.15)' },
-  collecting_stock: { label: 'Reception stocks', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.15)' },
+  negotiating: { label: 'Négociation', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
+  reexporting: { label: 'Ré-export', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.15)' },
+  collecting_stock: { label: 'Réception stocks', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.15)' },
   allocating_lots: { label: 'Allocation lots', color: 'var(--ivory-accent)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
   reviewing_allocations: { label: 'Revue allocations', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
   finalizing: { label: 'Finalisation', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
-  completed: { label: 'Termine', color: 'var(--ivory-teal)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
+  completed: { label: 'Terminé', color: 'var(--ivory-teal)', bg: 'rgba(13,148,136,0.08)', border: 'rgba(13,148,136,0.15)' },
 }
 
 const TOTAL_STEPS = 12
-const STEP_LABELS = ['', 'Import dispos', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Negociation', 'Re-export', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
+const STEP_LABELS = ['', 'Import dispos', 'Import commandes', 'Revue commandes', 'Commande initiale', 'Export grossistes', 'Négociation', 'Ré-export', 'Réception stocks', 'Agrégation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
 interface MonthlyProcessCardProps {
   process: MonthlyProcess
@@ -66,7 +66,7 @@ export default function MonthlyProcessCard({ process, index = 0 }: MonthlyProces
                 <div>
                   <h3 className="ivory-heading text-[14px]">{monthName} {process.year}</h3>
                   <p className="text-[11px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>
-                    Etape {process.current_step}/{TOTAL_STEPS} — {STEP_LABELS[process.current_step]}
+                    Étape {process.current_step}/{TOTAL_STEPS} — {STEP_LABELS[process.current_step]}
                   </p>
                 </div>
               </div>

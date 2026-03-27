@@ -52,7 +52,7 @@ export default function ManualAttributionEditor({
           onKeyDown={handleKeyDown}
           className="h-6 w-16 text-[10px] text-center"
           placeholder="Dem."
-          title="Quantite demandee"
+          title="Quantité demandée"
           autoFocus
           min={0}
           max={maxRequested}
@@ -67,7 +67,7 @@ export default function ManualAttributionEditor({
           onKeyDown={handleKeyDown}
           className="h-6 w-16 text-[10px] text-center"
           placeholder="Four."
-          title="Quantite fournisseur"
+          title="Quantité fournisseur"
           min={0}
           max={maxSupplier}
         />

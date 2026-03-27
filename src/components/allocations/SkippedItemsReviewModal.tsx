@@ -60,16 +60,16 @@ interface ItemState {
 const REASON_LABELS: Record<SkippedItem['reason'], string> = {
   unknown_customer: 'Client inconnu',
   unknown_product: 'Produit inconnu',
-  invalid_quantity: 'Quantite invalide',
+  invalid_quantity: 'Quantité invalide',
   both_unknown: 'Client et produit inconnus',
-  duplicate: 'Doublon (deja importe)',
+  duplicate: 'Doublon (déjà importé)',
 }
 
 const COUNTRIES = [
   { code: 'DE', name: 'Allemagne' },
   { code: 'DK', name: 'Danemark' },
-  { code: 'SE', name: 'Suede' },
-  { code: 'NO', name: 'Norvege' },
+  { code: 'SE', name: 'Suède' },
+  { code: 'NO', name: 'Norvège' },
   { code: 'NL', name: 'Pays-Bas' },
 ]
 
@@ -152,7 +152,7 @@ export default function SkippedItemsReviewModal({
         country: newCustomerCountry === 'none' ? null : newCustomerCountry,
       })
       setState(item.rowIndex, { resolvedCustomerId: id, action: 'resolved' })
-      toast.success(`Client "${item.customerCode}" cree`)
+      toast.success(`Client "${item.customerCode}" créé`)
     } catch (err) {
       toast.error(`Erreur: ${(err as Error).message}`)
     }
@@ -166,7 +166,7 @@ export default function SkippedItemsReviewModal({
         name: st.newProductName || `Produit ${item.cip13}`,
       })
       setState(item.rowIndex, { resolvedProductId: id, action: 'resolved' })
-      toast.success(`Produit "${item.cip13}" cree`)
+      toast.success(`Produit "${item.cip13}" créé`)
     } catch (err) {
       toast.error(`Erreur: ${(err as Error).message}`)
     }
@@ -237,10 +237,10 @@ export default function SkippedItemsReviewModal({
             <div className="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
             </div>
-            {skippedItems.length} lignes ignorees
+            {skippedItems.length} lignes ignorées
           </DialogTitle>
           <DialogDescription>
-            Ces lignes n'ont pas pu etre importees. Vous pouvez creer les entites manquantes ou les mapper a des existantes.
+            Ces lignes n'ont pas pu être importées. Vous pouvez créer les entités manquantes ou les mapper à des existantes.
           </DialogDescription>
         </DialogHeader>
 
@@ -248,7 +248,7 @@ export default function SkippedItemsReviewModal({
         <div className="flex gap-2">
           <Badge variant="outline" className="gap-1">
             <AlertTriangle className="h-3 w-3" />
-            {skippedCount} a traiter
+            {skippedCount} à traiter
           </Badge>
           {resolvedCount > 0 && (
             <Badge variant="default" className="gap-1">
@@ -345,11 +345,11 @@ export default function SkippedItemsReviewModal({
                               disabled={createCustomerMut.isPending}
                             >
                               <UserPlus className="h-3.5 w-3.5" />
-                              Creer
+                              Créer
                             </Button>
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-xs">Ou mapper a un client existant</Label>
+                            <Label className="text-xs">Ou mapper à un client existant</Label>
                             <Input
                               placeholder="Rechercher..."
                               value={customerSearch}
@@ -374,7 +374,7 @@ export default function SkippedItemsReviewModal({
                                   </button>
                                 ))}
                                 {filteredCustomers.length === 0 && (
-                                  <p className="text-xs text-muted-foreground p-2">Aucun resultat</p>
+                                  <p className="text-xs text-muted-foreground p-2">Aucun résultat</p>
                                 )}
                               </div>
                             )}
@@ -405,11 +405,11 @@ export default function SkippedItemsReviewModal({
                               disabled={createProductMut.isPending}
                             >
                               <Package className="h-3.5 w-3.5" />
-                              Creer
+                              Créer
                             </Button>
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-xs">Ou mapper a un produit existant</Label>
+                            <Label className="text-xs">Ou mapper à un produit existant</Label>
                             <Input
                               placeholder="Rechercher CIP13 ou nom..."
                               value={productSearch}
@@ -426,7 +426,7 @@ export default function SkippedItemsReviewModal({
                                     onClick={() => {
                                       setState(item.rowIndex, { mappedProductId: p.id, action: 'resolved' })
                                       setProductSearch('')
-                                      toast.success(`Produit mappe a "${p.name}"`)
+                                      toast.success(`Produit mappé à "${p.name}"`)
                                     }}
                                   >
                                     <span className="font-mono text-xs text-muted-foreground">{p.cip13}</span>
@@ -434,7 +434,7 @@ export default function SkippedItemsReviewModal({
                                   </button>
                                 ))}
                                 {filteredProducts.length === 0 && (
-                                  <p className="text-xs text-muted-foreground p-2">Aucun resultat</p>
+                                  <p className="text-xs text-muted-foreground p-2">Aucun résultat</p>
                                 )}
                               </div>
                             )}

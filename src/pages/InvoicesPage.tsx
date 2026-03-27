@@ -184,9 +184,9 @@ export default function InvoicesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] })
-      toast.success('Statut mis a jour')
+      toast.success('Statut mis à jour')
     },
-    onError: () => toast.error('Erreur lors de la mise a jour'),
+    onError: () => toast.error('Erreur lors de la mise à jour'),
   })
 
   const generateWholesalerInvoices = useMutation({
@@ -214,7 +214,7 @@ export default function InvoicesPage() {
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] })
-      toast.success(`${count} factures grossistes generees`)
+      toast.success(`${count} factures grossistes générées`)
       setGenerateDialog(null)
       setGenerateNotes('')
     },
@@ -263,14 +263,14 @@ export default function InvoicesPage() {
         })
       }
 
-      if (rows.length === 0) throw new Error('Aucune allocation trouvee pour ce processus')
+      if (rows.length === 0) throw new Error('Aucune allocation trouvée pour ce processus')
       const { error } = await supabase.from('invoices').insert(rows)
       if (error) throw error
       return rows.length
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] })
-      toast.success(`${count} factures clients generees`)
+      toast.success(`${count} factures clients générées`)
       setGenerateDialog(null)
       setGenerateNotes('')
     },
@@ -345,7 +345,7 @@ export default function InvoicesPage() {
           <div className="relative flex-1 min-w-[200px] max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Rechercher par numero ou entite..."
+              placeholder="Rechercher par numéro ou entité..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 h-9 rounded-xl text-xs"
@@ -398,13 +398,13 @@ export default function InvoicesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-[11px]">Numero</TableHead>
+                      <TableHead className="text-[11px]">Numéro</TableHead>
                       <TableHead className="text-[11px]">Type</TableHead>
-                      <TableHead className="text-[11px]">Entite</TableHead>
+                      <TableHead className="text-[11px]">Entité</TableHead>
                       <TableHead className="text-[11px]">Mois</TableHead>
                       <TableHead className="text-[11px] text-right">HT</TableHead>
                       <TableHead className="text-[11px] text-right">TTC</TableHead>
-                      <TableHead className="text-[11px]">Echeance</TableHead>
+                      <TableHead className="text-[11px]">Échéance</TableHead>
                       <TableHead className="text-[11px]">Statut</TableHead>
                       <TableHead className="text-[11px] text-right">Actions</TableHead>
                     </TableRow>
@@ -507,7 +507,7 @@ export default function InvoicesPage() {
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-base">
-              {generateDialog === 'wholesaler' ? 'Generer les factures grossistes' : 'Generer les factures clients'}
+              {generateDialog === 'wholesaler' ? 'Générer les factures grossistes' : 'Générer les factures clients'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -515,12 +515,12 @@ export default function InvoicesPage() {
               <Label className="text-xs">Processus mensuel</Label>
               <Select value={generateMonth} onValueChange={setGenerateMonth}>
                 <SelectTrigger className="h-9 rounded-xl text-xs">
-                  <SelectValue placeholder="Selectionnez un mois" />
+                  <SelectValue placeholder="Sélectionnez un mois" />
                 </SelectTrigger>
                 <SelectContent>
                   {processes?.map(p => (
                     <SelectItem key={p.id} value={p.id}>
-                      {MONTH_NAMES[p.month - 1]} {p.year} {p.status === 'completed' ? '(cloture)' : ''}
+                      {MONTH_NAMES[p.month - 1]} {p.year} {p.status === 'completed' ? '(clôturé)' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -547,7 +547,7 @@ export default function InvoicesPage() {
                   className="h-9 rounded-xl text-xs"
                 />
                 <p className="text-[10px]" style={{ color: 'var(--ivory-text-muted)' }}>
-                  Pourcentage du CA alloue par client
+                  Pourcentage du CA alloué par client
                 </p>
               </div>
             )}
@@ -556,7 +556,7 @@ export default function InvoicesPage() {
               <Textarea
                 value={generateNotes}
                 onChange={(e) => setGenerateNotes(e.target.value)}
-                placeholder="Notes sur cette serie de factures..."
+                placeholder="Notes sur cette série de factures..."
                 className="rounded-xl text-xs min-h-[60px]"
               />
             </div>
@@ -581,7 +581,7 @@ export default function InvoicesPage() {
               }}
             >
               {(generateWholesalerInvoices.isPending || generateClientInvoices.isPending) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Generer
+              Générer
             </Button>
           </DialogFooter>
         </DialogContent>

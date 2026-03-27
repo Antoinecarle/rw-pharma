@@ -114,7 +114,7 @@ export default function ManualAttributionAddForm({
                 <CommandInput placeholder="CIP13 ou nom..." className="text-xs" />
                 <CommandList>
                   <CommandEmpty>
-                    {productsLoading ? 'Chargement...' : 'Aucun produit trouve'}
+                    {productsLoading ? 'Chargement...' : 'Aucun produit trouvé'}
                   </CommandEmpty>
                   <CommandGroup>
                     {allProducts.slice(0, 200).map(p => (
@@ -183,7 +183,7 @@ export default function ManualAttributionAddForm({
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
         <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Qte demandee</label>
+          <label className="text-xs text-muted-foreground mb-1 block">Qté demandée</label>
           <Input
             type="number"
             min={0}

@@ -23,12 +23,12 @@ interface AllocationVisualizerProps {
 const REASON_CONFIG: Record<AllocationReason, { label: string; color: string; icon: typeof Boxes; bg: string }> = {
   fefo_lot:        { label: 'Stock FEFO',       color: 'text-violet-700',  icon: Boxes,          bg: 'bg-violet-50 border-violet-200' },
   quota:           { label: 'Dispo directe',    color: 'text-blue-700',    icon: ShieldCheck,    bg: 'bg-blue-50 border-blue-200' },
-  quota_balanced:  { label: 'Dispo repartie',   color: 'text-teal-700',    icon: ShieldCheck,    bg: 'bg-teal-50 border-teal-200' },
-  fallback:        { label: 'Repartition',      color: 'text-amber-700',   icon: Truck,          bg: 'bg-amber-50 border-amber-200' },
+  quota_balanced:  { label: 'Dispo répartie',   color: 'text-teal-700',    icon: ShieldCheck,    bg: 'bg-teal-50 border-teal-200' },
+  fallback:        { label: 'Répartition',      color: 'text-amber-700',   icon: Truck,          bg: 'bg-amber-50 border-amber-200' },
   fallback_single: { label: 'Grossiste unique', color: 'text-orange-700',  icon: Truck,          bg: 'bg-orange-50 border-orange-200' },
   max_pct_cap:     { label: 'Limite % max',     color: 'text-red-700',     icon: AlertTriangle,  bg: 'bg-red-50 border-red-200' },
-  ansm_blocked:    { label: 'Bloque ANSM',     color: 'text-rose-700',    icon: AlertTriangle,  bg: 'bg-rose-50 border-rose-200' },
-  min_lot_reject:  { label: 'Lot min refuse', color: 'text-pink-700',    icon: AlertTriangle,  bg: 'bg-pink-50 border-pink-200' },
+  ansm_blocked:    { label: 'Bloqué ANSM',     color: 'text-rose-700',    icon: AlertTriangle,  bg: 'bg-rose-50 border-rose-200' },
+  min_lot_reject:  { label: 'Lot min refusé', color: 'text-pink-700',    icon: AlertTriangle,  bg: 'bg-pink-50 border-pink-200' },
   no_match:        { label: 'Aucun match',    color: 'text-gray-700',    icon: AlertTriangle,  bg: 'bg-gray-50 border-gray-300' },
 }
 
@@ -189,7 +189,7 @@ export default function AllocationVisualizer({ logs, onClose }: AllocationVisual
     return (
       <Card>
         <CardContent className="p-8 text-center">
-          <p className="text-muted-foreground">Aucune etape d'allocation a visualiser.</p>
+          <p className="text-muted-foreground">Aucune étape d'allocation à visualiser.</p>
         </CardContent>
       </Card>
     )
@@ -314,7 +314,7 @@ export default function AllocationVisualizer({ logs, onClose }: AllocationVisual
           {hasFilters && (
             <>
               <Badge variant="secondary" className="text-[10px] gap-1">
-                {total}/{logs.length} etapes
+                {total}/{logs.length} étapes
               </Badge>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={clearFilters}>
                 <X className="h-3.5 w-3.5" />
@@ -327,9 +327,9 @@ export default function AllocationVisualizer({ logs, onClose }: AllocationVisual
       {total === 0 && hasFilters && (
         <Card>
           <CardContent className="p-6 text-center">
-            <p className="text-sm text-muted-foreground">Aucune etape ne correspond aux filtres.</p>
+            <p className="text-sm text-muted-foreground">Aucune étape ne correspond aux filtres.</p>
             <Button variant="link" size="sm" onClick={clearFilters} className="mt-1 text-xs">
-              Reinitialiser les filtres
+              Réinitialiser les filtres
             </Button>
           </CardContent>
         </Card>

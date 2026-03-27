@@ -418,7 +418,7 @@ function Vibe3() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-7 bg-white border border-stone-200 rounded-xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
             <div className="px-5 py-4 border-b border-stone-100 flex justify-between items-center">
-              <h3 className="text-[13px] font-semibold text-stone-700">Catalogue & Disponibilite</h3>
+              <h3 className="text-[13px] font-semibold text-stone-700">Catalogue & Disponibilité</h3>
               <button className="text-[11px] text-stone-400 hover:text-stone-600 font-medium transition-colors">Voir tout (1735)</button>
             </div>
             <div className="overflow-x-auto">
@@ -426,7 +426,7 @@ function Vibe3() {
                 <thead>
                   <tr className="bg-stone-50/50">
                     <th className="px-5 py-3 text-[10px] font-semibold text-stone-400 uppercase tracking-wider">CIP13</th>
-                    <th className="px-5 py-3 text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Designation</th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Désignation</th>
                     <th className="px-5 py-3 text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Prix PFHT</th>
                     <th className="px-5 py-3 text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Statut</th>
                   </tr>
@@ -470,7 +470,7 @@ function Vibe3() {
                       <span className={cn('text-[11px] font-bold uppercase tracking-tight', phase.active ? 'text-[#8BA88E]' : 'text-stone-400')}>
                         Phase {pIdx + 1}: {phase.name}
                       </span>
-                      <span className="text-[10px] font-mono text-stone-400">{phase.active ? 'En cours' : pIdx === 0 ? 'Complete' : 'En attente'}</span>
+                      <span className="text-[10px] font-mono text-stone-400">{phase.active ? 'En cours' : pIdx === 0 ? 'Terminé' : 'En attente'}</span>
                     </div>
                     <div className="flex gap-1.5 h-1.5">
                       {Array.from({ length: phase.steps }).map((_, sIdx) => (
@@ -511,14 +511,14 @@ function Vibe3() {
         <footer className="mt-10 flex flex-col sm:flex-row justify-between items-center gap-4 text-[11px] text-stone-400">
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1.5">
-              <CheckCircle2 size={12} /> Conformite ANSM validee
+              <CheckCircle2 size={12} /> Conformité ANSM validée
             </span>
             <span className="flex items-center gap-1.5">
-              <Activity size={12} /> Moteur d'allocation: Strategie Equilibree
+              <Activity size={12} /> Moteur d'allocation: Stratégie Équilibrée
             </span>
           </div>
           <div className="flex items-center gap-2">
-            Rapport genere le 11 Mars 2026
+            Rapport généré le 11 Mars 2026
             <MoreHorizontal size={14} className="ml-2 cursor-pointer hover:text-stone-600" />
           </div>
         </footer>
@@ -591,7 +591,7 @@ function Vibe4() {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
-              <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Systeme RW Pharma Actif</span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Système RW Pharma Actif</span>
             </div>
             <h1 className="text-2xl font-semibold tracking-tight text-white">Console Executive</h1>
           </div>
@@ -607,7 +607,7 @@ function Vibe4() {
           <div className="lg:col-span-2 group">
             <div className="h-full bg-slate-900/40 backdrop-blur-xl border border-white/5 rounded-xl overflow-hidden shadow-2xl transition-all duration-300 hover:border-blue-500/20">
               <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Catalogue Produits (Apercu)</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Catalogue Produits (Aperçu)</h3>
                 <button className="text-[10px] text-blue-400 font-medium flex items-center gap-1 hover:text-blue-300 transition-colors">
                   Voir tout <ChevronRight className="w-3 h-3" />
                 </button>
@@ -852,7 +852,7 @@ function Vibe5() {
                             {isCompleted ? '\u2713' : step.id}
                           </div>
                           <span className={cn(isActive ? 'font-medium' : 'text-[#7A7A7B]', isCompleted ? 'line-through opacity-50' : '')}>
-                            Etape {step.id}
+                            Étape {step.id}
                           </span>
                         </div>
                       );

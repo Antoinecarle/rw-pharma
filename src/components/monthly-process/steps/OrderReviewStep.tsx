@@ -14,7 +14,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { CheckCircle, ArrowRight, Package, Users, AlertTriangle, ShieldAlert, Copy, Filter, XCircle, Ban } from 'lucide-react'
+import { CheckCircle, ArrowRight, Package, Users, AlertTriangle, ShieldAlert, Copy, Filter, XCircle, Ban, UserX } from 'lucide-react'
 import { toast } from 'sonner'
 import { useState, useMemo } from 'react'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -37,8 +37,8 @@ interface Anomaly {
 
 const ANOMALY_LABELS: Record<AnomalyType, { label: string; color: string; icon: typeof AlertTriangle }> = {
   duplicate: { label: 'Doublon', color: 'text-amber-600 bg-amber-50 border-amber-200', icon: Copy },
-  outlier: { label: 'Outlier quantite', color: 'text-red-600 bg-red-50 border-red-200', icon: AlertTriangle },
-  ansm_blocked: { label: 'ANSM bloque', color: 'text-red-600 bg-red-50 border-red-200', icon: Ban },
+  outlier: { label: 'Outlier quantité', color: 'text-red-600 bg-red-50 border-red-200', icon: AlertTriangle },
+  ansm_blocked: { label: 'ANSM bloqué', color: 'text-red-600 bg-red-50 border-red-200', icon: Ban },
   no_documents: { label: 'Documents manquants', color: 'text-amber-600 bg-amber-50 border-amber-200', icon: ShieldAlert },
 }
 
@@ -73,6 +73,17 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
         from += pageSize
       }
       return all
+    },
+  })
+
+  // Fetch ALL active customers to detect who has no orders
+  const { data: allCustomers } = useQuery({
+    queryKey: ['customers', 'all-for-review'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('customers')
+        .select('id, name, code, is_top_client')
+      return (data ?? []) as { id: string; name: string; code: string; is_top_client: boolean }[]
     },
   })
 
@@ -118,7 +129,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
         addAnomaly(o.id, {
           orderId: o.id,
           type: 'outlier',
-          message: `Quantite ${o.quantity.toLocaleString('fr-FR')} = ${(o.quantity / avg).toFixed(1)}x la moyenne (${Math.round(avg).toLocaleString('fr-FR')})`,
+          message: `Quantité ${o.quantity.toLocaleString('fr-FR')} = ${(o.quantity / avg).toFixed(1)}x la moyenne (${Math.round(avg).toLocaleString('fr-FR')})`,
         })
       }
     }
@@ -184,7 +195,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      toast.success('Commandes validees')
+      toast.success('Commandes validées')
       onNext()
     },
     onError: (err: Error) => toast.error(err.message),
@@ -192,7 +203,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
 
   const rejectMut = useMutation({
     mutationFn: async () => {
-      if (selectedOrders.size === 0) throw new Error('Aucune commande selectionnee')
+      if (selectedOrders.size === 0) throw new Error('Aucune commande sélectionnée')
       const { error } = await supabase
         .from('orders')
         .update({ status: 'rejected' })
@@ -203,7 +214,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
       queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
       setSelectedOrders(new Set())
       setRejectOpen(false)
-      toast.success(`${selectedOrders.size} commandes rejetees`)
+      toast.success(`${selectedOrders.size} commandes rejetées`)
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -211,9 +222,22 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
   const pendingCount = orders?.filter((o) => o.status === 'pending').length ?? 0
   const totalQty = orders?.reduce((sum, o) => sum + o.quantity, 0) ?? 0
 
-  // Group by customer for summary (keyed by customer_id)
+  // Group by customer for summary (keyed by customer_id) — includes ALL customers
   const customerSummary = useMemo(() => {
     const map = new Map<string, { name: string; code: string; count: number; totalQty: number; isTop: boolean }>()
+
+    // First, seed with ALL customers (0 orders)
+    for (const c of allCustomers ?? []) {
+      map.set(c.id, {
+        name: c.name,
+        code: c.code ?? '?',
+        count: 0,
+        totalQty: 0,
+        isTop: c.is_top_client ?? false,
+      })
+    }
+
+    // Then, overlay with actual order data
     for (const o of orders ?? []) {
       const key = o.customer_id
       const existing = map.get(key)
@@ -232,7 +256,11 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
       }
     }
     return map
-  }, [orders])
+  }, [orders, allCustomers])
+
+  const customersWithoutOrders = useMemo(() => {
+    return [...customerSummary.values()].filter(c => c.count === 0).length
+  }, [customerSummary])
 
   // Filter orders
   const filteredOrders = useMemo(() => {
@@ -269,7 +297,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
       <div>
         <h3 className="text-lg font-semibold">Revue des Commandes</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Verifiez les commandes importees avant de lancer l'allocation.
+          Vérifiez les commandes importées avant de lancer l'allocation.
         </p>
       </div>
 
@@ -292,7 +320,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold">{totalQty.toLocaleString('fr-FR')}</p>
-            <p className="text-xs text-muted-foreground">Quantite totale</p>
+            <p className="text-xs text-muted-foreground">Quantité totale</p>
           </CardContent>
         </Card>
         <Card className={totalAnomalies > 0 ? 'border-amber-200' : ''}>
@@ -310,7 +338,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <p className="text-sm font-semibold">{totalAnomalies} commandes avec anomalies detectees</p>
+              <p className="text-sm font-semibold">{totalAnomalies} commandes avec anomalies détectées</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {anomalyStats.duplicate > 0 && (
@@ -325,7 +353,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
               )}
               {anomalyStats.ansm_blocked > 0 && (
                 <Badge variant="outline" className="gap-1 border-red-200 text-red-700">
-                  <Ban className="h-3 w-3" /> {anomalyStats.ansm_blocked} ANSM bloques
+                  <Ban className="h-3 w-3" /> {anomalyStats.ansm_blocked} ANSM bloqués
                 </Badge>
               )}
               {anomalyStats.no_documents > 0 && (
@@ -342,9 +370,26 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
               {!isProcessLocked && (
                 <Button variant="outline" size="sm" className="gap-1.5 text-destructive" onClick={selectAllAnomalies}>
                   <XCircle className="h-3.5 w-3.5" />
-                  Selectionner pour rejet
+                  Sélectionner pour rejet
                 </Button>
               )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Missing customers warning banner */}
+      {customersWithoutOrders > 0 && (
+        <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20">
+          <CardContent className="p-4 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-red-800 dark:text-red-400">
+                {customersWithoutOrders} client{customersWithoutOrders > 1 ? 's' : ''} sans commande ce mois-ci
+              </p>
+              <p className="text-xs text-red-600/80 dark:text-red-400/70 mt-0.5">
+                Vérifiez que tous les fichiers de commandes ont bien été importés avant de valider.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -353,15 +398,24 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
       {/* Customer summary */}
       {customerSummary.size > 0 && (
         <div>
-          <h4 className="text-sm font-semibold mb-2">Resume par client <span className="text-xs font-normal text-muted-foreground">(cliquer pour filtrer)</span></h4>
+          <h4 className="text-sm font-semibold mb-2">Résumé par client <span className="text-xs font-normal text-muted-foreground">(cliquer pour filtrer)</span></h4>
           <div className="flex flex-wrap gap-2">
-            {[...customerSummary.entries()].map(([custId, c]) => {
+            {[...customerSummary.entries()]
+              .sort(([, a], [, b]) => {
+                // Customers without orders first
+                if (a.count === 0 && b.count > 0) return -1
+                if (a.count > 0 && b.count === 0) return 1
+                return b.totalQty - a.totalQty
+              })
+              .map(([custId, c]) => {
               const isActive = filter === 'customer' && selectedCustomerId === custId
+              const hasNoOrders = c.count === 0
               return (
                 <button
                   key={c.code}
                   type="button"
                   onClick={() => {
+                    if (hasNoOrders) return // Nothing to filter for customers with 0 orders
                     if (isActive) {
                       setFilter('all')
                       setSelectedCustomerId(null)
@@ -372,12 +426,21 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
                   }}
                 >
                   <Badge
-                    variant={isActive ? 'default' : 'outline'}
-                    className={`gap-1.5 py-1.5 px-3 cursor-pointer transition-all ${isActive ? 'ring-2 ring-primary/30' : 'hover:bg-muted'}`}
+                    variant={hasNoOrders ? 'destructive' : isActive ? 'default' : 'outline'}
+                    className={`gap-1.5 py-1.5 px-3 cursor-pointer transition-all ${
+                      hasNoOrders
+                        ? 'animate-pulse'
+                        : isActive
+                          ? 'ring-2 ring-primary/30'
+                          : 'hover:bg-muted'
+                    }`}
                   >
+                    {hasNoOrders && <UserX className="h-3 w-3" />}
                     <span className="font-bold">{c.code}</span>
-                    {c.isTop && <span className="text-primary text-[9px]">TOP</span>}
-                    <span className={isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'}>{c.count} cmd / {c.totalQty.toLocaleString('fr-FR')} u.</span>
+                    {c.isTop && <span className={hasNoOrders ? 'text-red-100 text-[9px]' : 'text-primary text-[9px]'}>TOP</span>}
+                    <span className={hasNoOrders ? 'text-red-100' : isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'}>
+                      {hasNoOrders ? '0 commandes' : `${c.count} cmd / ${c.totalQty.toLocaleString('fr-FR')} u.`}
+                    </span>
                   </Badge>
                 </button>
               )
@@ -386,13 +449,14 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
         </div>
       )}
 
-      {/* Horizontal bar chart */}
-      {customerSummary.size > 0 && (
+      {/* Horizontal bar chart — only customers with orders */}
+      {[...customerSummary.values()].some(c => c.count > 0) && (
         <Card>
           <CardContent className="p-4">
             <p className="text-sm font-semibold mb-3">Volume par client</p>
             <HorizontalBarChart
               items={[...customerSummary.values()]
+                .filter(c => c.count > 0)
                 .sort((a, b) => b.totalQty - a.totalQty)
                 .map(c => ({
                   label: `${c.name}${c.isTop ? ' ★' : ''}`,
@@ -416,7 +480,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
             <SelectItem value="all">Toutes ({orders?.length ?? 0})</SelectItem>
             <SelectItem value="anomalies">Anomalies ({totalAnomalies})</SelectItem>
             <SelectItem value="pending">En attente ({pendingCount})</SelectItem>
-            <SelectItem value="validated">Validees ({(orders?.length ?? 0) - pendingCount})</SelectItem>
+            <SelectItem value="validated">Validées ({(orders?.length ?? 0) - pendingCount})</SelectItem>
           </SelectContent>
         </Select>
         {filter === 'customer' && selectedCustomerId && (
@@ -429,18 +493,18 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
         )}
         {selectedOrders.size > 0 && (
           <div className="flex items-center gap-2">
-            <Badge variant="secondary">{selectedOrders.size} selectionnees</Badge>
+            <Badge variant="secondary">{selectedOrders.size} sélectionnées</Badge>
             <Button variant="destructive" size="sm" className="gap-1 h-8" onClick={() => setRejectOpen(true)}>
               <XCircle className="h-3.5 w-3.5" />
               Rejeter
             </Button>
             <Button variant="ghost" size="sm" className="h-8" onClick={() => setSelectedOrders(new Set())}>
-              Deselectionner
+              Désélectionner
             </Button>
           </div>
         )}
         <span className="text-xs text-muted-foreground ml-auto">
-          {filteredOrders.length} commandes affichees
+          {filteredOrders.length} commandes affichées
         </span>
       </div>
 
@@ -458,7 +522,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
                 <TableHead>Client</TableHead>
                 <TableHead>CIP13</TableHead>
                 <TableHead className="hidden md:table-cell">Produit</TableHead>
-                <TableHead className="text-right">Quantite</TableHead>
+                <TableHead className="text-right">Quantité</TableHead>
                 <TableHead className="hidden sm:table-cell text-right">Prix</TableHead>
                 <TableHead className="hidden lg:table-cell text-right">Lot min.</TableHead>
                 <TableHead className="hidden lg:table-cell">Date d'exp. min</TableHead>
@@ -563,12 +627,12 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
                 Voir toutes les commandes
               </Button>
             ) : (
-              <p className="text-sm text-muted-foreground mt-1">Retournez a l'etape precedente pour importer des commandes.</p>
+              <p className="text-sm text-muted-foreground mt-1">Retournez à l'étape précédente pour importer des commandes.</p>
             )}
             {filter === 'all' && onBack && (
               <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={onBack}>
                 <ArrowRight className="h-4 w-4 rotate-180" />
-                Retour a l'import
+                Retour à l'import
               </Button>
             )}
           </CardContent>
@@ -601,8 +665,8 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
         title={pendingCount > 0 ? 'Valider les commandes ?' : 'Confirmer et continuer ?'}
         description={
           pendingCount > 0
-            ? `${pendingCount} commandes seront marquees comme validees.${totalAnomalies > 0 ? ` Attention : ${totalAnomalies} anomalies detectees.` : ''} Cette action lancera l'etape suivante.`
-            : `Toutes les ${orders?.length ?? 0} commandes sont deja validees.${totalAnomalies > 0 ? ` Note : ${totalAnomalies} commandes avec anomalies (non bloquant).` : ''} Passer a l'etape suivante ?`
+            ? `${pendingCount} commandes seront marquées comme validées.${totalAnomalies > 0 ? ` Attention : ${totalAnomalies} anomalies détectées.` : ''} Cette action lancera l'étape suivante.`
+            : `Toutes les ${orders?.length ?? 0} commandes sont déjà validées.${totalAnomalies > 0 ? ` Note : ${totalAnomalies} commandes avec anomalies (non bloquant).` : ''} Passer à l'étape suivante ?`
         }
         onConfirm={() => validateMut.mutate()}
         loading={validateMut.isPending}
@@ -615,7 +679,7 @@ export default function OrderReviewStep({ process, onNext, onBack }: OrderReview
         open={rejectOpen}
         onOpenChange={setRejectOpen}
         title={`Rejeter ${selectedOrders.size} commandes ?`}
-        description="Les commandes selectionnees seront marquees comme rejetees et ne seront pas incluses dans l'allocation."
+        description="Les commandes sélectionnées seront marquées comme rejetées et ne seront pas incluses dans l'allocation."
         onConfirm={() => rejectMut.mutate()}
         loading={rejectMut.isPending}
         variant="destructive"

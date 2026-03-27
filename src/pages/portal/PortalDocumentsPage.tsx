@@ -70,7 +70,7 @@ export default function PortalDocumentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portal-documents'] })
-      toast.success('Document uploade avec succes')
+      toast.success('Document uploadé avec succès')
     },
     onError: (err: any) => {
       toast.error(`Erreur: ${err.message}`)
@@ -88,7 +88,7 @@ export default function PortalDocumentsPage() {
       .from('customer-docs')
       .createSignedUrl(doc.storage_path, 60)
     if (error) {
-      toast.error('Erreur lors du telechargement')
+      toast.error('Erreur lors du téléchargement')
       return
     }
     window.open(data.signedUrl, '_blank')
@@ -111,7 +111,7 @@ export default function PortalDocumentsPage() {
       {/* Upload zone */}
       <Card className="ivory-card">
         <CardHeader className="pb-3">
-          <CardTitle className="text-[15px]">Uploader un document reglementaire</CardTitle>
+          <CardTitle className="text-[15px]">Uploader un document réglementaire</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-3">
@@ -150,13 +150,13 @@ export default function PortalDocumentsPage() {
 
       {/* Regulatory documents */}
       <DocumentSection
-        title="Documents reglementaires"
+        title="Documents réglementaires"
         icon={Shield}
         documents={regulatoryDocs}
         isLoading={isLoading}
         onDownload={handleDownload}
         formatSize={formatSize}
-        emptyMessage="Aucun document reglementaire. Uploadez vos certificats WDA et GDP."
+        emptyMessage="Aucun document réglementaire. Uploadez vos certificats WDA et GDP."
       />
 
       {/* Exports */}
@@ -250,7 +250,7 @@ function DocumentSection({
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" className="h-7 text-[11px] gap-1" onClick={() => onDownload(doc)}>
                         <Download className="h-3 w-3" />
-                        Telecharger
+                        Télécharger
                       </Button>
                     </TableCell>
                   </TableRow>

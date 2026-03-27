@@ -28,7 +28,10 @@ import {
   detectEntityFromData,
   getSampleValues as getSharedSampleValues,
   getUnmappedHeaders,
+  hasCipColumn,
+  getEffectiveCipColumn,
 } from '@/lib/column-detection'
+import { buildCip7Map, resolveProductCode } from '@/lib/cip-utils'
 
 // --------------- Types ---------------
 
@@ -36,11 +39,12 @@ type StockColumnMapping = Record<StockField, string>
 
 const FIELD_LABELS: Record<StockField, string> = {
   cip13: 'CIP13 Produit *',
-  lot_number: 'Numero de lot *',
+  cip7: 'CIP7 (code court)',
+  lot_number: 'Numéro de lot *',
   expiry_date: 'Date expiration *',
-  quantity: 'Quantite *',
-  unit_cost: 'Cout unitaire',
-  date_reception: 'Date reception',
+  quantity: 'Quantité *',
+  unit_cost: 'Coût unitaire',
+  date_reception: 'Date réception',
   productName: 'Nom produit',
   wholesalerColumn: 'Grossiste (multi)',
 }
@@ -374,7 +378,10 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
   const canProceed = (f: QueuedStockFile) => {
     const wholesalerCode = getWholesalerCode(f)
     const hasWholesalerColumn = !!f.mapping.wholesalerColumn
-    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (!!wholesalerCode || hasWholesalerColumn)
+    // CIP13 or CIP7 must be mapped (CIP7 serves as fallback)
+    const hasCip = hasCipColumn(f.mapping)
+    const otherRequired = REQUIRED_FIELDS.filter(fld => fld !== 'cip13').every(fld => f.mapping[fld])
+    return hasCip && otherRequired && (!!wholesalerCode || hasWholesalerColumn)
   }
 
   // --------------- Import mutation ---------------
@@ -386,7 +393,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
 
       const wholesalerCode = getWholesalerCode(f)
 
-      updateFile(fileId, { status: 'importing', importProgress: { current: 0, total: f.rows.length, phase: 'Chargement des references...' } })
+      updateFile(fileId, { status: 'importing', importProgress: { current: 0, total: f.rows.length, phase: 'Chargement des références...' } })
 
       // Load all products (paginated with safety limit)
       let allProducts: { id: string; cip13: string }[] = []
@@ -404,17 +411,13 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
 
       const productMap = new Map(allProducts.map(p => [p.cip13, p]))
 
-      // Build CIP7 reverse lookup: CIP7 = CIP13[5:12] (French pharma standard)
-      const cip7Map = new Map<string, typeof allProducts[0]>()
-      for (const p of allProducts) {
-        if (p.cip13 && p.cip13.length === 13) {
-          const c7 = p.cip13.substring(5, 12)
-          if (!cip7Map.has(c7)) cip7Map.set(c7, p)
-        }
-      }
-      const resolveProduct = (code: string) => {
-        return productMap.get(code) ?? (code.length === 7 && /^\d+$/.test(code) ? cip7Map.get(code) : null) ?? null
-      }
+      // Build CIP7 reverse lookup using shared utility
+      const cip7Map = buildCip7Map(allProducts)
+      const resolveProduct = (code: string) => resolveProductCode(code, productMap, cip7Map)
+
+      // Determine which column holds the product code (CIP13 or CIP7 fallback)
+      const cipColumn = getEffectiveCipColumn(f.mapping)
+      const usingCip7Column = !f.mapping.cip13 && !!f.mapping.cip7
 
       const wholesalersList = wholesalers ?? []
       const wholesaler = wholesalersList.find(w => w.code?.toUpperCase() === wholesalerCode?.toUpperCase())
@@ -434,7 +437,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
       for (let i = 0; i < f.rows.length; i += batchSize) {
         const batch = f.rows.slice(i, i + batchSize).map((row, batchIdx) => {
           const rowIndex = i + batchIdx
-          const cip13 = String(row[f.mapping.cip13] || '').trim()
+          const rawCode = String(row[cipColumn] || '').trim()
           const lotNumber = String(row[f.mapping.lot_number] || '').trim()
           const expiryRaw = String(row[f.mapping.expiry_date] || '').trim()
           const qty = parseInt(String(row[f.mapping.quantity] || '0').replace(/\s/g, ''), 10)
@@ -444,9 +447,10 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
           const dateReceptionRaw = f.mapping.date_reception ? String(row[f.mapping.date_reception] || '').trim() : ''
           const dateReception = dateReceptionRaw ? parseExpiryDate(dateReceptionRaw) : null
 
-          const product = resolveProduct(cip13)
+          const product = resolveProduct(rawCode)
+          const cip13 = product?.cip13 ?? rawCode // Resolve to CIP13 for storage
           if (!product) {
-            skippedDetails.push({ rowIndex, cip13, reason: 'unknown_product' })
+            skippedDetails.push({ rowIndex, cip13: usingCip7Column ? `CIP7:${rawCode}` : rawCode, reason: 'unknown_product' })
             return null
           }
 
@@ -570,7 +574,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
       })
       queryClient.invalidateQueries({ queryKey: ['collected_stock'] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      toast.success(`${result.inserted} lots importes`)
+      toast.success(`${result.inserted} lots importés`)
     },
     onError: (err: Error, fileId: string) => {
       updateFile(fileId, { status: 'error', importProgress: { current: 0, total: 0, phase: err.message } })
@@ -582,7 +586,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
 
   const manualStockMut = useMutation({
     mutationFn: async () => {
-      if (!manualWholesaler) throw new Error('Selectionnez un grossiste')
+      if (!manualWholesaler) throw new Error('Sélectionnez un grossiste')
       const ws = (wholesalers ?? []).find(w => w.code === manualWholesaler)
       if (!ws) throw new Error('Grossiste introuvable')
 
@@ -596,11 +600,14 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
         from += 1000
       }
       const productMap = new Map(allProducts.map(p => [p.cip13, p]))
+      // CIP7 reverse lookup for manual entry using shared utility
+      const manualCip7Map = buildCip7Map(allProducts)
+      const resolveManual = (code: string) => resolveProductCode(code, productMap, manualCip7Map)
 
       const validRows = manualStockRows
         .filter(r => r.cip13.trim() && r.lot_number.trim() && parseInt(r.quantity) > 0)
         .map(r => {
-          const product = productMap.get(r.cip13.trim())
+          const product = resolveManual(r.cip13.trim())
           if (!product) return null
           const expiry = parseExpiryDate(r.expiry_date)
           if (!expiry) return null
@@ -609,7 +616,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
             monthly_order_id: null,
             wholesaler_id: ws.id,
             product_id: product.id,
-            cip13: r.cip13.trim(),
+            cip13: product.cip13,
             lot_number: r.lot_number.trim(),
             expiry_date: expiry,
             quantity: parseInt(r.quantity),
@@ -664,7 +671,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ['collected_stock'] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      toast.success(`${count} lots ajoutes manuellement`)
+      toast.success(`${count} lots ajoutés manuellement`)
       setManualStockRows([{ cip13: '', lot_number: '', expiry_date: '', quantity: '', unit_cost: '' }])
       setManualWholesaler('')
     },
@@ -684,7 +691,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
 
   const getConfidenceBadge = (conf: StockMappingConfidence) => {
     if (conf.source === 'none') return null
-    if (conf.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Memorise</Badge>
+    if (conf.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Mémorisé</Badge>
     if (conf.source === 'auto') return <Badge variant="secondary" className="text-[9px] h-4 gap-0.5"><Zap className="h-2.5 w-2.5" /> Auto</Badge>
     if (conf.source === 'manual') return <Badge variant="outline" className="text-[9px] h-4 gap-0.5 border-blue-300 text-blue-600"><Hand className="h-2.5 w-2.5" /> Manuel</Badge>
     return null
@@ -744,13 +751,13 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-200">
-                    Grossiste non defini
+                    Grossiste non défini
                   </Badge>
                 )}
                 {f.status === 'done' && (
                   <span className="text-[11px] text-green-600 font-medium">
-                    {f.importResult.inserted} lots importes
-                    {f.importResult.skipped > 0 && <span className="text-amber-600"> / {f.importResult.skipped} ignores</span>}
+                    {f.importResult.inserted} lots importés
+                    {f.importResult.skipped > 0 && <span className="text-amber-600"> / {f.importResult.skipped} ignorés</span>}
                   </span>
                 )}
               </div>
@@ -800,10 +807,10 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
                     onValueChange={(v) => updateFile(f.id, { manualWholesaler: v === 'none' ? null : v })}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Selectionner le grossiste..." />
+                      <SelectValue placeholder="Sélectionner le grossiste..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">-- Selectionner --</SelectItem>
+                      <SelectItem value="none">-- Sélectionner --</SelectItem>
                       {(wholesalers ?? []).map(w => (
                         <SelectItem key={w.id} value={w.code ?? w.id}>{w.code} — {w.name}</SelectItem>
                       ))}
@@ -829,18 +836,21 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
               {(f.status === 'mapping' || f.status === 'pending') && (
                 <>
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs stock (lot, expiration, quantite).</p>
+                    <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs stock (lot, expiration, quantité).</p>
                     <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground" onClick={() => resetMapping(f.id)}>
-                      <RotateCcw className="h-3 w-3" /> Reinitialiser
+                      <RotateCcw className="h-3 w-3" /> Réinitialiser
                     </Button>
                   </div>
 
                   {/* Alert for missing required fields */}
-                  {!REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (
+                  {!(hasCipColumn(f.mapping) && REQUIRED_FIELDS.filter(fld => fld !== 'cip13').every(fld => f.mapping[fld])) && (
                     <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
                       <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                       <p className="text-xs text-red-600 dark:text-red-400">
-                        Champs obligatoires manquants : {REQUIRED_FIELDS.filter(fld => !f.mapping[fld]).map(fld => FIELD_LABELS[fld].replace(' *', '')).join(', ')}
+                        Champs obligatoires manquants : {[
+                          ...(!hasCipColumn(f.mapping) ? ['CIP13 ou CIP7'] : []),
+                          ...REQUIRED_FIELDS.filter(fld => fld !== 'cip13' && !f.mapping[fld]).map(fld => FIELD_LABELS[fld].replace(' *', '')),
+                        ].join(', ')}
                       </p>
                     </div>
                   )}
@@ -882,7 +892,8 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
                   </div>
 
                   {(() => {
-                    const reqMapped = REQUIRED_FIELDS.filter(fld => f.mapping[fld]).length
+                    // CIP7 satisfies the CIP13 requirement
+                    const reqMapped = REQUIRED_FIELDS.filter(fld => fld === 'cip13' ? hasCipColumn(f.mapping) : !!f.mapping[fld]).length
                     const reqTotal = REQUIRED_FIELDS.length
                     const optFields = ALL_FIELDS.filter(fld => !REQUIRED_FIELDS.includes(fld))
                     const optMapped = optFields.filter(fld => f.mapping[fld]).length
@@ -926,11 +937,11 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
                       size="sm"
                       onClick={() => {
                         if (canProceed(f)) updateFile(f.id, { status: 'preview' })
-                        else toast.error('Champs obligatoires manquants (CIP13, Lot, Expiration, Quantite, Grossiste)')
+                        else toast.error('Champs obligatoires manquants (CIP13 ou CIP7, Lot, Expiration, Quantité, Grossiste)')
                       }}
                       disabled={!canProceed(f)}
                     >
-                      Apercu
+                      Aperçu
                     </Button>
                   </div>
                 </>
@@ -940,25 +951,25 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
               {f.status === 'preview' && (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Apercu des 10 premieres lignes sur {f.rows.length} total. Grossiste : <strong>{wholesalerCode}</strong>
+                    Aperçu des 10 premières lignes sur {f.rows.length} total. Grossiste : <strong>{wholesalerCode}</strong>
                   </p>
                   <div className="border rounded-lg overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-10">#</TableHead>
-                          <TableHead>CIP13</TableHead>
+                          <TableHead>{f.mapping.cip13 ? 'CIP13' : 'CIP7'}</TableHead>
                           <TableHead>Lot</TableHead>
                           <TableHead>Expiration</TableHead>
-                          <TableHead>Quantite</TableHead>
-                          {f.mapping.unit_cost && <TableHead>Cout</TableHead>}
+                          <TableHead>Quantité</TableHead>
+                          {f.mapping.unit_cost && <TableHead>Coût</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {f.rows.slice(0, 10).map((row, i) => (
                           <TableRow key={i}>
                             <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
-                            <TableCell className="font-mono text-sm">{row[f.mapping.cip13]}</TableCell>
+                            <TableCell className="font-mono text-sm">{row[getEffectiveCipColumn(f.mapping)]}{!f.mapping.cip13 && f.mapping.cip7 ? <Badge variant="outline" className="ml-1 text-[9px] h-4">CIP7</Badge> : null}</TableCell>
                             <TableCell className="text-sm">{row[f.mapping.lot_number]}</TableCell>
                             <TableCell className="text-sm">{row[f.mapping.expiry_date]}</TableCell>
                             <TableCell className="text-sm">{row[f.mapping.quantity]}</TableCell>
@@ -987,7 +998,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
           <Card className="border-t-0 rounded-t-none border-amber-200/60 bg-amber-50/30 dark:bg-amber-950/20">
             <CardContent className="p-3 flex items-center gap-3">
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-              <p className="text-xs flex-1">{f.skippedItems.length} lignes ignorees</p>
+              <p className="text-xs flex-1">{f.skippedItems.length} lignes ignorées</p>
               <Button
                 variant="outline"
                 size="sm"
@@ -1016,7 +1027,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
                           <TableCell>
                             <Badge variant="outline" className="text-[9px]">
                               {item.reason === 'unknown_product' ? 'Produit inconnu' :
-                               item.reason === 'invalid_quantity' ? 'Quantite invalide' :
+                               item.reason === 'invalid_quantity' ? 'Quantité invalide' :
                                item.reason === 'invalid_expiry' ? 'Date invalide' : 'Lot manquant'}
                             </Badge>
                           </TableCell>
@@ -1038,9 +1049,9 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-semibold">Reception des Stocks Collectes</h3>
+        <h3 className="text-lg font-semibold">Réception des Stocks Collectés</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Importez les stocks recus des grossistes ou saisissez-les directement.
+          Importez les stocks reçus des grossistes ou saisissez-les directement.
         </p>
       </div>
 
@@ -1075,9 +1086,9 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Grossiste *</Label>
               <Select value={manualWholesaler || 'none'} onValueChange={(v) => setManualWholesaler(v === 'none' ? '' : v)}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Selectionner le grossiste..." /></SelectTrigger>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Sélectionner le grossiste..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">-- Selectionner --</SelectItem>
+                  <SelectItem value="none">-- Sélectionner --</SelectItem>
                   {(wholesalers ?? []).map(w => (
                     <SelectItem key={w.id} value={w.code ?? w.id}>{w.code} — {w.name}</SelectItem>
                   ))}
@@ -1094,8 +1105,8 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
                       <TableHead>CIP13 *</TableHead>
                       <TableHead>N° Lot *</TableHead>
                       <TableHead>Expiration *</TableHead>
-                      <TableHead>Quantite *</TableHead>
-                      <TableHead>Cout unit.</TableHead>
+                      <TableHead>Quantité *</TableHead>
+                      <TableHead>Coût unit.</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1142,7 +1153,7 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
           <CardContent className="p-4 flex items-center gap-3">
             <PackageCheck className="h-5 w-5 text-primary shrink-0" />
             <p className="text-sm">
-              <strong>{existingStock}</strong> lots deja importes pour ce processus.
+              <strong>{existingStock}</strong> lots déjà importés pour ce processus.
             </p>
           </CardContent>
         </Card>
@@ -1160,13 +1171,13 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
             <Card>
               <CardContent className="p-3 text-center">
                 <p className="text-2xl font-bold">{stockSummary.totalLots.toLocaleString('fr-FR')}</p>
-                <p className="text-xs text-muted-foreground">Lots recus</p>
+                <p className="text-xs text-muted-foreground">Lots reçus</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-3 text-center">
                 <p className="text-2xl font-bold">{stockSummary.totalQty.toLocaleString('fr-FR')}</p>
-                <p className="text-xs text-muted-foreground">Unites en stock</p>
+                <p className="text-xs text-muted-foreground">Unités en stock</p>
               </CardContent>
             </Card>
           </div>
@@ -1234,14 +1245,14 @@ export default function StockImportStep({ process, onNext }: StockImportStepProp
         </div>
         <p className="text-sm font-medium">
           {isDragOver
-            ? 'Deposez les fichiers ici'
+            ? 'Déposez les fichiers ici'
             : queue.length > 0
               ? 'Ajouter un autre fichier de stock'
-              : 'Deposez des fichiers de stock collecte ou cliquez pour selectionner'
+              : 'Déposez des fichiers de stock collecté ou cliquez pour sélectionner'
           }
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          .xlsx, .xls, .csv — Un fichier par grossiste avec lots, dates d'expiration et quantites
+          .xlsx, .xls, .csv — Un fichier par grossiste avec lots, dates d'expiration et quantités
         </p>
       </div>}
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileInput} multiple className="hidden" />

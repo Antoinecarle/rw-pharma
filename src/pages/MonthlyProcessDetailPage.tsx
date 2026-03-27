@@ -31,8 +31,8 @@ import { useState, useCallback, useRef } from 'react'
 import type { MonthlyProcess } from '@/types/database'
 
 const MONTH_NAMES = [
-  'Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre',
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ]
 
 const STATUS_LABELS: Record<string, string> = {
@@ -40,17 +40,17 @@ const STATUS_LABELS: Record<string, string> = {
   importing_quotas: 'Import dispos',
   importing_orders: 'Import commandes',
   reviewing_orders: 'Revue commandes',
-  macro_attributing: 'Attribution macro',
+  macro_attributing: 'Commande initiale',
   exporting_wholesalers: 'Export grossistes',
-  negotiating: 'Negociation',
-  reexporting: 'Re-export grossistes',
+  negotiating: 'Négociation',
+  reexporting: 'Ré-export grossistes',
   attente_stock: 'Attente stock grossistes',
-  collecting_stock: 'Reception stocks',
-  aggregating_stock: 'Aggregation stock',
+  collecting_stock: 'Réception stocks',
+  aggregating_stock: 'Agrégation stock',
   allocating_lots: 'Allocation',
   reviewing_allocations: 'Revue allocations',
   finalizing: 'Finalisation',
-  completed: 'Termine',
+  completed: 'Terminé',
 }
 
 const stepTransition = {
@@ -139,7 +139,7 @@ export default function MonthlyProcessDetailPage() {
       queryClient.removeQueries({ queryKey: ['monthly-processes', id] })
       // Invalidate the list query so the listing page refreshes
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'], exact: true })
-      toast.success('Processus supprime')
+      toast.success('Processus supprimé')
       navigate('/monthly-processes')
     },
     onError: (err: Error) => toast.error(err.message),
@@ -156,11 +156,11 @@ export default function MonthlyProcessDetailPage() {
     const stats: Record<number, { value: string | number; label: string }> = {}
     if ((process.quotas_count ?? 0) > 0) stats[1] = { value: process.quotas_count ?? 0, label: 'dispos' }
     if (process.orders_count > 0) stats[2] = { value: process.orders_count, label: 'commandes' }
-    if (process.orders_count > 0 && processStep > 3) stats[3] = { value: 'validees', label: '' }
-    if (process.orders_count > 0 && processStep > 4) stats[4] = { value: 'attribue', label: '' }
-    if (process.orders_count > 0 && processStep > 5) stats[5] = { value: 'envoye', label: '' }
+    if (process.orders_count > 0 && processStep > 3) stats[3] = { value: 'validées', label: '' }
+    if (process.orders_count > 0 && processStep > 4) stats[4] = { value: 'attribué', label: '' }
+    if (process.orders_count > 0 && processStep > 5) stats[5] = { value: 'envoyé', label: '' }
     if (process.allocations_count > 0) stats[10] = { value: process.allocations_count, label: 'allocations' }
-    if (process.allocations_count > 0 && processStep > 11) stats[11] = { value: 'confirmees', label: '' }
+    if (process.allocations_count > 0 && processStep > 11) stats[11] = { value: 'confirmées', label: '' }
     return stats
   })()
 
@@ -188,7 +188,7 @@ export default function MonthlyProcessDetailPage() {
         .then(({ error }) => {
           if (error) {
             console.error('advanceStep DB error:', error)
-            toast.error(`Erreur avancement etape: ${error.message}`)
+            toast.error(`Erreur avancement étape: ${error.message}`)
           }
           queryClient.invalidateQueries({ queryKey: ['monthly-processes', id] })
         })
@@ -276,7 +276,7 @@ export default function MonthlyProcessDetailPage() {
                   {STATUS_LABELS[process.status] ?? process.status}
                 </Badge>
                 <span className="text-[11px] sm:text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
-                  Etape {processStep}/12
+                  Étape {processStep}/12
                   {' '}&middot;{' '}
                   {process.orders_count} cmd / {process.allocations_count} alloc
                   {process.date_ouverture && (
@@ -437,7 +437,7 @@ export default function MonthlyProcessDetailPage() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Supprimer ce processus ?"
-        description="Cette action est irreversible. Toutes les commandes et allocations associees seront supprimees."
+        description="Cette action est irréversible. Toutes les commandes et allocations associées seront supprimées."
         onConfirm={() => deleteMut.mutate()}
         loading={deleteMut.isPending}
         variant="destructive"

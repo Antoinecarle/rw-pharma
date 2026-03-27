@@ -29,43 +29,43 @@ interface ReopenPhaseDialogProps {
 const PHASE_IMPACTS: Record<number, { deletions: string[]; preserved: string[] }> = {
   1: {
     deletions: [
-      'Toutes les allocations seront supprimees',
-      'Le processus reviendra a l\'etape 1 (Import Disponibilites)',
+      'Toutes les allocations seront supprimées',
+      'Le processus reviendra à l\'étape 1 (Import Disponibilités)',
     ],
     preserved: [
-      'Le stock collecte est conserve (il existe physiquement)',
-      'Les disponibilites et commandes de base sont conservees',
+      'Le stock collecté est conservé (il existe physiquement)',
+      'Les disponibilités et commandes de base sont conservées',
     ],
   },
   2: {
     deletions: [
-      'Les ajustements de negociation seront reinitialises',
-      'Le processus reviendra a l\'etape 6 (Negociation)',
+      'Les ajustements de négociation seront réinitialisés',
+      'Le processus reviendra à l\'étape 6 (Négociation)',
     ],
     preserved: [
-      'Les commandes initiales sont conservees',
-      'Les disponibilites sont conservees',
+      'Les commandes initiales sont conservées',
+      'Les disponibilités sont conservées',
     ],
   },
   3: {
     deletions: [
-      'Toutes les allocations seront supprimees',
-      'Le processus reviendra a l\'etape 8 (Reception Stock)',
+      'Toutes les allocations seront supprimées',
+      'Le processus reviendra à l\'étape 8 (Réception Stock)',
     ],
     preserved: [
-      'Les commandes validees sont conservees',
-      'Le stock collecte est conserve',
-      'Les disponibilites sont conservees',
+      'Les commandes validées sont conservées',
+      'Le stock collecté est conservé',
+      'Les disponibilités sont conservées',
     ],
   },
   4: {
     deletions: [
-      'La date de cloture sera annulee',
-      'Le processus reviendra a l\'etape 11 (Revue Allocations)',
+      'La date de clôture sera annulée',
+      'Le processus reviendra à l\'étape 11 (Revue Allocations)',
     ],
     preserved: [
-      'Toutes les allocations sont conservees (mode edition)',
-      'Les commandes et le stock sont conserves',
+      'Toutes les allocations sont conservées (mode édition)',
+      'Les commandes et le stock sont conservés',
     ],
   },
 }
@@ -134,7 +134,7 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
       queryClient.invalidateQueries({ queryKey: ['monthly-processes', process.id] })
       queryClient.invalidateQueries({ queryKey: ['allocations', process.id] })
       queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
-      toast.success(`Phase ${targetPhaseId} reouverte — retour a l'etape ${newStep}`)
+      toast.success(`Phase ${targetPhaseId} réouverte — retour à l'étape ${newStep}`)
       setReason('')
       onOpenChange(false)
       onReopened(newStep)
@@ -153,9 +153,9 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
               <RotateCcw className="h-5 w-5 text-amber-600" />
             </div>
             <div>
-              <DialogTitle>Reouvrir Phase {targetPhaseId} — {targetPhase.label}</DialogTitle>
+              <DialogTitle>Réouvrir Phase {targetPhaseId} — {targetPhase.label}</DialogTitle>
               <DialogDescription className="mt-1">
-                Cette action renverra le processus a une etape anterieure.
+                Cette action renverra le processus à une étape antérieure.
               </DialogDescription>
             </div>
           </div>
@@ -166,7 +166,7 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
           <div>
             <p className="text-xs font-semibold text-destructive flex items-center gap-1.5 mb-2">
               <Trash2 className="h-3.5 w-3.5" />
-              Impact de la reouverture
+              Impact de la réouverture
             </p>
             <div className="space-y-1.5">
               {impacts.deletions.map((d, i) => (
@@ -182,7 +182,7 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
           <div>
             <p className="text-xs font-semibold text-green-600 flex items-center gap-1.5 mb-2">
               <Archive className="h-3.5 w-3.5" />
-              Donnees conservees
+              Données conservées
             </p>
             <div className="space-y-1.5">
               {impacts.preserved.map((p, i) => (
@@ -199,12 +199,12 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
           {/* Reason (optional) */}
           <div>
             <label className="text-xs font-medium text-muted-foreground">
-              Raison (optionnel — pour la tracabilite)
+              Raison (optionnel — pour la traçabilité)
             </label>
             <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Ex: commande client modifiee, erreur d'import..."
+              placeholder="Ex: commande client modifiée, erreur d'import..."
               className="mt-1.5 resize-none"
               rows={2}
             />
@@ -222,7 +222,7 @@ export default function ReopenPhaseDialog({ open, onOpenChange, process, targetP
             className="gap-2"
           >
             <RotateCcw className="h-4 w-4" />
-            {reopenMut.isPending ? 'Reouverture...' : `Reouvrir Phase ${targetPhaseId}`}
+            {reopenMut.isPending ? 'Réouverture...' : `Réouvrir Phase ${targetPhaseId}`}
           </Button>
         </DialogFooter>
       </DialogContent>

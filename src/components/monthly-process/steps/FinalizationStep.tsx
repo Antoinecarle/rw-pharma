@@ -258,13 +258,13 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes', process.id] })
-      toast.success('Processus termine avec succes !')
+      toast.success('Processus terminé avec succès !')
       setShowConfetti(true)
       fireConfetti()
       createNotification({
         type: 'info',
-        title: 'Processus finalise',
-        message: `Le processus ${MONTH_NAMES[process.month - 1]} ${process.year} a ete cloture avec succes.`,
+        title: 'Processus finalisé',
+        message: `Le processus ${MONTH_NAMES[process.month - 1]} ${process.year} a été clôturé avec succès.`,
       })
     },
     onError: (err: Error) => toast.error(err.message),
@@ -327,20 +327,20 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
     setExporting(true)
     try {
       const allocs = await fetchAllocations(process.id)
-      if (allocs.length === 0) { toast.error('Aucune donnee a exporter'); setExporting(false); return }
+      if (allocs.length === 0) { toast.error('Aucune donnée à exporter'); setExporting(false); return }
 
       switch (exportMode) {
         case 'global_csv': {
           const csv = generateCSV(allocs)
           downloadBlob(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }), `${filePrefix}.csv`)
-          toast.success('CSV global telecharge')
+          toast.success('CSV global téléchargé')
           break
         }
 
         case 'global_excel': {
           const wb = generateExcelWorkbook(allocs, 'Allocations')
           XLSX.writeFile(wb, `${filePrefix}.xlsx`)
-          toast.success('Excel global telecharge')
+          toast.success('Excel global téléchargé')
           break
         }
 
@@ -378,7 +378,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
             }
             XLSX.writeFile(wb, `${filePrefix}-par-grossiste.xlsx`)
           }
-          toast.success(`Export par grossiste telecharge (${groups.size} grossistes)`)
+          toast.success(`Export par grossiste téléchargé (${groups.size} grossistes)`)
           break
         }
 
@@ -416,13 +416,13 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
             }
             XLSX.writeFile(wb, `${filePrefix}-par-client.xlsx`)
           }
-          toast.success(`Export par client telecharge (${groups.size} clients)`)
+          toast.success(`Export par client téléchargé (${groups.size} clients)`)
           break
         }
 
         case 'delivery_notes': {
           const count = generateDeliveryNotes(allocs, filePrefix)
-          toast.success(`Bons de livraison telecharges (${count} clients)`)
+          toast.success(`Bons de livraison téléchargés (${count} clients)`)
           break
         }
       }
@@ -455,12 +455,12 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
           )}
         </motion.div>
         <h3 className="text-xl font-bold">
-          {isCompleted ? 'Processus Termine !' : 'Finalisation'}
+          {isCompleted ? 'Processus Terminé !' : 'Finalisation'}
         </h3>
         <p className="text-sm text-muted-foreground mt-1">
           {isCompleted
-            ? `Allocation de ${monthName} ${process.year} terminee avec succes.`
-            : `Resume du processus d'allocation - ${monthName} ${process.year}`
+            ? `Allocation de ${monthName} ${process.year} terminée avec succès.`
+            : `Résumé du processus d'allocation - ${monthName} ${process.year}`
           }
         </p>
         {isCompleted && (
@@ -510,11 +510,11 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
               />
               <div className="flex-1 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Unites allouees</span>
+                  <span className="text-sm text-muted-foreground">Unités allouées</span>
                   <span className="font-bold tabular-nums">{stats?.totalAllocated?.toLocaleString('fr-FR') ?? 0}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Unites demandees</span>
+                  <span className="text-sm text-muted-foreground">Unités demandées</span>
                   <span className="font-bold tabular-nums">{stats?.totalRequested?.toLocaleString('fr-FR') ?? 0}</span>
                 </div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -538,7 +538,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
             <CardContent className="p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <Eye className="h-4 w-4 text-primary" />
-                <h4 className="text-sm font-semibold">Detail des allocations</h4>
+                <h4 className="text-sm font-semibold">Détail des allocations</h4>
                 <Badge variant="secondary" className="ml-auto text-[10px]">{allocations.length} lignes</Badge>
               </div>
 
@@ -555,7 +555,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
                     {wholesalerSummary.length > 0 && (
                       <div>
                         <h5 className="text-xs font-semibold mb-3 flex items-center gap-1.5 text-muted-foreground">
-                          <Truck className="h-3.5 w-3.5" /> Repartition par grossiste
+                          <Truck className="h-3.5 w-3.5" /> Répartition par grossiste
                         </h5>
                         <HorizontalBarChart
                           items={wholesalerSummary.map(w => ({ label: w.name, code: w.code, value: w.totalQty }))}
@@ -566,7 +566,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
                     {customerSummary.length > 0 && (
                       <div>
                         <h5 className="text-xs font-semibold mb-3 flex items-center gap-1.5 text-muted-foreground">
-                          <Users className="h-3.5 w-3.5" /> Repartition par client
+                          <Users className="h-3.5 w-3.5" /> Répartition par client
                         </h5>
                         <HorizontalBarChart
                           items={customerSummary.map(c => ({ label: c.name, code: c.code, value: c.totalQty }))}
@@ -705,7 +705,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
               className="gap-2 w-full sm:w-auto"
             >
               <Download className="h-4 w-4" />
-              {exporting ? 'Export en cours...' : 'Telecharger'}
+              {exporting ? 'Export en cours...' : 'Télécharger'}
             </Button>
           </CardContent>
         </Card>
@@ -737,7 +737,7 @@ export default function FinalizationStep({ process }: FinalizationStepProps) {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Terminer le processus ?"
-        description={`Le processus d'allocation de ${monthName} ${process.year} sera marque comme termine. Cette action est irreversible.`}
+        description={`Le processus d'allocation de ${monthName} ${process.year} sera marqué comme terminé. Cette action est irréversible.`}
         onConfirm={() => finalizeMut.mutate()}
         loading={finalizeMut.isPending}
         variant="default"

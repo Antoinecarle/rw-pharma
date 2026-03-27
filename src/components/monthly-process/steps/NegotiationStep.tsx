@@ -18,8 +18,8 @@ import {
 } from '@/components/ui/dialog'
 import {
   ArrowRight, ArrowLeft, Package, Search, CheckCircle, Circle,
-  Ban, AlertTriangle, Pencil, X, Check, TrendingDown, Star,
-  ChevronLeft, ChevronRight, Clock,
+  Ban, AlertTriangle, Pencil, X, Check, TrendingUp, Star,
+  ChevronLeft, ChevronRight, Clock, MessageSquare,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { MonthlyProcess, Order, Product } from '@/types/database'
@@ -75,6 +75,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
   const [editing, setEditing] = useState<EditingCell | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showNextWarning, setShowNextWarning] = useState(false)
+  const [showOnlyCommented, setShowOnlyCommented] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
 
   // ── Fetch orders with joins ──
@@ -184,7 +185,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
         existing.orders.push(order)
         existing.totalQty += order.quantity
         existing.clientCount = new Set(existing.orders.map(o => o.customer_id)).size
-        if (order.unit_price != null && (existing.bestPrice == null || order.unit_price < existing.bestPrice)) {
+        if (order.unit_price != null && (existing.bestPrice == null || order.unit_price > existing.bestPrice)) {
           existing.bestPrice = order.unit_price
         }
       } else {
@@ -231,6 +232,11 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     return [...custMap.values()].sort((a, b) => a.code.localeCompare(b.code))
   }, [orders])
 
+  // ── Count of products that have at least one order with a comment ──
+  const commentedProductCount = useMemo(() => {
+    return productGroups.filter(g => g.orders.some(o => o.nego_comment && o.nego_comment.trim() !== '')).length
+  }, [productGroups])
+
   // ── Filter groups (for left panel list) ──
   const filteredGroups = useMemo(() => {
     let result = productGroups
@@ -250,6 +256,11 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
       })
     }
 
+    // Filter by commented products only
+    if (showOnlyCommented) {
+      result = result.filter(g => g.orders.some(o => o.nego_comment && o.nego_comment.trim() !== ''))
+    }
+
     // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -260,7 +271,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     }
 
     return result
-  }, [productGroups, selectedCustomerId, negoFilter, searchQuery])
+  }, [productGroups, selectedCustomerId, negoFilter, showOnlyCommented, searchQuery])
 
   // ── Auto-select first product ──
   useEffect(() => {
@@ -322,7 +333,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
 
       if (field === 'quantity') {
         const newQty = parseInt(value, 10)
-        if (isNaN(newQty) || newQty < 0) throw new Error('Quantite invalide')
+        if (isNaN(newQty) || newQty < 0) throw new Error('Quantité invalide')
         if (order.nego_original_qty == null) {
           updates.nego_original_qty = order.quantity
         }
@@ -349,7 +360,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders', process.id, 'negotiation'] })
       setEditing(null)
-      toast.success('Modification enregistree')
+      toast.success('Modification enregistrée')
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -528,7 +539,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Negociation</h3>
+        <h3 className="text-lg font-semibold">Négociation</h3>
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
         </div>
@@ -540,9 +551,9 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
     return (
       <div className="space-y-5">
         <div>
-          <h3 className="text-lg font-semibold">Negociation</h3>
+          <h3 className="text-lg font-semibold">Négociation</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Aucune commande trouvee pour ce processus. Verifiez que les commandes ont ete importees et validees.
+            Aucune commande trouvée pour ce processus. Vérifiez que les commandes ont été importées et validées.
           </p>
         </div>
         <div className="flex justify-between">
@@ -576,9 +587,9 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
       {/* Header + progress */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Negociation</h3>
+          <h3 className="text-lg font-semibold">Négociation</h3>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Produit par produit : ajustez les quantites, prix, et validez.
+            Produit par produit : ajustez les quantités, prix, et validez.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -637,6 +648,23 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                   {c.code}
                 </button>
               ))}
+              {commentedProductCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowOnlyCommented(v => !v)}
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors inline-flex items-center gap-1 ${
+                    showOnlyCommented
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  <MessageSquare className="h-2.5 w-2.5" />
+                  Avec commentaire
+                  <span className={`text-[10px] px-1 rounded-full ${showOnlyCommented ? 'bg-amber-600 text-white' : 'bg-muted-foreground/20'}`}>
+                    {commentedProductCount}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -726,7 +754,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
                 <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">Selectionnez un produit</p>
+                <p className="text-sm">Sélectionnez un produit</p>
               </div>
             </div>
           ) : (
@@ -752,7 +780,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                       </span>
                       {selectedGroup.bestPrice != null && (
                         <span className="flex items-center gap-1">
-                          <TrendingDown className="h-3 w-3 text-green-600" />
+                          <TrendingUp className="h-3 w-3 text-green-600" />
                           Best : <strong className="text-green-700">{selectedGroup.bestPrice.toFixed(2)} EUR</strong>
                         </span>
                       )}
@@ -1166,7 +1194,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                     disabled={currentIndex <= 0}
                     className="gap-1 h-7 text-xs"
                   >
-                    <ChevronLeft className="h-3.5 w-3.5" /> Precedent
+                    <ChevronLeft className="h-3.5 w-3.5" /> Précédent
                   </Button>
                   <span className="text-xs text-muted-foreground">
                     {currentIndex + 1} / {filteredGroups.length}
@@ -1189,7 +1217,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
                     disabled={validateProductMutation.isPending}
                   >
                     <CheckCircle className="h-3.5 w-3.5" />
-                    Valider ce medicament ({selectedValidatedOrders}/{detailOrders.length} clients)
+                    Valider ce médicament ({selectedValidatedOrders}/{detailOrders.length} clients)
                   </Button>
                 )}
               </div>
@@ -1218,7 +1246,7 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
           }}
           className="gap-2"
         >
-          Passer a l'etape suivante <ArrowRight className="h-4 w-4" />
+          Passer à l'étape suivante <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
 
@@ -1228,10 +1256,10 @@ export default function NegotiationStep({ process, onNext, onBack }: Negotiation
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Produits non valides
+              Produits non validés
             </DialogTitle>
             <DialogDescription>
-              {totalCount - validatedCount} produit{totalCount - validatedCount > 1 ? 's' : ''} sur {totalCount} n'{totalCount - validatedCount > 1 ? 'ont' : 'a'} pas encore ete valide{totalCount - validatedCount > 1 ? 's' : ''} en negociation.
+              {totalCount - validatedCount} produit{totalCount - validatedCount > 1 ? 's' : ''} sur {totalCount} n'{totalCount - validatedCount > 1 ? 'ont' : 'a'} pas encore été validé{totalCount - validatedCount > 1 ? 's' : ''} en négociation.
               <br /><br />
               Voulez-vous continuer sans les valider ?
             </DialogDescription>

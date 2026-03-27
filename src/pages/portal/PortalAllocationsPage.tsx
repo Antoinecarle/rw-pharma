@@ -55,8 +55,8 @@ interface ProductGroup {
 
 const confirmationLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   pending: { label: 'En attente', variant: 'outline' },
-  confirmed: { label: 'Confirmee', variant: 'default' },
-  refused: { label: 'Refusee', variant: 'destructive' },
+  confirmed: { label: 'Confirmée', variant: 'default' },
+  refused: { label: 'Refusée', variant: 'destructive' },
 }
 
 function getExpiryStatus(dateStr: string): 'danger' | 'warning' | 'ok' {
@@ -130,9 +130,9 @@ export default function PortalAllocationsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portal-allocations'] })
-      toast.success('Allocation mise a jour')
+      toast.success('Allocation mise à jour')
     },
-    onError: () => toast.error('Erreur lors de la mise a jour'),
+    onError: () => toast.error('Erreur lors de la mise à jour'),
   })
 
   // Save sold quantity mutation
@@ -151,7 +151,7 @@ export default function PortalAllocationsPage() {
         next.delete(variables.id)
         return next
       })
-      toast.success('Quantite vendue enregistree')
+      toast.success('Quantité vendue enregistrée')
     },
     onError: () => toast.error('Erreur lors de la sauvegarde'),
   })
@@ -177,7 +177,7 @@ export default function PortalAllocationsPage() {
     const soldQty = editingSold.get(alloc.id)
     if (soldQty === undefined) return
     if (soldQty > alloc.allocated_quantity) {
-      toast.error(`La quantite vendue ne peut pas depasser ${alloc.allocated_quantity}`)
+      toast.error(`La quantité vendue ne peut pas dépasser ${alloc.allocated_quantity}`)
       return
     }
     updateSoldMutation.mutate({ id: alloc.id, soldQty })
@@ -241,7 +241,7 @@ export default function PortalAllocationsPage() {
       'CIP13': a.products?.cip13 ?? '',
       'Produit': a.products?.name ?? '',
       'Grossiste': a.wholesalers?.name ?? '',
-      'Qte allouee': a.allocated_quantity,
+      'Qté allouée': a.allocated_quantity,
       'Statut': confirmationLabels[a.confirmation_status]?.label ?? a.confirmation_status,
       'N° lot': (a.metadata?.lot_number as string) ?? '',
       'Expiration': (a.metadata?.expiry_date as string) ? new Date(a.metadata!.expiry_date as string).toLocaleDateString('fr-FR') : '',
@@ -267,10 +267,10 @@ export default function PortalAllocationsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { icon: FileCheck, color: 'rgba(13,148,136,0.08)', iconColor: 'var(--ivory-accent)', label: 'Allocations', value: totalAllocations },
-          { icon: Package, color: 'rgba(59,130,246,0.08)', iconColor: '#3b82f6', label: 'Qte allouee', value: totalAllocated },
+          { icon: Package, color: 'rgba(59,130,246,0.08)', iconColor: '#3b82f6', label: 'Qté allouée', value: totalAllocated },
           { icon: Boxes, color: 'rgba(139,92,246,0.08)', iconColor: '#8b5cf6', label: 'Qte vendue', value: totalSold },
           { icon: BarChart3, color: 'rgba(245,158,11,0.08)', iconColor: '#f59e0b', label: 'Restant', value: totalRemaining },
-          { icon: ThumbsUp, color: 'rgba(34,197,94,0.08)', iconColor: '#22c55e', label: 'Confirmees', value: confirmedCount },
+          { icon: ThumbsUp, color: 'rgba(34,197,94,0.08)', iconColor: '#22c55e', label: 'Confirmées', value: confirmedCount },
           { icon: AlertTriangle, color: 'rgba(234,179,8,0.08)', iconColor: '#eab308', label: 'En attente', value: pendingCount },
         ].map(stat => (
           <Card key={stat.label} className="ivory-card">
@@ -320,10 +320,10 @@ export default function PortalAllocationsPage() {
           <CardContent className="p-8 text-center">
             <FileCheck className="h-10 w-10 mx-auto mb-3" style={{ color: 'var(--ivory-text-muted)', opacity: 0.3 }} />
             <p className="font-medium" style={{ color: 'var(--ivory-text-heading)' }}>
-              {search ? `Aucun resultat pour "${search}"` : 'Aucune allocation'}
+              {search ? `Aucun résultat pour "${search}"` : 'Aucune allocation'}
             </p>
             <p className="text-sm mt-1" style={{ color: 'var(--ivory-text-muted)' }}>
-              Les allocations apparaitront ici apres le processus mensuel.
+              Les allocations apparaîtront ici après le processus mensuel.
             </p>
           </CardContent>
         </Card>

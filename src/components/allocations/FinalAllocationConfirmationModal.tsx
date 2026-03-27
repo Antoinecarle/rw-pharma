@@ -75,7 +75,7 @@ export default function FinalAllocationConfirmationModal({
             Confirmation des allocations
           </DialogTitle>
           <DialogDescription>
-            Verifiez le resume ci-dessous avant de confirmer. Cette action est irreversible.
+            Vérifiez le résumé ci-dessous avant de confirmer. Cette action est irréversible.
           </DialogDescription>
         </DialogHeader>
 
@@ -83,9 +83,9 @@ export default function FinalAllocationConfirmationModal({
         <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-sm text-amber-800 dark:text-amber-200">
-            <p className="font-medium">Action irreversible</p>
+            <p className="font-medium">Action irréversible</p>
             <p className="text-xs mt-0.5 opacity-80">
-              Une fois confirmees, les {proposedCount} allocations ne pourront plus etre modifiees.
+              Une fois confirmées, les {proposedCount} allocations ne pourront plus être modifiées.
             </p>
           </div>
         </div>
@@ -114,12 +114,12 @@ export default function FinalAllocationConfirmationModal({
 
         <div className="text-sm space-y-1">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Quantite demandee</span>
-            <span className="font-medium tabular-nums">{totalRequested.toLocaleString('fr-FR')} unites</span>
+            <span className="text-muted-foreground">Quantité demandée</span>
+            <span className="font-medium tabular-nums">{totalRequested.toLocaleString('fr-FR')} unités</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Quantite allouee</span>
-            <span className="font-medium tabular-nums">{totalAllocated.toLocaleString('fr-FR')} unites</span>
+            <span className="text-muted-foreground">Quantité allouée</span>
+            <span className="font-medium tabular-nums">{totalAllocated.toLocaleString('fr-FR')} unités</span>
           </div>
         </div>
 
@@ -170,7 +170,7 @@ export default function FinalAllocationConfirmationModal({
               onCheckedChange={(c) => setChecked(c === true)}
             />
             <Label htmlFor="confirm-check" className="text-sm cursor-pointer leading-tight">
-              J'ai verifie les allocations et je confirme la repartition proposee
+              J'ai vérifié les allocations et je confirme la répartition proposée
             </Label>
           </div>
           <div className="space-y-1.5">

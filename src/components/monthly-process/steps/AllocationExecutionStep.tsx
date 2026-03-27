@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { runAllocation, type AllocationStrategy, type AllocationLog, type CustomerWholesalerMap } from '@/lib/allocation-engine'
@@ -21,7 +21,8 @@ import {
   Cpu, ArrowRight, CheckCircle, AlertTriangle,
   BarChart3, Users, Zap, Package, Boxes,
   Pencil, Check, X, RotateCcw,
-  Lock, Search, ChevronDown, ChevronUp,
+  Lock, Search, ChevronDown, ChevronUp, ChevronRight,
+  ChevronsUpDown, Filter, CheckSquare, Square, MessageSquare,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createNotification } from '@/lib/notifications'
@@ -130,6 +131,7 @@ interface OrderDemand {
     min_batch: number | null
     order_multiple: number | null
     min_expiry_months: number | null
+    nego_comment: string | null
   }[]
 }
 
@@ -157,6 +159,31 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
   const [strategy, setStrategy] = useState<AllocationStrategy>('balanced')
   const [allocationLogs, setAllocationLogs] = useState<AllocationLog[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Collapse/expand per product
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
+
+  // Checkbox "traité" per product — persisted in localStorage
+  const processedStorageKey = `rw-pharma-processed-${process.id}`
+  const [processedProducts, setProcessedProducts] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(processedStorageKey)
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch { return new Set() }
+  })
+
+  // Persist processedProducts to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(processedStorageKey, JSON.stringify([...processedProducts]))
+    } catch { /* ignore */ }
+  }, [processedProducts, processedStorageKey])
+
+  // Filter: 'all' | 'pending' | 'done'
+  const [processedFilter, setProcessedFilter] = useState<'all' | 'pending' | 'done'>('all')
+
+  // Filter: show only products with negotiation comments
+  const [showOnlyCommented, setShowOnlyCommented] = useState(false)
 
   // Allocation map state
   const [allocMap, setAllocMap] = useState<AllocMap>({})
@@ -189,7 +216,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       while (true) {
         const { data, error } = await supabase
           .from('orders')
-          .select('id, product_id, customer_id, quantity, unit_price, metadata, customer:customers(id, name, code, min_lot_acceptable, allocation_preferences), product:products(id, cip13, name)')
+          .select('id, product_id, customer_id, quantity, unit_price, nego_comment, metadata, customer:customers(id, name, code, min_lot_acceptable, allocation_preferences), product:products(id, cip13, name)')
           .eq('monthly_process_id', process.id)
           .neq('status', 'rejected')
           .range(from, from + pageSize - 1)
@@ -356,6 +383,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
         min_batch: (meta as any).min_batch_quantity ?? cust?.min_lot_acceptable ?? null,
         order_multiple: (meta as any).order_multiple ?? null,
         min_expiry_months: (prefs as any).preferred_expiry_months ?? null,
+        nego_comment: o.nego_comment ?? null,
       }
 
       const existing = map.get(o.product_id)
@@ -365,6 +393,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
         if (ec) {
           ec.quantity += o.quantity
           if (o.unit_price && !ec.unit_price) ec.unit_price = o.unit_price
+          if (o.nego_comment && !ec.nego_comment) ec.nego_comment = o.nego_comment
         } else {
           existing.customers.push(custEntry)
         }
@@ -381,16 +410,39 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     return [...map.values()].sort((a, b) => b.totalQuantity - a.totalQuantity)
   }, [orders])
 
-  // Filter demands by search
+  // ── Count of products that have at least one negotiation comment ──
+  const commentedProductCount = useMemo(() => {
+    return demands.filter(d => d.customers.some(c => c.nego_comment && c.nego_comment.trim() !== '')).length
+  }, [demands])
+
+  // Filter demands by search + processed status + comments
   const filteredDemands = useMemo(() => {
-    if (!searchQuery.trim()) return demands
-    const q = searchQuery.toLowerCase()
-    return demands.filter(d =>
-      d.productName.toLowerCase().includes(q) ||
-      d.cip13.includes(q) ||
-      d.customers.some(c => c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
-    )
-  }, [demands, searchQuery])
+    let result = demands
+
+    // Text search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter(d =>
+        d.productName.toLowerCase().includes(q) ||
+        d.cip13.includes(q) ||
+        d.customers.some(c => c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
+      )
+    }
+
+    // Processed status filter
+    if (processedFilter === 'pending') {
+      result = result.filter(d => !processedProducts.has(d.productId))
+    } else if (processedFilter === 'done') {
+      result = result.filter(d => processedProducts.has(d.productId))
+    }
+
+    // Comment filter
+    if (showOnlyCommented) {
+      result = result.filter(d => d.customers.some(c => c.nego_comment && c.nego_comment.trim() !== ''))
+    }
+
+    return result
+  }, [demands, searchQuery, processedFilter, processedProducts, showOnlyCommented])
 
   // ── Stats ─────────────────────────────────────────────────────────
 
@@ -510,12 +562,12 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     }
 
     setAllocMap(newMap)
-    toast.success('Auto-attribution FEFO effectuee')
+    toast.success('Auto-attribution FEFO effectuée')
   }, [demands, groupedLotsByProduct, isClientWholesalerOpen])
 
   const resetAllocation = () => {
     setAllocMap({})
-    toast.info('Attribution reinitialise')
+    toast.info('Attribution réinitialisée')
   }
 
   // ── Cell editing ──────────────────────────────────────────────────
@@ -547,7 +599,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
     }
 
     if (val + otherUsed > stockQty) {
-      toast.error(`Stock depasse (${stockQty} dispo, ${otherUsed} deja attribues)`)
+      toast.error(`Stock dépassé (${stockQty} dispo, ${otherUsed} déjà attribués)`)
       return
     }
 
@@ -583,12 +635,42 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
 
   const cancelEdit = () => setEditingCell(null)
 
+  // ── Expand/Collapse helpers ─────────────────────────────────────
+
+  const toggleProduct = useCallback((productId: string) => {
+    setExpandedProducts(prev => {
+      const next = new Set(prev)
+      if (next.has(productId)) next.delete(productId)
+      else next.add(productId)
+      return next
+    })
+  }, [])
+
+  const expandAll = useCallback(() => {
+    setExpandedProducts(new Set(demands.map(d => d.productId)))
+  }, [demands])
+
+  const collapseAll = useCallback(() => {
+    setExpandedProducts(new Set())
+  }, [])
+
+  // ── Processed checkbox helpers ──────────────────────────────────
+
+  const toggleProcessed = useCallback((productId: string) => {
+    setProcessedProducts(prev => {
+      const next = new Set(prev)
+      if (next.has(productId)) next.delete(productId)
+      else next.add(productId)
+      return next
+    })
+  }, [])
+
   // ── Allocation mutation (run engine + persist) ────────────────────
 
   const allocateMut = useMutation({
     mutationFn: async () => {
       if (isProcessLocked) {
-        throw new Error('Ce processus est deja termine. Impossible de relancer l\'allocation.')
+        throw new Error('Ce processus est déjà terminé. Impossible de relancer l\'allocation.')
       }
       setPhase('running')
 
@@ -642,11 +724,11 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
       queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
       queryClient.invalidateQueries({ queryKey: ['collected_stock', process.id] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      toast.success(`${count} allocations generees (strategie: ${strategy})`)
+      toast.success(`${count} allocations générées (stratégie: ${strategy})`)
       createNotification({
         type: 'info',
-        title: 'Allocation terminee',
-        message: `${count} allocations generees pour le processus ${process.month}/${process.year}.`,
+        title: 'Allocation terminée',
+        message: `${count} allocations générées pour le processus ${process.month}/${process.year}.`,
       })
     },
     onError: (err: Error) => {
@@ -677,14 +759,14 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 <>
                   <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
                   <p className="text-sm">
-                    <strong>{existingAllocations}</strong> allocations existantes. Relancer ajoutera de nouvelles entrees.
+                    <strong>{existingAllocations}</strong> allocations existantes. Relancer ajoutera de nouvelles entrées.
                   </p>
                 </>
               )}
             </div>
             {allocatableCount === 0 && (
               <Button onClick={onNext} size="sm" className="gap-2 shrink-0">
-                Voir les resultats <ArrowRight className="h-4 w-4" />
+                Voir les résultats <ArrowRight className="h-4 w-4" />
               </Button>
             )}
           </CardContent>
@@ -731,32 +813,95 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                   </Button>
                   {Object.keys(allocMap).length > 0 && (
                     <Button onClick={resetAllocation} variant="outline" className="gap-1.5">
-                      <RotateCcw className="h-4 w-4" /> Reinitialiser
+                      <RotateCcw className="h-4 w-4" /> Réinitialiser
                     </Button>
                   )}
                 </>
               )}
               {!isProcessLocked && Object.keys(allocMap).length > 0 && (
                 <Badge variant="outline" className="gap-1 text-amber-600 border-amber-200 bg-amber-50">
-                  <AlertTriangle className="h-3 w-3" /> Modifications non sauvegardees — lancez l'allocation pour persister
+                  <AlertTriangle className="h-3 w-3" /> Modifications non sauvegardées — lancez l'allocation pour persister
                 </Badge>
               )}
               {isProcessLocked && (
                 <Badge variant="outline" className="gap-1 text-amber-700 border-amber-200">
-                  <Lock className="h-3 w-3" /> Processus verrouille
+                  <Lock className="h-3 w-3" /> Processus verrouillé
                 </Badge>
               )}
             </div>
 
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher produit, CIP13, client..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="pl-8 h-9 w-[260px]"
-              />
+            {/* Search + comment filter */}
+            <div className="flex items-center gap-2">
+              {commentedProductCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowOnlyCommented(v => !v)}
+                  className={`px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-colors inline-flex items-center gap-1 whitespace-nowrap ${
+                    showOnlyCommented
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  <MessageSquare className="h-3 w-3" />
+                  Avec commentaire
+                  <span className={`text-[10px] px-1 rounded-full ${showOnlyCommented ? 'bg-amber-600 text-white' : 'bg-muted-foreground/20'}`}>
+                    {commentedProductCount}
+                  </span>
+                </button>
+              )}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher produit, CIP13, client..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="pl-8 h-9 w-[260px]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Expand/Collapse + Processed progress + Filter */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={expandAll} className="gap-1.5 h-8 text-xs">
+                <ChevronsUpDown className="h-3.5 w-3.5" /> Tout déplier
+              </Button>
+              <Button variant="outline" size="sm" onClick={collapseAll} className="gap-1.5 h-8 text-xs">
+                <ChevronsUpDown className="h-3.5 w-3.5" /> Tout replier
+              </Button>
+              <div className="w-px h-5 bg-border mx-1" />
+              <div className="flex items-center gap-1.5 text-sm">
+                <CheckSquare className="h-3.5 w-3.5 text-green-600" />
+                <span className="font-medium tabular-nums">
+                  {processedProducts.size} / {demands.length}
+                </span>
+                <span className="text-muted-foreground text-xs">produits traités</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+              {([
+                { value: 'all' as const, label: 'Tous' },
+                { value: 'pending' as const, label: 'À traiter' },
+                { value: 'done' as const, label: 'Traités' },
+              ]).map(f => (
+                <Button
+                  key={f.value}
+                  variant={processedFilter === f.value ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 text-xs px-3"
+                  onClick={() => setProcessedFilter(f.value)}
+                >
+                  {f.label}
+                  {f.value === 'pending' && (
+                    <span className="ml-1 tabular-nums">({demands.filter(d => !processedProducts.has(d.productId)).length})</span>
+                  )}
+                  {f.value === 'done' && (
+                    <span className="ml-1 tabular-nums">({processedProducts.size})</span>
+                  )}
+                </Button>
+              ))}
             </div>
           </div>
 
@@ -804,7 +949,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                     <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
                     <div>
                       <p className="text-sm font-semibold">Aucun lot de stock disponible</p>
-                      <p className="text-xs text-muted-foreground">L'allocation se fera uniquement par disponibilites. Utilisez "Valider et lancer" pour lancer l'algo sur les dispos.</p>
+                      <p className="text-xs text-muted-foreground">L'allocation se fera uniquement par disponibilités. Utilisez "Valider et lancer" pour lancer l'algo sur les dispos.</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -815,14 +960,53 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 {filteredDemands.map(demand => {
                   const groupedLots = groupedLotsByProduct.get(demand.productId) ?? []
                   const totalStock = groupedLots.reduce((s, gl) => s + gl.total_qty, 0)
+                  const isExpanded = expandedProducts.has(demand.productId)
+                  const isProcessed = processedProducts.has(demand.productId)
+                  const productTotalAttr = demand.customers.reduce((s, c) => s + getCustomerAttributed(demand.productId, c.id), 0)
+
+                  const hasNegoComments = demand.customers.some(c => c.nego_comment && c.nego_comment.trim() !== '')
 
                   return (
-                    <Card key={demand.productId} className="overflow-hidden">
-                      {/* Product header */}
-                      <div className="px-5 py-3 bg-muted/30 border-b flex items-center justify-between gap-5">
+                    <Card key={demand.productId} className={`overflow-hidden transition-colors duration-200 ${isProcessed ? 'border-green-200 bg-green-50/20' : ''}`}>
+                      {/* Product header — clickable to expand/collapse */}
+                      <div
+                        className={`px-5 py-3 border-b flex items-center justify-between gap-5 cursor-pointer select-none transition-colors ${
+                          isProcessed ? 'bg-green-50/50 hover:bg-green-100/50' : 'bg-muted/30 hover:bg-muted/50'
+                        }`}
+                        onClick={() => toggleProduct(demand.productId)}
+                      >
                         <div className="flex items-center gap-3">
+                          {/* Checkbox */}
+                          <button
+                            type="button"
+                            className="shrink-0"
+                            onClick={e => { e.stopPropagation(); toggleProcessed(demand.productId) }}
+                            title={isProcessed ? 'Marquer comme non traité' : 'Marquer comme traité'}
+                          >
+                            {isProcessed
+                              ? <CheckSquare className="h-5 w-5 text-green-600" />
+                              : <Square className="h-5 w-5 text-muted-foreground/50 hover:text-muted-foreground" />
+                            }
+                          </button>
+                          {/* Chevron */}
+                          {isExpanded
+                            ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                          }
                           <span className="font-mono text-[11px] bg-muted border border-border rounded-md px-2 py-1 text-muted-foreground tracking-wider">{demand.cip13}</span>
-                          <span className="text-[17px] font-bold tracking-tight truncate max-w-[350px]">{demand.productName}</span>
+                          <span className={`text-[17px] font-bold tracking-tight truncate max-w-[350px] ${isProcessed ? 'line-through text-muted-foreground' : ''}`}>{demand.productName}</span>
+                          {isProcessed && <Badge variant="outline" className="text-[10px] bg-green-100 text-green-700 border-green-200 gap-1 shrink-0"><Check className="h-3 w-3" />Traité</Badge>}
+                          {hasNegoComments && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-700">
+                                  <MessageSquare className="h-3 w-3" />
+                                  <span className="text-[10px] font-semibold">{demand.customers.filter(c => c.nego_comment && c.nego_comment.trim() !== '').length}</span>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>Commentaires de negociation</TooltipContent>
+                            </Tooltip>
+                          )}
                         </div>
                         <div className="flex items-center gap-6">
                           <div className="text-right">
@@ -842,14 +1026,24 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                               </div>
                             </>
                           )}
+                          {/* Collapsed summary: show attributed count when collapsed */}
+                          {!isExpanded && productTotalAttr > 0 && (
+                            <div className="text-right">
+                              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Attribué</div>
+                              <div className={`text-xl font-bold tabular-nums ${productTotalAttr >= demand.totalQuantity ? 'text-green-600' : 'text-amber-600'}`}>
+                                {productTotalAttr.toLocaleString('fr-FR')}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      <CardContent className="p-0">
+                      {/* Collapsible content — only shown when expanded */}
+                      {isExpanded && <CardContent className="p-0">
                         {groupedLots.length === 0 ? (
                           <div className="p-4 text-sm text-muted-foreground flex items-center gap-2">
                             <Package className="h-4 w-4" />
-                            Pas de lot disponible — allocation par disponibilites uniquement
+                            Pas de lot disponible — allocation par disponibilités uniquement
                           </div>
                         ) : (
                           <div className="overflow-x-auto" style={{ fontSize: '12px' }}>
@@ -949,6 +1143,14 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                                             </span>
                                           )}
                                         </div>
+                                        {cust.nego_comment && cust.nego_comment.trim() !== '' && (
+                                          <div className="mt-0.5 flex items-start gap-1 max-w-[200px]">
+                                            <MessageSquare className="h-2.5 w-2.5 text-amber-500 shrink-0 mt-[1px]" />
+                                            <span className="text-[10px] italic text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0 leading-tight line-clamp-2">
+                                              {cust.nego_comment}
+                                            </span>
+                                          </div>
+                                        )}
                                       </TableCell>
                                       {/* Prix */}
                                       <TableCell className="text-center py-1.5 font-mono text-xs font-bold text-green-800 bg-green-50 border-r border-r-gray-100 whitespace-nowrap">
@@ -1125,7 +1327,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                             </Table>
                           </div>
                         )}
-                      </CardContent>
+                      </CardContent>}
                     </Card>
                   )
                 })}
@@ -1140,7 +1342,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                         <div className="flex items-center gap-2 mb-2">
                           <Boxes className="h-4 w-4 text-muted-foreground" />
                           <h4 className="text-sm font-semibold text-muted-foreground">
-                            {noLotProducts.length} produit{noLotProducts.length > 1 ? 's' : ''} sans lot — allocation par disponibilites uniquement
+                            {noLotProducts.length} produit{noLotProducts.length > 1 ? 's' : ''} sans lot — allocation par disponibilités uniquement
                           </h4>
                         </div>
                         <ExpandableBadgeList
@@ -1175,7 +1377,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                     className="gap-2"
                   >
                     <Cpu className="h-4 w-4" />
-                    {isProcessLocked ? 'Processus termine' : allocateMut.isPending ? 'Allocation...' : 'Valider et lancer l\'allocation'}
+                    {isProcessLocked ? 'Processus terminé' : allocateMut.isPending ? 'Allocation...' : 'Valider et lancer l\'allocation'}
                   </Button>
                 </div>
               </div>
@@ -1193,7 +1395,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
               <Cpu className="h-6 w-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
             </div>
             <p className="text-lg font-medium">Allocation en cours...</p>
-            <p className="text-sm text-muted-foreground">Repartition des {orderCount} commandes</p>
+            <p className="text-sm text-muted-foreground">Répartition des {orderCount} commandes</p>
           </div>
 
           {allocationLogs.length > 0 && (
@@ -1233,8 +1435,8 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                 <div>
                   <p className="text-xl font-semibold">Aucune allocation possible</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Les produits commandes ne correspondent a aucun stock ni quota disponible.
-                    <br />Verifiez que les fichiers de stock et de commande/nego contiennent les memes CIP13.
+                    Les produits commandés ne correspondent à aucun stock ni quota disponible.
+                    <br />Vérifiez que les fichiers de stock et de commande/négo contiennent les mêmes CIP13.
                   </p>
                 </div>
                 <Card className="border-amber-200/60 bg-amber-50/30 max-w-lg mx-auto">
@@ -1254,9 +1456,9 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                   <CheckCircle className="h-8 w-8 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-xl font-semibold">Allocation terminee</p>
+                  <p className="text-xl font-semibold">Allocation terminée</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {totalAllocated} allocations generees avec la strategie "{STRATEGIES.find(s => s.value === strategy)?.label ?? strategy}".
+                    {totalAllocated} allocations générées avec la stratégie "{STRATEGIES.find(s => s.value === strategy)?.label ?? strategy}".
                   </p>
                 </div>
                 {noMatchLogs.length > 0 && (
@@ -1266,7 +1468,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
                         <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                         <div>
                           <p className="text-sm font-medium text-amber-800">
-                            {noMatchLogs.length} commande(s) non allouee(s) — aucun stock/quota correspondant
+                            {noMatchLogs.length} commande(s) non allouée(s) — aucun stock/quota correspondant
                           </p>
                           <ExpandableLogList
                             items={noMatchLogs}
@@ -1281,7 +1483,7 @@ export default function AllocationExecutionStep({ process, onNext }: AllocationE
               </>
             )}
             <Button onClick={onNext} size="lg" className="gap-2">
-              Voir les resultats <ArrowRight className="h-4 w-4" />
+              Voir les résultats <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         )

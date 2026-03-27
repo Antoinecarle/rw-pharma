@@ -18,7 +18,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await signIn(email, password)
-      toast.success('Connexion reussie')
+      toast.success('Connexion réussie')
     } catch {
       toast.error('Email ou mot de passe incorrect')
     } finally {
@@ -47,18 +47,18 @@ export default function LoginPage() {
 
           <div className="space-y-8 max-w-lg">
             <div>
-              <h2 className="text-3xl font-bold leading-tight tracking-tight">Gerez vos allocations</h2>
-              <h2 className="text-3xl font-bold leading-tight tracking-tight text-white/70">en toute simplicite</h2>
+              <h2 className="text-3xl font-bold leading-tight tracking-tight">Gérez vos allocations</h2>
+              <h2 className="text-3xl font-bold leading-tight tracking-tight text-white/70">en toute simplicité</h2>
             </div>
             <p className="text-white/60 text-base leading-relaxed">
-              Import parallele de medicaments en Europe. Collecte des commandes et allocation des stocks automatisees.
+              Import parallèle de médicaments en Europe. Collecte des commandes et allocation des stocks automatisées.
             </p>
 
             <div className="space-y-2.5">
               {[
                 { icon: Package, label: '1 760+ produits', desc: 'Catalogue pharmaceutique complet' },
-                { icon: TrendingUp, label: 'Allocation optimisee', desc: 'Disponibilites grossistes en temps reel' },
-                { icon: Shield, label: 'Conformite ANSM', desc: 'Controle des produits bloques' },
+                { icon: TrendingUp, label: 'Allocation optimisée', desc: 'Disponibilités grossistes en temps réel' },
+                { icon: Shield, label: 'Conformité ANSM', desc: 'Contrôle des produits bloqués' },
               ].map((feat) => (
                 <div key={feat.label} className="flex items-center gap-3 bg-white/[0.08] backdrop-blur-sm rounded-xl px-4 py-3">
                   <div className="h-8 w-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0">

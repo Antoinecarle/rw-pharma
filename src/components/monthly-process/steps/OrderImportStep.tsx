@@ -13,7 +13,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, User, X, Keyboard, RotateCcw, Hand, SkipForward } from 'lucide-react'
+import { Upload, FileSpreadsheet, Check, AlertTriangle, ArrowRight, Eye, Sparkles, History, Zap, Plus, User, X, Keyboard, RotateCcw, Hand, SkipForward, UserX } from 'lucide-react'
 import { toast } from 'sonner'
 import SkippedItemsReviewModal, {
   type SkippedItem, type ResolvedItem,
@@ -30,7 +30,10 @@ import {
   detectEntityFromData,
   getSampleValues as getSharedSampleValues,
   getUnmappedHeaders,
+  hasCipColumn,
+  getEffectiveCipColumn,
 } from '@/lib/column-detection'
+import { buildCip7Map, resolveProductCode } from '@/lib/cip-utils'
 
 // --------------- Types ---------------
 
@@ -38,7 +41,8 @@ type OrderColumnMapping = Record<OrderField, string>
 
 const FIELD_LABELS: Record<OrderField, string> = {
   cip13: 'CIP13 Produit *',
-  quantity: 'Quantite *',
+  cip7: 'CIP7 (code court)',
+  quantity: 'Quantité *',
   unit_price: 'Prix unitaire',
   productName: 'Nom produit',
   clientColumn: 'Client (multi)',
@@ -199,28 +203,56 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
   const { data: orderSummary } = useQuery({
     queryKey: ['orders', process.id, 'summary'],
     queryFn: async () => {
+      // Fetch ALL customers to show who has no orders
+      const { data: allCustomers } = await supabase
+        .from('customers')
+        .select('id, code, name, is_top_client')
+      const customerList = (allCustomers ?? []) as { id: string; code: string; name: string; is_top_client: boolean }[]
+
       const { data } = await supabase
         .from('orders')
         .select('customer_id, quantity, customer:customers(code, name, is_top_client)')
         .eq('monthly_process_id', process.id)
-      if (!data || data.length === 0) return null
 
-      const byCustomer = new Map<string, { code: string; name: string; isTop: boolean; totalQty: number; orderCount: number }>()
-      for (const o of data) {
+      // Build order stats per customer
+      const byCustomerId = new Map<string, { code: string; name: string; isTop: boolean; totalQty: number; orderCount: number }>()
+      for (const o of (data ?? [])) {
         const cust = o.customer as unknown as { code: string; name: string; is_top_client: boolean } | null
         const code = cust?.code ?? 'N/A'
         const name = cust?.name ?? code
-        const existing = byCustomer.get(code) ?? { code, name, isTop: cust?.is_top_client ?? false, totalQty: 0, orderCount: 0 }
+        const existing = byCustomerId.get(o.customer_id) ?? { code, name, isTop: cust?.is_top_client ?? false, totalQty: 0, orderCount: 0 }
         existing.totalQty += o.quantity ?? 0
         existing.orderCount += 1
-        byCustomer.set(code, existing)
+        byCustomerId.set(o.customer_id, existing)
       }
 
-      const entries = [...byCustomer.values()].sort((a, b) => b.totalQty - a.totalQty)
+      // Merge ALL customers, including those without orders
+      const entries: { code: string; name: string; isTop: boolean; totalQty: number; orderCount: number }[] = []
+      for (const c of customerList) {
+        const existing = byCustomerId.get(c.id)
+        if (existing) {
+          entries.push(existing)
+        } else {
+          entries.push({ code: c.code ?? '?', name: c.name, isTop: c.is_top_client ?? false, totalQty: 0, orderCount: 0 })
+        }
+      }
+
+      // Sort: customers without orders FIRST, then by totalQty descending
+      entries.sort((a, b) => {
+        if (a.orderCount === 0 && b.orderCount > 0) return -1
+        if (a.orderCount > 0 && b.orderCount === 0) return 1
+        return b.totalQty - a.totalQty
+      })
+
+      const customersWithOrders = entries.filter(e => e.orderCount > 0).length
+      const customersWithoutOrders = entries.filter(e => e.orderCount === 0).length
+
       return {
-        totalOrders: data.length,
+        totalOrders: (data ?? []).length,
         totalQty: entries.reduce((s, e) => s + e.totalQty, 0),
-        customerCount: entries.length,
+        customerCount: customersWithOrders,
+        totalCustomers: entries.length,
+        customersWithoutOrders,
         entries,
       }
     },
@@ -364,7 +396,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
 
       const clientCode = getClientCode(f)
 
-      updateFile(fileId, { status: 'importing', importProgress: { current: 0, total: f.rows.length, phase: 'Chargement des references...' } })
+      updateFile(fileId, { status: 'importing', importProgress: { current: 0, total: f.rows.length, phase: 'Chargement des références...' } })
 
       const { data: custData } = await supabase.from('customers').select('id, code, name')
 
@@ -389,34 +421,23 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       const customerMap = new Map(customersList.map(c => [c.code?.toUpperCase(), c.id]))
       const productMap = new Map(productsList.map(p => [p.cip13, { id: p.id, name: p.name }]))
 
-      // Build CIP7 reverse lookup: CIP7 = CIP13[5:12] (French pharma standard)
-      const cip7Map = new Map<string, { id: string; name: string }>()
-      for (const p of productsList) {
-        if (p.cip13 && p.cip13.length === 13) {
-          const cip7 = p.cip13.substring(5, 12)
-          if (!cip7Map.has(cip7)) {
-            cip7Map.set(cip7, { id: p.id, name: p.name })
-          }
-        }
-      }
+      // Build CIP7 reverse lookup using shared utility
+      const cip7Map = buildCip7Map(productsList.map(p => ({ ...p, cip13: p.cip13 })))
+      const cip7MapNamed = new Map<string, { id: string; name: string }>()
+      for (const [k, v] of cip7Map) cip7MapNamed.set(k, { id: v.id, name: v.name })
 
       // Resolve product by CIP13 or CIP7 fallback
-      const resolveProduct = (code: string) => {
-        // Direct CIP13 match
-        const direct = productMap.get(code)
-        if (direct) return direct
-        // CIP7 match (input is 7 digits → lookup in CIP7 reverse map)
-        if (code.length === 7 && /^\d+$/.test(code)) {
-          return cip7Map.get(code) ?? null
-        }
-        return null
-      }
+      const resolveProduct = (code: string) => resolveProductCode(code, productMap, cip7MapNamed)
+
+      // Determine which column holds the product code (CIP13 or CIP7 fallback)
+      const cipColumn = getEffectiveCipColumn(f.mapping)
+      const usingCip7Column = !f.mapping.cip13 && !!f.mapping.cip7
 
       // Auto-create missing products (only for codes that don't resolve via CIP7 either)
       const missingCip13s = new Set<string>()
       const cip13NameMap = new Map<string, string>()
       for (const row of f.rows) {
-        const code = String(row[f.mapping.cip13] || '').trim()
+        const code = String(row[cipColumn] || '').trim()
         if (code && !resolveProduct(code)) {
           missingCip13s.add(code)
           if (f.mapping.productName) {
@@ -428,23 +449,29 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
 
       let autoCreatedProducts = 0
       if (missingCip13s.size > 0) {
-        updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Creation de ${missingCip13s.size} produit(s) manquant(s)...` } })
-        const newProducts = [...missingCip13s].map(cip13 => ({
-          cip13,
-          cip7: cip13.length === 13 ? cip13.substring(5, 12) : (cip13.length === 7 ? cip13 : null),
-          name: cip13NameMap.get(cip13) || `Produit ${cip13}`,
-          is_ansm_blocked: false,
-          is_demo_generated: true,
-          metadata: { auto_created_from: f.fileName },
-        }))
-        const { data: created, error: createErr } = await supabase
-          .from('products')
-          .upsert(newProducts, { onConflict: 'cip13', ignoreDuplicates: true })
-          .select('id, cip13, name')
-        if (createErr) console.error('Auto-create products error:', createErr)
-        if (created) {
-          for (const p of created) productMap.set(p.cip13, { id: p.id, name: p.name })
-          autoCreatedProducts = created.length
+        // When using CIP7 column, unresolved codes cannot be auto-created (we don't know the full CIP13)
+        if (usingCip7Column) {
+          // All unresolved CIP7 codes go to skipped items later with reason 'unknown_product'
+          autoCreatedProducts = 0
+        } else {
+          updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Création de ${missingCip13s.size} produit(s) manquant(s)...` } })
+          const newProducts = [...missingCip13s].map(cip13 => ({
+            cip13,
+            cip7: cip13.length === 13 ? cip13.substring(5, 12) : (cip13.length === 7 ? cip13 : null),
+            name: cip13NameMap.get(cip13) || `Produit ${cip13}`,
+            is_ansm_blocked: false,
+            is_demo_generated: true,
+            metadata: { auto_created_from: f.fileName },
+          }))
+          const { data: created, error: createErr } = await supabase
+            .from('products')
+            .upsert(newProducts, { onConflict: 'cip13', ignoreDuplicates: true })
+            .select('id, cip13, name')
+          if (createErr) console.error('Auto-create products error:', createErr)
+          if (created) {
+            for (const p of created) productMap.set(p.cip13, { id: p.id, name: p.name })
+            autoCreatedProducts = created.length
+          }
         }
       }
 
@@ -455,7 +482,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       if (!isMultiClient) {
         singleCustomerId = clientCode ? customerMap.get(clientCode.toUpperCase()) : undefined
         if (!singleCustomerId) {
-          throw new Error(`Client "${clientCode ?? '?'}" introuvable en base. Verifiez le code client.`)
+          throw new Error(`Client "${clientCode ?? '?'}" introuvable en base. Vérifiez le code client.`)
         }
       }
 
@@ -488,18 +515,21 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       for (let i = 0; i < f.rows.length; i += batchSize) {
         const batch = f.rows.slice(i, i + batchSize).map((row, batchIdx) => {
           const rowIndex = i + batchIdx
-          const cip13 = String(row[f.mapping.cip13] || '').trim()
+          const rawCode = String(row[cipColumn] || '').trim()
+          const cip13 = rawCode // may be CIP7 or CIP13
           const qty = parseInt(String(row[f.mapping.quantity] || '0'), 10)
           const price = f.mapping.unit_price ? parseFloat(String(row[f.mapping.unit_price]).replace(',', '.')) || null : null
 
-          const productEntry = resolveProduct(cip13)
+          const productEntry = resolveProduct(rawCode)
 
           if (!productEntry || qty <= 0) {
-            const reason: SkippedItem['reason'] = !productEntry ? 'unknown_product' : 'invalid_quantity'
+            const reason: SkippedItem['reason'] = !productEntry
+              ? (usingCip7Column ? 'unknown_product' : 'unknown_product')
+              : 'invalid_quantity'
             skippedDetails.push({
               rowIndex,
               customerCode: clientCode ?? '',
-              cip13,
+              cip13: usingCip7Column ? `CIP7:${rawCode}` : rawCode,
               quantity: qty,
               unitPrice: price,
               reason,
@@ -616,8 +646,8 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
       queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
-      const parts = [`${result.inserted} commandes importees`]
-      if (result.autoCreatedProducts > 0) parts.push(`${result.autoCreatedProducts} produit(s) cree(s)`)
+      const parts = [`${result.inserted} commandes importées`]
+      if (result.autoCreatedProducts > 0) parts.push(`${result.autoCreatedProducts} produit(s) créé(s)`)
       toast.success(parts.join(' — '))
     },
     onError: (err: Error, fileId: string) => {
@@ -653,14 +683,14 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
 
     queryClient.invalidateQueries({ queryKey: ['orders', process.id] })
     queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-    toast.success(`${count} commandes recuperees`)
+    toast.success(`${count} commandes récupérées`)
   }
 
   // --------------- Render helpers ---------------
 
   const getConfidenceBadge = (conf: OrderMappingConfidence) => {
     if (conf.source === 'none') return null
-    if (conf.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Memorise</Badge>
+    if (conf.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Mémorisé</Badge>
     if (conf.source === 'auto') return <Badge variant="secondary" className="text-[9px] h-4 gap-0.5"><Zap className="h-2.5 w-2.5" /> Auto</Badge>
     if (conf.source === 'manual') return <Badge variant="outline" className="text-[9px] h-4 gap-0.5 border-blue-300 text-blue-600"><Hand className="h-2.5 w-2.5" /> Manuel</Badge>
     return null
@@ -673,14 +703,17 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
   const canProceed = (f: QueuedFile) => {
     const clientCode = getClientCode(f)
     const hasClientColumn = !!f.mapping.clientColumn
-    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (!!clientCode || hasClientColumn)
+    // CIP13 or CIP7 must be mapped (CIP7 serves as fallback)
+    const hasCip = hasCipColumn(f.mapping)
+    const hasQuantity = !!f.mapping.quantity
+    return hasCip && hasQuantity && (!!clientCode || hasClientColumn)
   }
 
   // --------------- Manual entry mutation ---------------
 
   const manualImportMut = useMutation({
     mutationFn: async () => {
-      if (!manualCustomer) throw new Error('Selectionnez un client')
+      if (!manualCustomer) throw new Error('Sélectionnez un client')
       const customer = (customers ?? []).find(c => c.code === manualCustomer)
       if (!customer) throw new Error('Client introuvable')
 
@@ -695,17 +728,9 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         from += 1000
       }
       const productMap = new Map(allProducts.map(p => [p.cip13, p]))
-      // CIP7 reverse lookup for manual entry too
-      const manualCip7Map = new Map<string, { id: string; cip13: string }>()
-      for (const p of allProducts) {
-        if (p.cip13 && p.cip13.length === 13) {
-          const c7 = p.cip13.substring(5, 12)
-          if (!manualCip7Map.has(c7)) manualCip7Map.set(c7, p)
-        }
-      }
-      const resolveManual = (code: string) => {
-        return productMap.get(code) ?? (code.length === 7 && /^\d+$/.test(code) ? manualCip7Map.get(code) : null) ?? null
-      }
+      // CIP7 reverse lookup for manual entry using shared utility
+      const manualCip7Map = buildCip7Map(allProducts)
+      const resolveManual = (code: string) => resolveProductCode(code, productMap, manualCip7Map)
 
       const validRows = manualRows
         .filter(r => r.cip13.trim() && parseInt(r.quantity) > 0)
@@ -741,7 +766,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      toast.success(`${count} commandes ajoutees manuellement`)
+      toast.success(`${count} commandes ajoutées manuellement`)
       setManualRows([{ cip13: '', quantity: '', unit_price: '', comment: '' }])
       setManualCustomer('')
     },
@@ -806,18 +831,18 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-200">
-                    Client non defini
+                    Client non défini
                   </Badge>
                 )}
                 {f.status === 'done' && (
                   <span className="text-[11px] text-green-600 font-medium">
-                    {f.importResult.inserted} importees
-                    {f.importResult.skipped > 0 && <span className="text-amber-600"> / {f.importResult.skipped} ignorees</span>}
+                    {f.importResult.inserted} importées
+                    {f.importResult.skipped > 0 && <span className="text-amber-600"> / {f.importResult.skipped} ignorées</span>}
                   </span>
                 )}
                 {f.confidence.some(c => c.source === 'saved') && f.status !== 'done' && (
                   <Badge variant="secondary" className="text-[9px] h-4 gap-0.5">
-                    <History className="h-2.5 w-2.5" /> Mapping memorise
+                    <History className="h-2.5 w-2.5" /> Mapping mémorisé
                   </Badge>
                 )}
               </div>
@@ -859,10 +884,10 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                     onValueChange={(v) => updateFile(f.id, { manualClient: v === 'none' ? null : v })}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Selectionner le client..." />
+                      <SelectValue placeholder="Sélectionner le client..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">-- Selectionner --</SelectItem>
+                      <SelectItem value="none">-- Sélectionner --</SelectItem>
                       {(customers ?? []).map(c => (
                         <SelectItem key={c.id} value={c.code ?? c.id}>{c.code} — {c.name}</SelectItem>
                       ))}
@@ -890,16 +915,19 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs commande.</p>
                     <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground" onClick={() => resetMapping(f.id)}>
-                      <RotateCcw className="h-3 w-3" /> Reinitialiser
+                      <RotateCcw className="h-3 w-3" /> Réinitialiser
                     </Button>
                   </div>
 
                   {/* Alert for missing required fields */}
-                  {!REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (
+                  {!(hasCipColumn(f.mapping) && f.mapping.quantity) && (
                     <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
                       <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                       <p className="text-xs text-red-600 dark:text-red-400">
-                        Champs obligatoires manquants : {REQUIRED_FIELDS.filter(fld => !f.mapping[fld]).map(fld => FIELD_LABELS[fld].replace(' *', '')).join(', ')}
+                        Champs obligatoires manquants : {[
+                          ...(!hasCipColumn(f.mapping) ? ['CIP13 ou CIP7'] : []),
+                          ...(!f.mapping.quantity ? ['Quantite'] : []),
+                        ].join(', ')}
                       </p>
                     </div>
                   )}
@@ -941,7 +969,8 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                   </div>
 
                   {(() => {
-                    const reqMapped = REQUIRED_FIELDS.filter(fld => f.mapping[fld]).length
+                    // CIP7 satisfies the CIP13 requirement
+                    const reqMapped = REQUIRED_FIELDS.filter(fld => fld === 'cip13' ? hasCipColumn(f.mapping) : !!f.mapping[fld]).length
                     const reqTotal = REQUIRED_FIELDS.length
                     const optFields = ALL_FIELDS.filter(fld => !REQUIRED_FIELDS.includes(fld))
                     const optMapped = optFields.filter(fld => f.mapping[fld]).length
@@ -985,11 +1014,11 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                       size="sm"
                       onClick={() => {
                         if (canProceed(f)) updateFile(f.id, { status: 'preview' })
-                        else toast.error('Champs obligatoires manquants (CIP13, Quantite, Client)')
+                        else toast.error('Champs obligatoires manquants (CIP13 ou CIP7, Quantité, Client)')
                       }}
                       disabled={!canProceed(f)}
                     >
-                      Apercu
+                      Aperçu
                     </Button>
                   </div>
                 </>
@@ -999,15 +1028,15 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
               {f.status === 'preview' && (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Apercu des 10 premieres lignes sur {f.rows.length} total. Client : <strong>{clientCode}</strong>
+                    Aperçu des 10 premières lignes sur {f.rows.length} total. Client : <strong>{clientCode}</strong>
                   </p>
                   <div className="border rounded-lg overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-10">#</TableHead>
-                          <TableHead>CIP13</TableHead>
-                          <TableHead>Quantite</TableHead>
+                          <TableHead>{f.mapping.cip13 ? 'CIP13' : 'CIP7'}</TableHead>
+                          <TableHead>Quantité</TableHead>
                           <TableHead>Prix</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1015,7 +1044,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                         {f.rows.slice(0, 10).map((row, i) => (
                           <TableRow key={i}>
                             <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
-                            <TableCell className="font-mono text-sm">{row[f.mapping.cip13]}</TableCell>
+                            <TableCell className="font-mono text-sm">{row[getEffectiveCipColumn(f.mapping)]}{!f.mapping.cip13 && f.mapping.cip7 ? <Badge variant="outline" className="ml-1 text-[9px] h-4">CIP7</Badge> : null}</TableCell>
                             <TableCell>{row[f.mapping.quantity]}</TableCell>
                             <TableCell>{f.mapping.unit_price ? row[f.mapping.unit_price] : '-'}</TableCell>
                           </TableRow>
@@ -1042,7 +1071,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
           <Card className="border-t-0 rounded-t-none border-amber-200/60 bg-amber-50/30 dark:bg-amber-950/20">
             <CardContent className="p-3 flex items-center gap-3">
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-              <p className="text-xs flex-1">{f.skippedItems.length} lignes ignorees (produits inconnus / quantites invalides)</p>
+              <p className="text-xs flex-1">{f.skippedItems.length} lignes ignorées (produits inconnus / quantités invalides)</p>
               <Button
                 variant="outline"
                 size="sm"
@@ -1100,9 +1129,9 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Client *</Label>
               <Select value={manualCustomer || 'none'} onValueChange={(v) => setManualCustomer(v === 'none' ? '' : v)}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Selectionner le client..." /></SelectTrigger>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Sélectionner le client..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">-- Selectionner --</SelectItem>
+                  <SelectItem value="none">-- Sélectionner --</SelectItem>
                   {(customers ?? []).map(c => (
                     <SelectItem key={c.id} value={c.code ?? c.id}>{c.code} — {c.name}</SelectItem>
                   ))}
@@ -1117,7 +1146,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
                   <TableHeader>
                     <TableRow>
                       <TableHead>CIP13 *</TableHead>
-                      <TableHead>Quantite *</TableHead>
+                      <TableHead>Quantité *</TableHead>
                       <TableHead>Prix unitaire</TableHead>
                       <TableHead>Commentaire</TableHead>
                       <TableHead className="w-10"></TableHead>
@@ -1165,7 +1194,7 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
           <CardContent className="p-4 flex items-center gap-3">
             <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
             <p className="text-sm">
-              <strong>{existingOrders}</strong> commandes deja importees pour ce processus.
+              <strong>{existingOrders}</strong> commandes déjà importées pour ce processus.
             </p>
           </CardContent>
         </Card>
@@ -1173,11 +1202,27 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
 
       {orderSummary && queue.length === 0 && (
         <div className="space-y-3">
+          {/* Warning banner if any customer has 0 orders */}
+          {orderSummary.customersWithoutOrders > 0 && (
+            <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20">
+              <CardContent className="p-4 flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-400">
+                    {orderSummary.customersWithoutOrders} client{orderSummary.customersWithoutOrders > 1 ? 's' : ''} sans commande ce mois-ci
+                  </p>
+                  <p className="text-xs text-red-600/80 dark:text-red-400/70 mt-0.5">
+                    Vérifiez que tous les fichiers de commandes ont bien été importés avant de continuer.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <Card>
               <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold">{orderSummary.customerCount}</p>
-                <p className="text-xs text-muted-foreground">Clients</p>
+                <p className="text-2xl font-bold">{orderSummary.customerCount}<span className="text-sm font-normal text-muted-foreground">/{orderSummary.totalCustomers}</span></p>
+                <p className="text-xs text-muted-foreground">Clients avec commandes</p>
               </CardContent>
             </Card>
             <Card>
@@ -1189,19 +1234,38 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
             <Card>
               <CardContent className="p-3 text-center">
                 <p className="text-2xl font-bold">{orderSummary.totalQty.toLocaleString('fr-FR')}</p>
-                <p className="text-xs text-muted-foreground">Unites commandees</p>
+                <p className="text-xs text-muted-foreground">Unités commandées</p>
               </CardContent>
             </Card>
           </div>
           <Card>
             <CardContent className="p-4">
-              <p className="text-sm font-semibold mb-3">Repartition par client</p>
+              <p className="text-sm font-semibold mb-3">Répartition par client</p>
+              {/* Badges for ALL customers — missing ones highlighted in red */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {orderSummary.entries.map(e => (
+                  <Badge
+                    key={e.code}
+                    variant={e.orderCount === 0 ? 'destructive' : 'outline'}
+                    className={`gap-1.5 py-1.5 px-3 ${e.orderCount === 0 ? 'animate-pulse' : ''}`}
+                  >
+                    {e.orderCount === 0 && <UserX className="h-3 w-3" />}
+                    <span className="font-bold">{e.code}</span>
+                    {e.isTop && <span className="text-[9px]">TOP</span>}
+                    <span className={e.orderCount === 0 ? 'text-red-100' : 'text-muted-foreground'}>
+                      {e.orderCount === 0 ? '0 commandes' : `${e.orderCount} cmd / ${e.totalQty.toLocaleString('fr-FR')} u.`}
+                    </span>
+                  </Badge>
+                ))}
+              </div>
               <HorizontalBarChart
-                items={orderSummary.entries.map(e => ({
-                  label: `${e.name}${e.isTop ? ' ★' : ''}`,
-                  code: e.code,
-                  value: e.totalQty,
-                }))}
+                items={orderSummary.entries
+                  .filter(e => e.orderCount > 0)
+                  .map(e => ({
+                    label: `${e.name}${e.isTop ? ' ★' : ''}`,
+                    code: e.code,
+                    value: e.totalQty,
+                  }))}
                 formatValue={(v) => `${v.toLocaleString('fr-FR')} u.`}
               />
             </CardContent>
@@ -1257,10 +1321,10 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
         </div>
         <p className="text-sm font-medium">
           {isDragOver
-            ? 'Deposez les fichiers ici'
+            ? 'Déposez les fichiers ici'
             : queue.length > 0
               ? 'Ajouter un autre fichier client'
-              : 'Deposez des fichiers Excel ou cliquez pour selectionner'
+              : 'Déposez des fichiers Excel ou cliquez pour sélectionner'
           }
         </p>
         <p className="text-xs text-muted-foreground mt-1">
@@ -1305,23 +1369,23 @@ export default function OrderImportStep({ process, onNext }: OrderImportStepProp
               <div className="space-y-1 text-sm">
                 <p className="font-medium text-amber-800">Passer sans importer les commandes ?</p>
                 <ul className="text-amber-700 list-disc pl-4 space-y-0.5">
-                  <li>La revue commandes (etape 3) sera vide</li>
-                  <li>L'attribution macro (etape 4) n'aura aucune demande a traiter</li>
-                  <li>Aucune allocation ne pourra etre generee sans commandes</li>
+                  <li>La revue commandes (étape 3) sera vide</li>
+                  <li>La commande initiale (étape 4) n'aura aucune demande à traiter</li>
+                  <li>Aucune allocation ne pourra être générée sans commandes</li>
                   <li>Vous pourrez revenir importer les commandes plus tard</li>
                 </ul>
               </div>
             </div>
             <div className="flex justify-end">
               <Button variant="outline" onClick={onNext} className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-100">
-                <SkipForward className="h-4 w-4" /> Passer quand meme
+                <SkipForward className="h-4 w-4" /> Passer quand même
               </Button>
             </div>
           </div>
         )}
         {(allDone || (existingOrders != null && existingOrders > 0)) && !hasActiveImport && (
           <Button onClick={onNext} className="gap-2">
-            Passer a l'etape suivante <ArrowRight className="h-4 w-4" />
+            Passer à l'étape suivante <ArrowRight className="h-4 w-4" />
           </Button>
         )}
       </div>

@@ -24,9 +24,9 @@ import { toast } from 'sonner'
 
 const statusLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   pending: { label: 'En attente', variant: 'outline' },
-  validated: { label: 'Validee', variant: 'default' },
-  rejected: { label: 'Rejetee', variant: 'destructive' },
-  allocated: { label: 'Allouee', variant: 'secondary' },
+  validated: { label: 'Validée', variant: 'default' },
+  rejected: { label: 'Rejetée', variant: 'destructive' },
+  allocated: { label: 'Allouée', variant: 'secondary' },
 }
 
 interface ParsedOrderLine {
@@ -43,7 +43,7 @@ function parseOrderFile(wb: XLSX.WorkBook): { headers: string[]; rows: Record<st
   const sheet = wb.Sheets[wb.SheetNames[0]]
   if (!sheet) throw new Error('Fichier vide')
   const json = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { header: 'A', defval: '' })
-  if (json.length < 2) throw new Error('Fichier vide ou sans donnees')
+  if (json.length < 2) throw new Error('Fichier vide ou sans données')
   const headers = Object.values(json[0])
   const rows = json.slice(1).map(row => {
     const mapped: Record<string, string> = {}
@@ -138,8 +138,8 @@ export default function PortalOrdersPage() {
       const qtyCol = detectColumn(headers, [/quant/, /qty/, /qte/, /nb/, /nombre/])
       const priceCol = detectColumn(headers, [/prix/, /price/, /pu/, /unit.*price/, /pfht/])
 
-      if (!cipCol) { toast.error('Colonne CIP13 non trouvee. Verifiez le fichier.'); return }
-      if (!qtyCol) { toast.error('Colonne Quantite non trouvee. Verifiez le fichier.'); return }
+      if (!cipCol) { toast.error('Colonne CIP13 non trouvée. Vérifiez le fichier.'); return }
+      if (!qtyCol) { toast.error('Colonne Quantité non trouvée. Vérifiez le fichier.'); return }
 
       const lines: ParsedOrderLine[] = rows
         .filter(r => r[cipCol]?.trim())
@@ -159,7 +159,7 @@ export default function PortalOrdersPage() {
             productName: product?.name,
             productId: product?.id,
             valid,
-            error: !product ? 'CIP13 inconnu' : qty <= 0 ? 'Quantite invalide' : undefined,
+            error: !product ? 'CIP13 inconnu' : qty <= 0 ? 'Quantité invalide' : undefined,
           }
         })
 
@@ -213,7 +213,7 @@ export default function PortalOrdersPage() {
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ['portal-orders'] })
-      toast.success(`${count} lignes de commande deposees`)
+      toast.success(`${count} lignes de commande déposées`)
       setUploadDialogOpen(false)
       setParsedLines([])
     },
@@ -248,7 +248,7 @@ export default function PortalOrdersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portal-orders'] })
-      toast.success('Commande mise a jour')
+      toast.success('Commande mise à jour')
       cancelEditing()
     },
     onError: (err: Error) => toast.error(`Erreur: ${err.message}`),
@@ -256,7 +256,7 @@ export default function PortalOrdersPage() {
 
   const handleSaveEdit = () => {
     if (!editingOrderId || editQty <= 0) {
-      toast.error('La quantite doit etre superieure a 0')
+      toast.error('La quantité doit être supérieure à 0')
       return
     }
     const parsedPrice = editPrice.trim() ? parseFloat(editPrice.replace(',', '.')) : null
@@ -276,7 +276,7 @@ export default function PortalOrdersPage() {
     const rows = filteredOrders.map((o: any) => ({
       'CIP13': o.products?.cip13 ?? '',
       'Produit': o.products?.name ?? '',
-      'Quantite': o.quantity ?? 0,
+      'Quantité': o.quantity ?? 0,
       'Prix unitaire': o.unit_price != null ? Number(o.unit_price) : '',
       'Statut': statusLabels[o.status]?.label ?? o.status,
       'Date': new Date(o.created_at).toLocaleDateString('fr-FR'),
@@ -331,7 +331,7 @@ export default function PortalOrdersPage() {
               <Package className="h-4.5 w-4.5 text-blue-500" />
             </div>
             <div>
-              <p className="text-[11px] font-medium" style={{ color: 'var(--ivory-text-muted)' }}>Quantite totale</p>
+              <p className="text-[11px] font-medium" style={{ color: 'var(--ivory-text-muted)' }}>Quantité totale</p>
               <p className="text-lg font-bold" style={{ color: 'var(--ivory-text-heading)' }}>{totalQty.toLocaleString('fr-FR')}</p>
             </div>
           </CardContent>
@@ -361,16 +361,16 @@ export default function PortalOrdersPage() {
           <Badge variant="outline" className="ml-2 text-[10px]">
             {({
               draft: 'Brouillon',
-              importing_quotas: 'Import disponibilites',
+              importing_quotas: 'Import disponibilités',
               importing_orders: 'Import commandes',
               reviewing_orders: 'Revue commandes',
               exporting_wholesalers: 'Export grossistes',
-              collecting_stock: 'Reception stocks',
-              aggregating_stock: 'Agregation stock',
+              collecting_stock: 'Réception stocks',
+              aggregating_stock: 'Agrégation stock',
               allocating: 'Allocation',
               reviewing_allocations: 'Revue allocations',
               finalizing: 'Finalisation',
-              completed: 'Termine',
+              completed: 'Terminé',
             } as Record<string, string>)[currentProcess.status] ?? currentProcess.status}
           </Badge>
         </div>
@@ -433,7 +433,7 @@ export default function PortalOrdersPage() {
                   <TableRow>
                     <TableHead className="text-[11px]">Produit</TableHead>
                     <TableHead className="text-[11px]">CIP13</TableHead>
-                    <TableHead className="text-[11px] text-right">Quantite</TableHead>
+                    <TableHead className="text-[11px] text-right">Quantité</TableHead>
                     <TableHead className="text-[11px] text-right">Prix unitaire</TableHead>
                     <TableHead className="text-[11px]">Statut</TableHead>
                     <TableHead className="text-[11px]">Date</TableHead>
@@ -533,10 +533,10 @@ export default function PortalOrdersPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5 text-primary" />
-              Apercu du fichier
+              Aperçu du fichier
             </DialogTitle>
             <DialogDescription>
-              {fileName} — {parsedLines.length} lignes detectees
+              {fileName} — {parsedLines.length} lignes détectées
             </DialogDescription>
           </DialogHeader>
 
@@ -560,7 +560,7 @@ export default function PortalOrdersPage() {
                   <TableHead className="text-xs w-8">#</TableHead>
                   <TableHead className="text-xs">CIP13</TableHead>
                   <TableHead className="text-xs">Produit</TableHead>
-                  <TableHead className="text-xs text-right">Quantite</TableHead>
+                  <TableHead className="text-xs text-right">Quantité</TableHead>
                   <TableHead className="text-xs text-right">Prix</TableHead>
                   <TableHead className="text-xs">Statut</TableHead>
                 </TableRow>

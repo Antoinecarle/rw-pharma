@@ -28,6 +28,11 @@ const CIP13_PATTERNS: RegExp[] = [
   /^local\s*code/i, /^external$/i, /^ean$/i, /^gtin$/i,
 ]
 
+// --- CIP7 (short code, any client/wholesaler may use it instead of CIP13)
+const CIP7_PATTERNS: RegExp[] = [
+  /^cip\s*7$/i, /cip.*7/i, /code.*court/i, /short.*code/i,
+]
+
 // --- Product name (shared)
 const PRODUCT_NAME_PATTERNS: RegExp[] = [
   /nom.*produit/i, /product.*name/i, /designation/i,
@@ -50,10 +55,11 @@ const CLIENT_COLUMN_PATTERNS: RegExp[] = [
 
 // ========================= QUOTA PATTERNS =========================
 
-export type QuotaField = 'cip13' | 'quantity' | 'extra' | 'productName' | 'wholesalerColumn'
+export type QuotaField = 'cip13' | 'cip7' | 'quantity' | 'extra' | 'productName' | 'wholesalerColumn'
 
 export const QUOTA_PATTERNS: FieldPattern<QuotaField>[] = [
   { field: 'cip13', patterns: CIP13_PATTERNS },
+  { field: 'cip7', patterns: CIP7_PATTERNS },
   {
     field: 'quantity',
     patterns: [/quota/i, /contingent/i, /quantit/i, /^qty/i, /alloue/i, /disponible/i, /menge/i, /quantity/i, /^qte/i, /mensuel/i],
@@ -68,10 +74,11 @@ export const QUOTA_PATTERNS: FieldPattern<QuotaField>[] = [
 
 // ========================= ORDER PATTERNS =========================
 
-export type OrderField = 'cip13' | 'quantity' | 'unit_price' | 'productName' | 'clientColumn' | 'comment' | 'minLotQty' | 'minExpiryDate'
+export type OrderField = 'cip13' | 'cip7' | 'quantity' | 'unit_price' | 'productName' | 'clientColumn' | 'comment' | 'minLotQty' | 'minExpiryDate'
 
 export const ORDER_PATTERNS: FieldPattern<OrderField>[] = [
   { field: 'cip13', patterns: CIP13_PATTERNS },
+  { field: 'cip7', patterns: CIP7_PATTERNS },
   {
     field: 'quantity',
     patterns: [/qte.*command/i, /quantit/i, /^qty/i, /quantity/i, /^qte/i, /commandee?/i, /menge/i, /bestell/i, /ordered/i, /^poqnt$/i, /^volume$/i, /^nb$/i],
@@ -98,10 +105,11 @@ export const ORDER_PATTERNS: FieldPattern<OrderField>[] = [
 
 // ========================= STOCK PATTERNS =========================
 
-export type StockField = 'cip13' | 'lot_number' | 'expiry_date' | 'quantity' | 'unit_cost' | 'date_reception' | 'productName' | 'wholesalerColumn'
+export type StockField = 'cip13' | 'cip7' | 'lot_number' | 'expiry_date' | 'quantity' | 'unit_cost' | 'date_reception' | 'productName' | 'wholesalerColumn'
 
 export const STOCK_PATTERNS: FieldPattern<StockField>[] = [
   { field: 'cip13', patterns: CIP13_PATTERNS },
+  { field: 'cip7', patterns: CIP7_PATTERNS },
   {
     field: 'lot_number',
     patterns: [/^lot$/i, /numero.*lot/i, /lot.*num/i, /batch/i, /^n.*lot/i, /charge/i, /chargen/i],
@@ -283,4 +291,20 @@ export function countMappedFields<F extends string>(
   const total = Object.keys(mapping).length
   const allRequired = requiredFields.every(f => !!mapping[f])
   return { mapped, total, allRequired }
+}
+
+/**
+ * Check whether a mapping has a CIP column (CIP13 or CIP7 as fallback).
+ * Used by import steps to validate that at least one product code column is mapped.
+ */
+export function hasCipColumn<F extends string>(mapping: Record<F, string>): boolean {
+  return !!(mapping['cip13' as F] || mapping['cip7' as F])
+}
+
+/**
+ * Get the effective CIP column name from a mapping.
+ * Returns the CIP13 column if mapped, otherwise falls back to CIP7.
+ */
+export function getEffectiveCipColumn<F extends string>(mapping: Record<F, string>): string {
+  return mapping['cip13' as F] || mapping['cip7' as F] || ''
 }

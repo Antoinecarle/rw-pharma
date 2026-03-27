@@ -169,7 +169,7 @@ export default function ExcelImport({ open, onOpenChange }: ExcelImportProps) {
       setImportResult(result)
       setStep('done')
       queryClient.invalidateQueries({ queryKey: ['products'] })
-      toast.success(`${result.inserted} produits importes`)
+      toast.success(`${result.inserted} produits importés`)
     },
     onError: (err: Error) => {
       toast.error(`Erreur: ${err.message}`)
@@ -205,7 +205,7 @@ export default function ExcelImport({ open, onOpenChange }: ExcelImportProps) {
               onClick={() => fileRef.current?.click()}
             >
               <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-              <p className="text-sm font-medium">Cliquez pour selectionner un fichier Excel</p>
+              <p className="text-sm font-medium">Cliquez pour sélectionner un fichier Excel</p>
               <p className="text-xs text-muted-foreground mt-1">.xlsx, .xls, .csv</p>
             </div>
             <input
@@ -237,7 +237,7 @@ export default function ExcelImport({ open, onOpenChange }: ExcelImportProps) {
             )}
 
             <p className="text-sm text-muted-foreground">
-              {rows.length} lignes detectees. Mappez les colonnes du fichier aux champs produit.
+              {rows.length} lignes détectées. Mappez les colonnes du fichier aux champs produit.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -305,7 +305,7 @@ export default function ExcelImport({ open, onOpenChange }: ExcelImportProps) {
             <DialogFooter>
               <Button variant="outline" onClick={reset}>Retour</Button>
               <Button onClick={goToPreview} disabled={!canProceed}>
-                Apercu
+                Aperçu
               </Button>
             </DialogFooter>
           </div>
@@ -314,7 +314,7 @@ export default function ExcelImport({ open, onOpenChange }: ExcelImportProps) {
         {step === 'preview' && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Apercu des 5 premieres lignes sur {rows.length} total.
+              Aperçu des 5 premières lignes sur {rows.length} total.
             </p>
 
             <div className="border rounded-lg overflow-x-auto">

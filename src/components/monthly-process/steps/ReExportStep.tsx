@@ -186,13 +186,14 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
   // ── Export handlers ──
 
   const handleExportExcel = (ws: WholesalerGroup) => {
+    const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
     const rows = ws.items.map(item => {
       const row: Record<string, unknown> = {
         'CIP13': item.cip13,
         'Produit': item.productName,
         'Client': item.customerCode,
-        'Quantite': item.quantity,
-        'Prix unitaire': item.unitPrice != null ? item.unitPrice : '',
+        'Qté fournisseur': item.quantity,
+        'Date edition': today,
       }
       if (item.isQtyModified) {
         row['Qty originale'] = item.negoOriginalQty
@@ -206,9 +207,8 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
       } else {
         row['Prix original'] = ''
       }
-      row['Commentaire nego'] = item.negoComment ?? ''
-      row['Date demande'] = new Date(item.createdAt).toLocaleDateString('fr-FR')
-      row['Modifie'] = item.isQtyModified || item.isPriceModified ? 'OUI' : ''
+      row['Commentaire négo'] = item.negoComment ?? ''
+      row['Modifié'] = item.isQtyModified || item.isPriceModified ? 'OUI' : ''
       return row
     })
 
@@ -219,14 +219,13 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
     worksheet['!cols'] = [
       { wch: 16 }, // CIP13
       { wch: 40 }, // Produit
-      { wch: 10 }, // Client
-      { wch: 12 }, // Quantite
-      { wch: 14 }, // Prix unitaire
+      { wch: 12 }, // Client
+      { wch: 14 }, // Qte fournisseur
+      { wch: 18 }, // Date edition
       { wch: 14 }, // Qty originale
       { wch: 10 }, // Diff qty
       { wch: 14 }, // Prix original
       { wch: 30 }, // Commentaire
-      { wch: 14 }, // Date demande
       { wch: 10 }, // Modifie
     ]
 
@@ -235,11 +234,12 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
     XLSX.writeFile(workbook, filename)
 
     setExportedWholesalers(prev => new Set([...prev, ws.wholesalerId]))
-    toast.success(`Re-export ${ws.wholesalerCode} telecharge`)
+    toast.success(`Ré-export ${ws.wholesalerCode} téléchargé`)
   }
 
   const handleExportCSV = (ws: WholesalerGroup) => {
-    const header = ['CIP13', 'Produit', 'Client', 'Quantite', 'Prix', 'Qty orig', 'Prix orig', 'Commentaire', 'Modifie']
+    const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    const header = ['CIP13', 'Produit', 'Client', 'Qté fournisseur', 'Date edition', 'Qty orig', 'Prix orig', 'Commentaire', 'Modifié']
     const csvRows = [header.join(';')]
 
     for (const item of ws.items) {
@@ -248,7 +248,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
         `"${item.productName.replace(/"/g, '""')}"`,
         item.customerCode,
         item.quantity,
-        item.unitPrice ?? '',
+        today,
         item.negoOriginalQty ?? '',
         item.negoOriginalPrice ?? '',
         `"${(item.negoComment ?? '').replace(/"/g, '""')}"`,
@@ -266,7 +266,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
     URL.revokeObjectURL(url)
 
     setExportedWholesalers(prev => new Set([...prev, ws.wholesalerId]))
-    toast.success(`Re-export CSV ${ws.wholesalerCode} telecharge`)
+    toast.success(`Ré-export CSV ${ws.wholesalerCode} téléchargé`)
   }
 
   const handleExportAll = () => {
@@ -285,7 +285,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Re-Export apres Negociation</h3>
+        <h3 className="text-lg font-semibold">Ré-Export après Négociation</h3>
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map(i => <div key={i} className="h-20 bg-muted rounded-xl" />)}
         </div>
@@ -297,9 +297,9 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
     return (
       <div className="space-y-5">
         <div>
-          <h3 className="text-lg font-semibold">Re-Export apres Negociation</h3>
+          <h3 className="text-lg font-semibold">Ré-Export après Négociation</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Aucun besoin grossiste a re-exporter. Verifiez que les quotas et commandes sont correctement configures.
+            Aucun besoin grossiste à ré-exporter. Vérifiez que les quotas et commandes sont correctement configurés.
           </p>
         </div>
         <div className="flex justify-end">
@@ -317,9 +317,9 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-semibold">Re-Export apres Negociation</h3>
+        <h3 className="text-lg font-semibold">Ré-Export après Négociation</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Fichiers de besoins mis a jour avec les ajustements de negociation. Les lignes modifiees sont mises en evidence.
+          Fichiers de besoins mis à jour avec les ajustements de négociation. Les lignes modifiées sont mises en évidence.
         </p>
       </div>
 
@@ -340,7 +340,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
           {totalModified > 0 && (
             <div className="flex items-center gap-1.5 text-blue-600">
               <Pencil className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">{totalModified} lignes modifiees</span>
+              <span className="text-xs font-medium">{totalModified} lignes modifiées</span>
             </div>
           )}
           {totalNewOrders > 0 && (
@@ -382,7 +382,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
                       <span>{ws.items.length} lignes</span>
                       <span>{ws.totalQuantity.toLocaleString('fr-FR')} u.</span>
                       {ws.modifiedCount > 0 && (
-                        <span className="text-blue-600 font-medium">{ws.modifiedCount} modifiees</span>
+                        <span className="text-blue-600 font-medium">{ws.modifiedCount} modifiées</span>
                       )}
                       {ws.newOrderCount > 0 && (
                         <span className="text-purple-600 font-medium">{ws.newOrderCount} ajouts</span>
@@ -405,7 +405,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
                       onClick={() => handleExportExcel(ws)}
                     >
                       {isExported ? <FileSpreadsheet className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-                      {isExported ? 'Re-telecharger' : 'Excel'}
+                      {isExported ? 'Re-télécharger' : 'Excel'}
                     </Button>
                   </div>
                 </div>
@@ -418,7 +418,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
                         <TableHead className="text-xs">CIP13</TableHead>
                         <TableHead className="text-xs">Produit</TableHead>
                         <TableHead className="text-xs">Client</TableHead>
-                        <TableHead className="text-xs text-right">Quantite</TableHead>
+                        <TableHead className="text-xs text-right">Quantité</TableHead>
                         <TableHead className="text-xs text-right">Prix</TableHead>
                         <TableHead className="text-xs">Date d'ajout</TableHead>
                         <TableHead className="text-xs w-10"></TableHead>
@@ -495,10 +495,10 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     {item.isQtyModified && item.isPriceModified
-                                      ? 'Quantite et prix modifies'
+                                      ? 'Quantité et prix modifiés'
                                       : item.isQtyModified
-                                        ? 'Quantite modifiee'
-                                        : 'Prix modifie'}
+                                        ? 'Quantité modifiée'
+                                        : 'Prix modifié'}
                                   </TooltipContent>
                                 </Tooltip>
                               )}
@@ -509,7 +509,7 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
                                       <CalendarPlus className="h-3 w-3" />
                                     </span>
                                   </TooltipTrigger>
-                                  <TooltipContent>Ajoute pendant la negociation</TooltipContent>
+                                  <TooltipContent>Ajouté pendant la négociation</TooltipContent>
                                 </Tooltip>
                               )}
                             </TableCell>
@@ -562,12 +562,12 @@ export default function ReExportStep({ process, onNext }: ReExportStepProps) {
           {exportedWholesalers.size > 0 && (
             <Badge variant="secondary" className="gap-1">
               <FileSpreadsheet className="h-3 w-3" />
-              {exportedWholesalers.size}/{wholesalerGroups.length} exportes
+              {exportedWholesalers.size}/{wholesalerGroups.length} exportés
             </Badge>
           )}
         </div>
         <Button onClick={onNext} className="gap-2">
-          {allExported ? 'Passer a la collecte' : 'Passer a l\'etape suivante'} <ArrowRight className="h-4 w-4" />
+          {allExported ? 'Passer à la collecte' : 'Passer à l\'étape suivante'} <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
     </div>

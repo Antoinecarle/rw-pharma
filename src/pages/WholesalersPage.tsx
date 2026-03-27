@@ -81,13 +81,13 @@ export default function WholesalersPage() {
       if (w.id) { const { id, ...rest } = w; const { error } = await supabase.from('wholesalers').update(rest).eq('id', id); if (error) throw error }
       else { const { error } = await supabase.from('wholesalers').insert(w); if (error) throw error }
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['wholesalers'] }); setDialogOpen(false); toast.success(editing ? 'Grossiste modifie' : 'Grossiste cree') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['wholesalers'] }); setDialogOpen(false); toast.success(editing ? 'Grossiste modifié' : 'Grossiste créé') },
     onError: (err: Error) => toast.error(err.message),
   })
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('wholesalers').delete().eq('id', id); if (error) throw error },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['wholesalers'] }); toast.success('Grossiste supprime') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['wholesalers'] }); toast.success('Grossiste supprimé') },
     onError: (err: Error) => toast.error(err.message),
   })
 
@@ -302,13 +302,13 @@ export default function WholesalersPage() {
 
             <DialogFooter>
               <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">Annuler</Button>
-              <Button type="submit" size="sm" disabled={upsert.isPending} className="text-[13px] rounded-xl" style={{ background: 'var(--ivory-accent)', color: 'white' }}>{upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Creer'}</Button>
+              <Button type="submit" size="sm" disabled={upsert.isPending} className="text-[13px] rounded-xl" style={{ background: 'var(--ivory-accent)', color: 'white' }}>{upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Créer'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Supprimer le grossiste" description="Cette action est irreversible." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
+      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Supprimer le grossiste" description="Cette action est irréversible." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
     </div>
   )
 }

@@ -272,9 +272,9 @@ export default function StockLotView({
       <Card className="ivory-card-empty">
         <CardContent className="p-8 text-center">
           <Warehouse className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="font-medium">Aucun stock collecte</p>
+          <p className="font-medium">Aucun stock collecté</p>
           <p className="text-sm text-muted-foreground mt-1">
-            {processId ? "Importez le stock recu a l'etape precedente." : "Aucun stock disponible pour le moment."}
+            {processId ? "Importez le stock reçu à l'étape précédente." : "Aucun stock disponible pour le moment."}
           </p>
         </CardContent>
       </Card>
@@ -391,8 +391,8 @@ export default function StockLotView({
                             <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">N° de lot</th>
                             <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Expiration</th>
                             <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Grossiste</th>
-                            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Quantite</th>
-                            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Alloue</th>
+                            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Quantité</th>
+                            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Alloué</th>
                             <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Restant</th>
                           </tr>
                         </thead>
@@ -439,7 +439,7 @@ export default function StockLotView({
           <Card className="ivory-card-empty">
             <CardContent className="p-6 text-center">
               <Search className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">Aucun resultat pour "{search}"</p>
+              <p className="text-sm text-muted-foreground">Aucun résultat pour "{search}"</p>
             </CardContent>
           </Card>
         )}

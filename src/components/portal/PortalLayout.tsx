@@ -134,7 +134,7 @@ function PortalSidebar({ onNavigate }: { onNavigate?: () => void }) {
           <DropdownMenuContent align="start" className="w-52 rounded-xl">
             <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive text-[13px] rounded-lg">
               <LogOut className="h-3.5 w-3.5 mr-2" />
-              Se deconnecter
+              Se déconnecter
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -8,12 +8,12 @@ export const STEPS = [
   { label: 'Import Dispos', shortLabel: 'Dispos', icon: BarChart3, phase: 'commandes' as MonthlyProcessPhase },
   { label: 'Import Commandes', shortLabel: 'Commandes', icon: FileUp, phase: 'commandes' as MonthlyProcessPhase },
   { label: 'Revue Commandes', shortLabel: 'Revue', icon: ClipboardCheck, phase: 'commandes' as MonthlyProcessPhase },
-  { label: 'Attribution Macro', shortLabel: 'Attribution', icon: GitMerge, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Commande initiale', shortLabel: 'Cmd init.', icon: GitMerge, phase: 'commandes' as MonthlyProcessPhase },
   { label: 'Export Grossistes', shortLabel: 'Export', icon: Send, phase: 'commandes' as MonthlyProcessPhase },
-  { label: 'Negociation', shortLabel: 'Nego', icon: MessageSquare, phase: 'commandes' as MonthlyProcessPhase },
-  { label: 'Re-export', shortLabel: 'Re-export', icon: RefreshCw, phase: 'commandes' as MonthlyProcessPhase },
-  { label: 'Reception Stocks', shortLabel: 'Stocks', icon: PackageCheck, phase: 'collecte' as MonthlyProcessPhase },
-  { label: 'Aggregation Stock', shortLabel: 'Agregation', icon: Layers, phase: 'collecte' as MonthlyProcessPhase },
+  { label: 'Négociation', shortLabel: 'Négo', icon: MessageSquare, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Ré-export', shortLabel: 'Ré-export', icon: RefreshCw, phase: 'commandes' as MonthlyProcessPhase },
+  { label: 'Réception Stocks', shortLabel: 'Stocks', icon: PackageCheck, phase: 'collecte' as MonthlyProcessPhase },
+  { label: 'Agrégation Stock', shortLabel: 'Agrégation', icon: Layers, phase: 'collecte' as MonthlyProcessPhase },
   { label: 'Allocation', shortLabel: 'Allocation', icon: Cpu, phase: 'allocation' as MonthlyProcessPhase },
   { label: 'Revue Allocations', shortLabel: 'Revue Alloc', icon: SearchCheck, phase: 'allocation' as MonthlyProcessPhase },
   { label: 'Finalisation', shortLabel: 'Final', icon: Flag, phase: 'cloture' as MonthlyProcessPhase },
@@ -232,7 +232,7 @@ export default function ProcessStepper({ currentStep, onStepClick, stepStats }: 
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground">{step.label}</p>
                   <p className="text-[10px] text-muted-foreground">
-                    Etape {currentStep} sur {STEPS.length}
+                    Étape {currentStep} sur {STEPS.length}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">

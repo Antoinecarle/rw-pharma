@@ -23,8 +23,8 @@ export const PHASES: PhaseDefinition[] = [
   },
   {
     id: 2,
-    label: 'Negociation',
-    shortLabel: 'Nego',
+    label: 'Négociation',
+    shortLabel: 'Négo',
     icon: ShoppingCart,
     phase: 'commandes',
     steps: [6, 7],
@@ -39,7 +39,7 @@ export const PHASES: PhaseDefinition[] = [
   },
   {
     id: 4,
-    label: 'Livraison & Cloture',
+    label: 'Livraison & Clôture',
     shortLabel: 'Export',
     icon: Flag,
     phase: 'cloture',
@@ -153,10 +153,10 @@ export default function PhaseTabBar({ currentStep, processStatus, activePhase, o
                   Phase {phase.id} — {phase.label}
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {status === 'completed' && `${totalInPhase}/${totalInPhase} etapes`}
-                  {status === 'active' && `${completedInPhase}/${totalInPhase} etapes`}
+                  {status === 'completed' && `${totalInPhase}/${totalInPhase} étapes`}
+                  {status === 'active' && `${completedInPhase}/${totalInPhase} étapes`}
                   {status === 'waiting' && 'En attente des grossistes'}
-                  {status === 'future' && `${totalInPhase} etapes`}
+                  {status === 'future' && `${totalInPhase} étapes`}
                 </p>
               </div>
               {/* Selection indicator */}

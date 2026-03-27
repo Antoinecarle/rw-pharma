@@ -34,16 +34,16 @@ const NAV_ITEMS = [
   { path: '/products', label: 'Produits', keywords: 'produits catalogue medicaments cip13', icon: Pill, shortcut: 'catalogue' },
   { path: '/wholesalers', label: 'Grossistes', keywords: 'grossistes fournisseurs alliance cerp ocp', icon: Truck },
   { path: '/customers', label: 'Clients importateurs', keywords: 'clients importateurs orifarm mpa axicorp', icon: Users },
-  { path: '/disponibilites', label: 'Disponibilites', keywords: 'disponibilites quotas dispos grossistes', icon: ClipboardList },
+  { path: '/disponibilites', label: 'Disponibilités', keywords: 'disponibilites quotas dispos grossistes', icon: ClipboardList },
   { path: '/debts', label: 'Dettes clients', keywords: 'dettes sous-allocation compensation', icon: Scale },
   { path: '/stock', label: 'Stock', keywords: 'stock lots collecte inventaire', icon: Boxes },
   { path: '/ansm', label: 'ANSM', keywords: 'ansm bloques export interdit', icon: ShieldAlert },
-  { path: '/allocation-dashboard', label: 'Metriques', keywords: 'metriques dashboard kpi statistiques couverture', icon: BarChart3 },
+  { path: '/allocation-dashboard', label: 'Métriques', keywords: 'metriques dashboard kpi statistiques couverture', icon: BarChart3 },
 ]
 
 const ACTION_ITEMS = [
   { path: '/products', label: 'Import Excel produits', keywords: 'import excel produits catalogue', icon: FileSpreadsheet },
-  { path: '/monthly-processes', label: 'Nouveau processus mensuel', keywords: 'nouveau processus mensuel creer', icon: CalendarRange },
+  { path: '/monthly-processes', label: 'Nouveau processus mensuel', keywords: 'nouveau processus mensuel créer', icon: CalendarRange },
 ]
 
 function matchesSearch(keywords: string, label: string, query: string): boolean {
@@ -123,8 +123,8 @@ export default function CommandPalette() {
     enabled: search.length >= 2,
   })
 
-  const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
-  const STEP_LABELS = ['Import dispos', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Negociation', 'Re-export', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
+  const MONTH_NAMES = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+  const STEP_LABELS = ['Import dispos', 'Import commandes', 'Revue commandes', 'Commande initiale', 'Export grossistes', 'Négociation', 'Ré-export', 'Réception stocks', 'Agrégation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
   const isOnProcess = location.pathname.startsWith('/monthly-processes/')
 
@@ -155,7 +155,7 @@ export default function CommandPalette() {
         onValueChange={setSearch}
       />
       <CommandList>
-        {!hasAnyResults && <CommandEmpty>Aucun resultat.</CommandEmpty>}
+        {!hasAnyResults && <CommandEmpty>Aucun résultat.</CommandEmpty>}
 
         {/* Contextual actions */}
         {activeProcess && !search && (
@@ -165,7 +165,7 @@ export default function CommandPalette() {
               <span>
                 Continuer {MONTH_NAMES[activeProcess.month - 1]} {activeProcess.year}
               </span>
-              <CommandShortcut>Etape {activeProcess.current_step}/12</CommandShortcut>
+              <CommandShortcut>Étape {activeProcess.current_step}/12</CommandShortcut>
             </CommandItem>
             {isOnProcess && activeProcess.current_step <= 3 && (
               <CommandItem onSelect={() => go(`/monthly-processes/${activeProcess.id}`)}>
@@ -195,7 +195,7 @@ export default function CommandPalette() {
         {productResults && productResults.length > 0 && (
           <>
             <CommandSeparator />
-            <CommandGroup heading="Produits trouves">
+            <CommandGroup heading="Produits trouvés">
               {productResults.map((p) => (
                 <CommandItem key={p.id} onSelect={() => go('/products')}>
                   <Pill className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -209,7 +209,7 @@ export default function CommandPalette() {
         {customerResults && customerResults.length > 0 && (
           <>
             <CommandSeparator />
-            <CommandGroup heading="Clients trouves">
+            <CommandGroup heading="Clients trouvés">
               {customerResults.map((c) => (
                 <CommandItem key={c.id} onSelect={() => go('/customers')}>
                   <Users className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -224,7 +224,7 @@ export default function CommandPalette() {
         {wholesalerResults && wholesalerResults.length > 0 && (
           <>
             <CommandSeparator />
-            <CommandGroup heading="Grossistes trouves">
+            <CommandGroup heading="Grossistes trouvés">
               {wholesalerResults.map((w) => (
                 <CommandItem key={w.id} onSelect={() => go('/wholesalers')}>
                   <Truck className="mr-2 h-4 w-4 text-muted-foreground" />

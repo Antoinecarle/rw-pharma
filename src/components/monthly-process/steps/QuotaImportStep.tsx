@@ -26,7 +26,10 @@ import {
   detectEntityFromData,
   getSampleValues as getSharedSampleValues,
   getUnmappedHeaders,
+  hasCipColumn,
+  getEffectiveCipColumn,
 } from '@/lib/column-detection'
+import { buildCip7Map, resolveProductCode } from '@/lib/cip-utils'
 
 // --------------- Types ---------------
 
@@ -34,7 +37,8 @@ type QuotaColumnMapping = Record<QuotaField, string>
 
 const FIELD_LABELS: Record<QuotaField, string> = {
   cip13: 'CIP13 Produit *',
-  quantity: 'Quantite disponible *',
+  cip7: 'CIP7 (code court)',
+  quantity: 'Quantité disponible *',
   extra: 'Extra disponible',
   productName: 'Nom produit',
   wholesalerColumn: 'Grossiste (multi)',
@@ -122,7 +126,7 @@ function createQueuedFile(file: File): QueuedQuotaFile {
     sheetNames: [],
     selectedSheet: '',
     workbook: null,
-    mapping: { cip13: '', quantity: '', extra: '', productName: '', wholesalerColumn: '' },
+    mapping: { cip13: '', cip7: '', quantity: '', extra: '', productName: '', wholesalerColumn: '' },
     confidence: [],
     importResult: { inserted: 0, updated: 0, errors: 0, skipped: 0 },
     importProgress: { current: 0, total: 0, phase: '' },
@@ -327,7 +331,10 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
   const canProceed = (f: QueuedQuotaFile) => {
     const wholesalerCode = getWholesalerCode(f)
     const hasWholesalerColumn = !!f.mapping.wholesalerColumn
-    return REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (!!wholesalerCode || hasWholesalerColumn)
+    // CIP13 or CIP7 must be mapped (CIP7 serves as fallback)
+    const hasCip = hasCipColumn(f.mapping)
+    const hasQuantity = !!f.mapping.quantity
+    return hasCip && hasQuantity && (!!wholesalerCode || hasWholesalerColumn)
   }
 
   // --------------- Import mutation ---------------
@@ -339,7 +346,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
 
       const wholesalerCode = getWholesalerCode(f)
 
-      updateFile(fileId, { status: 'importing', importProgress: { current: 0, total: f.rows.length, phase: 'Chargement des references...' } })
+      updateFile(fileId, { status: 'importing', importProgress: { current: 0, total: f.rows.length, phase: 'Chargement des références...' } })
 
       // Load all products (paginated with safety limit)
       let allProducts: { id: string; cip13: string; name: string; is_ansm_blocked: boolean }[] = []
@@ -357,49 +364,48 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
 
       const productMap = new Map(allProducts.map(p => [p.cip13, p]))
 
-      // Build CIP7 reverse lookup: CIP7 = CIP13[5:12] (French pharma standard)
-      const cip7Map = new Map<string, typeof allProducts[0]>()
-      for (const p of allProducts) {
-        if (p.cip13 && p.cip13.length === 13) {
-          const c7 = p.cip13.substring(5, 12)
-          if (!cip7Map.has(c7)) cip7Map.set(c7, p)
-        }
-      }
-      const resolveProduct = (code: string) => {
-        return productMap.get(code) ?? (code.length === 7 && /^\d+$/.test(code) ? cip7Map.get(code) : null) ?? null
-      }
+      // Build CIP7 reverse lookup using shared utility
+      const cip7Map = buildCip7Map(allProducts)
+      const resolveProduct = (code: string) => resolveProductCode(code, productMap, cip7Map)
+
+      // Determine which column holds the product code (CIP13 or CIP7 fallback)
+      const cipColumn = getEffectiveCipColumn(f.mapping)
+      const usingCip7Column = !f.mapping.cip13 && !!f.mapping.cip7
 
       // Auto-create missing products (demo mode)
       const missingCip13s = new Set<string>()
       const cip13NameMap = new Map<string, string>()
       for (const row of f.rows) {
-        const cip13 = String(row[f.mapping.cip13] || '').trim()
-        if (cip13 && !resolveProduct(cip13)) {
-          missingCip13s.add(cip13)
+        const code = String(row[cipColumn] || '').trim()
+        if (code && !resolveProduct(code)) {
+          missingCip13s.add(code)
           if (f.mapping.productName) {
             const name = String(row[f.mapping.productName] || '').trim()
-            if (name) cip13NameMap.set(cip13, name)
+            if (name) cip13NameMap.set(code, name)
           }
         }
       }
 
       if (missingCip13s.size > 0) {
-        updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Creation de ${missingCip13s.size} produit(s) manquant(s)...` } })
-        const newProducts = [...missingCip13s].map(cip13 => ({
-          cip13,
-          cip7: cip13.length === 13 ? cip13.substring(5, 12) : (cip13.length === 7 ? cip13 : null),
-          name: cip13NameMap.get(cip13) || `Produit ${cip13}`,
-          is_ansm_blocked: false,
-          is_demo_generated: true,
-          metadata: { auto_created_from: f.fileName },
-        }))
-        const { data: created, error: createErr } = await supabase
-          .from('products')
-          .upsert(newProducts, { onConflict: 'cip13', ignoreDuplicates: true })
-          .select('id, cip13, name, is_ansm_blocked')
-        if (createErr) console.error('Auto-create products error:', createErr)
-        if (created) {
-          for (const p of created) productMap.set(p.cip13, p)
+        // When using CIP7 column, unresolved codes cannot be auto-created (we don't know the full CIP13)
+        if (!usingCip7Column) {
+          updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Création de ${missingCip13s.size} produit(s) manquant(s)...` } })
+          const newProducts = [...missingCip13s].map(cip13 => ({
+            cip13,
+            cip7: cip13.length === 13 ? cip13.substring(5, 12) : (cip13.length === 7 ? cip13 : null),
+            name: cip13NameMap.get(cip13) || `Produit ${cip13}`,
+            is_ansm_blocked: false,
+            is_demo_generated: true,
+            metadata: { auto_created_from: f.fileName },
+          }))
+          const { data: created, error: createErr } = await supabase
+            .from('products')
+            .upsert(newProducts, { onConflict: 'cip13', ignoreDuplicates: true })
+            .select('id, cip13, name, is_ansm_blocked')
+          if (createErr) console.error('Auto-create products error:', createErr)
+          if (created) {
+            for (const p of created) productMap.set(p.cip13, p)
+          }
         }
       }
 
@@ -412,7 +418,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       if (!isMultiWholesaler) {
         const wholesaler = wholesalersList.find(w => w.code?.toUpperCase() === wholesalerCode?.toUpperCase())
         if (!wholesaler) {
-          throw new Error(`Grossiste "${wholesalerCode ?? '?'}" introuvable en base. Verifiez le code grossiste.`)
+          throw new Error(`Grossiste "${wholesalerCode ?? '?'}" introuvable en base. Vérifiez le code grossiste.`)
         }
         singleWholesalerId = wholesaler.id
       }
@@ -425,7 +431,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
           if (wsCode && !wholesalerIdMap.has(wsCode)) wsCodesInFile.add(wsCode)
         }
         if (wsCodesInFile.size > 0) {
-          updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Creation de ${wsCodesInFile.size} grossiste(s) manquant(s)...` } })
+          updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: `Création de ${wsCodesInFile.size} grossiste(s) manquant(s)...` } })
           const newWholesalers = [...wsCodesInFile].map(code => ({
             code,
             name: code,
@@ -448,26 +454,26 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       let skipped = 0
       const skippedDetails: SkippedQuotaItem[] = []
       const batchSize = 100
-      let autoCreatedProducts = missingCip13s.size
+      let autoCreatedProducts = usingCip7Column ? 0 : missingCip13s.size
 
       updateFile(fileId, { importProgress: { current: 0, total: f.rows.length, phase: 'Validation et insertion...' } })
 
       for (let i = 0; i < f.rows.length; i += batchSize) {
         const batch = f.rows.slice(i, i + batchSize).map((row, batchIdx) => {
           const rowIndex = i + batchIdx
-          const cip13 = String(row[f.mapping.cip13] || '').trim()
+          const rawCode = String(row[cipColumn] || '').trim()
           const qty = parseInt(String(row[f.mapping.quantity] || '0').replace(/\s/g, ''), 10)
           const extra = f.mapping.extra ? parseInt(String(row[f.mapping.extra] || '0').replace(/\s/g, ''), 10) || 0 : 0
 
-          const product = resolveProduct(cip13)
+          const product = resolveProduct(rawCode)
 
           if (!product) {
-            skippedDetails.push({ rowIndex, cip13, quantity: qty, reason: 'unknown_product' })
+            skippedDetails.push({ rowIndex, cip13: usingCip7Column ? `CIP7:${rawCode}` : rawCode, quantity: qty, reason: 'unknown_product' })
             return null
           }
 
           if (qty <= 0 && extra <= 0) {
-            skippedDetails.push({ rowIndex, cip13, quantity: qty, reason: 'invalid_quantity' })
+            skippedDetails.push({ rowIndex, cip13: rawCode, quantity: qty, reason: 'invalid_quantity' })
             return null
           }
 
@@ -478,7 +484,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
             rowWholesalerId = wholesalerIdMap.get(wsCode)
           }
           if (!rowWholesalerId) {
-            skippedDetails.push({ rowIndex, cip13, quantity: qty, reason: 'unknown_wholesaler' })
+            skippedDetails.push({ rowIndex, cip13: rawCode, quantity: qty, reason: 'unknown_wholesaler' })
             return null
           }
 
@@ -549,8 +555,8 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
       queryClient.invalidateQueries({ queryKey: ['wholesaler_quotas'] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
-      const parts = [`${result.inserted} quotas importes`]
-      if (result.autoCreatedProducts > 0) parts.push(`${result.autoCreatedProducts} produit(s) cree(s) automatiquement`)
+      const parts = [`${result.inserted} quotas importés`]
+      if (result.autoCreatedProducts > 0) parts.push(`${result.autoCreatedProducts} produit(s) créé(s) automatiquement`)
       toast.success(parts.join(' — '))
     },
     onError: (err: Error, fileId: string) => {
@@ -563,7 +569,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
 
   const getConfidenceBadge = (conf: QuotaMappingConfidence) => {
     if (conf.source === 'none') return null
-    if (conf.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Memorise</Badge>
+    if (conf.source === 'saved') return <Badge variant="default" className="text-[9px] h-4 gap-0.5"><History className="h-2.5 w-2.5" /> Mémorisé</Badge>
     if (conf.source === 'auto') return <Badge variant="secondary" className="text-[9px] h-4 gap-0.5"><Zap className="h-2.5 w-2.5" /> Auto</Badge>
     if (conf.source === 'manual') return <Badge variant="outline" className="text-[9px] h-4 gap-0.5 border-blue-300 text-blue-600"><Hand className="h-2.5 w-2.5" /> Manuel</Badge>
     return null
@@ -621,18 +627,18 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-200">
-                    Grossiste non defini
+                    Grossiste non défini
                   </Badge>
                 )}
                 {f.status === 'done' && (
                   <span className="text-[11px] text-green-600 font-medium">
-                    {f.importResult.inserted} importes
-                    {f.importResult.skipped > 0 && <span className="text-amber-600"> / {f.importResult.skipped} ignores</span>}
+                    {f.importResult.inserted} importés
+                    {f.importResult.skipped > 0 && <span className="text-amber-600"> / {f.importResult.skipped} ignorés</span>}
                   </span>
                 )}
                 {f.confidence.some(c => c.source === 'saved') && f.status !== 'done' && (
                   <Badge variant="secondary" className="text-[9px] h-4 gap-0.5">
-                    <History className="h-2.5 w-2.5" /> Mapping memorise
+                    <History className="h-2.5 w-2.5" /> Mapping mémorisé
                   </Badge>
                 )}
               </div>
@@ -674,10 +680,10 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                     onValueChange={(v) => updateFile(f.id, { manualWholesaler: v === 'none' ? null : v })}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Selectionner le grossiste..." />
+                      <SelectValue placeholder="Sélectionner le grossiste..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">-- Selectionner --</SelectItem>
+                      <SelectItem value="none">-- Sélectionner --</SelectItem>
                       {(wholesalers ?? []).map(w => (
                         <SelectItem key={w.id} value={w.code ?? w.id}>{w.code} — {w.name}</SelectItem>
                       ))}
@@ -705,16 +711,19 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">Mappez les colonnes aux champs quotas.</p>
                     <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground" onClick={() => resetMapping(f.id)}>
-                      <RotateCcw className="h-3 w-3" /> Reinitialiser
+                      <RotateCcw className="h-3 w-3" /> Réinitialiser
                     </Button>
                   </div>
 
                   {/* Alert for missing required fields */}
-                  {!REQUIRED_FIELDS.every(fld => f.mapping[fld]) && (
+                  {!(hasCipColumn(f.mapping) && f.mapping.quantity) && (
                     <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
                       <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                       <p className="text-xs text-red-600 dark:text-red-400">
-                        Champs obligatoires manquants : {REQUIRED_FIELDS.filter(fld => !f.mapping[fld]).map(fld => FIELD_LABELS[fld].replace(' *', '')).join(', ')}
+                        Champs obligatoires manquants : {[
+                          ...(!hasCipColumn(f.mapping) ? ['CIP13 ou CIP7'] : []),
+                          ...(!f.mapping.quantity ? ['Quantité disponible'] : []),
+                        ].join(', ')}
                       </p>
                     </div>
                   )}
@@ -756,7 +765,8 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                   </div>
 
                   {(() => {
-                    const reqMapped = REQUIRED_FIELDS.filter(fld => f.mapping[fld]).length
+                    // CIP7 satisfies the CIP13 requirement
+                    const reqMapped = REQUIRED_FIELDS.filter(fld => fld === 'cip13' ? hasCipColumn(f.mapping) : !!f.mapping[fld]).length
                     const reqTotal = REQUIRED_FIELDS.length
                     const optFields = ALL_FIELDS.filter(fld => !REQUIRED_FIELDS.includes(fld))
                     const optMapped = optFields.filter(fld => f.mapping[fld]).length
@@ -800,11 +810,11 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                       size="sm"
                       onClick={() => {
                         if (canProceed(f)) updateFile(f.id, { status: 'preview' })
-                        else toast.error('Champs obligatoires manquants (CIP13, Quantite, Grossiste)')
+                        else toast.error('Champs obligatoires manquants (CIP13 ou CIP7, Quantité, Grossiste)')
                       }}
                       disabled={!canProceed(f)}
                     >
-                      Apercu
+                      Aperçu
                     </Button>
                   </div>
                 </>
@@ -814,15 +824,15 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
               {f.status === 'preview' && (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Apercu des 10 premieres lignes sur {f.rows.length} total. Grossiste : <strong>{wholesalerCode}</strong>
+                    Aperçu des 10 premières lignes sur {f.rows.length} total. Grossiste : <strong>{wholesalerCode}</strong>
                   </p>
                   <div className="border rounded-lg overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-10">#</TableHead>
-                          <TableHead>CIP13</TableHead>
-                          <TableHead>Quantite quota</TableHead>
+                          <TableHead>{f.mapping.cip13 ? 'CIP13' : 'CIP7'}</TableHead>
+                          <TableHead>Quantité quota</TableHead>
                           <TableHead>Extra</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -830,7 +840,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                         {f.rows.slice(0, 10).map((row, i) => (
                           <TableRow key={i}>
                             <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
-                            <TableCell className="font-mono text-sm">{row[f.mapping.cip13]}</TableCell>
+                            <TableCell className="font-mono text-sm">{row[getEffectiveCipColumn(f.mapping)]}{!f.mapping.cip13 && f.mapping.cip7 ? <Badge variant="outline" className="ml-1 text-[9px] h-4">CIP7</Badge> : null}</TableCell>
                             <TableCell>{row[f.mapping.quantity]}</TableCell>
                             <TableCell>{f.mapping.extra ? row[f.mapping.extra] : '-'}</TableCell>
                           </TableRow>
@@ -857,7 +867,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
           <Card className="border-t-0 rounded-t-none border-amber-200/60 bg-amber-50/30 dark:bg-amber-950/20">
             <CardContent className="p-3 flex items-center gap-3">
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-              <p className="text-xs flex-1">{f.skippedItems.length} lignes ignorees (produits inconnus / quantites invalides)</p>
+              <p className="text-xs flex-1">{f.skippedItems.length} lignes ignorées (produits inconnus / quantités invalides)</p>
               <Button
                 variant="outline"
                 size="sm"
@@ -875,7 +885,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                       <TableRow>
                         <TableHead className="w-10">Ligne</TableHead>
                         <TableHead>CIP13</TableHead>
-                        <TableHead>Quantite</TableHead>
+                        <TableHead>Quantité</TableHead>
                         <TableHead>Raison</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -889,7 +899,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                             <Badge variant="outline" className="text-[9px]">
                               {item.reason === 'unknown_product' ? 'Produit inconnu' :
                                item.reason === 'unknown_wholesaler' ? 'Grossiste inconnu' :
-                               item.reason === 'invalid_quantity' ? 'Quantite invalide' : 'Bloque ANSM'}
+                               item.reason === 'invalid_quantity' ? 'Quantité invalide' : 'Bloqué ANSM'}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -910,9 +920,9 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-semibold">Import des Disponibilites Grossistes</h3>
+        <h3 className="text-lg font-semibold">Import des Disponibilités Grossistes</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Importez les fichiers de disponibilites recus des grossistes pour ce mois. Un fichier par grossiste.
+          Importez les fichiers de disponibilités reçus des grossistes pour ce mois. Un fichier par grossiste.
         </p>
       </div>
 
@@ -924,7 +934,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
               <div className="flex items-center gap-3">
                 <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
                 <p className="text-sm">
-                  <strong>{existingQuotas}</strong> disponibilites importees pour ce mois.
+                  <strong>{existingQuotas}</strong> disponibilités importées pour ce mois.
                 </p>
               </div>
               {!isProcessLocked && (
@@ -937,7 +947,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                     const { error } = await supabase.from('wholesaler_quotas').delete().eq('month', monthStr)
                     if (error) { toast.error(error.message); return }
                     queryClient.invalidateQueries({ queryKey: ['wholesaler_quotas'] })
-                    toast.success('Toutes les disponibilites ont ete supprimees')
+                    toast.success('Toutes les disponibilités ont été supprimées')
                   }}
                 >
                   <X className="h-3.5 w-3.5" /> Tout supprimer
@@ -1002,7 +1012,7 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
                               const { error } = await supabase.from('wholesaler_quotas').delete().eq('month', monthStr).eq('wholesaler_id', ws.id)
                               if (error) { toast.error(error.message); return }
                               queryClient.invalidateQueries({ queryKey: ['wholesaler_quotas'] })
-                              toast.success(`Disponibilites ${entry.code} supprimees`)
+                              toast.success(`Disponibilités ${entry.code} supprimées`)
                             }}
                           >
                             <X className="h-3.5 w-3.5" />
@@ -1025,11 +1035,11 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
             <span className="text-sm font-medium">{queue.length} fichier{queue.length > 1 ? 's' : ''}</span>
             <Badge variant="secondary" className="text-xs gap-1">
               <Check className="h-3 w-3" />
-              {queue.filter(f => f.status === 'done').length}/{queue.length} importes
+              {queue.filter(f => f.status === 'done').length}/{queue.length} importés
             </Badge>
             {(totalInserted > 0 || (existingQuotas ?? 0) > 0) && (
               <Badge variant="default" className="text-xs gap-1">
-                {totalInserted + (existingQuotas ?? 0)} disponibilites total
+                {totalInserted + (existingQuotas ?? 0)} disponibilités total
               </Badge>
             )}
           </div>
@@ -1064,10 +1074,10 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
         </div>
         <p className="text-sm font-medium">
           {isDragOver
-            ? 'Deposez les fichiers ici'
+            ? 'Déposez les fichiers ici'
             : queue.length > 0
               ? 'Ajouter un autre fichier grossiste'
-              : 'Deposez des fichiers Excel de disponibilites ou cliquez pour selectionner'
+              : 'Déposez des fichiers Excel de disponibilités ou cliquez pour sélectionner'
           }
         </p>
         <p className="text-xs text-muted-foreground mt-1">
@@ -1110,17 +1120,17 @@ export default function QuotaImportStep({ process, onNext }: QuotaImportStepProp
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
               <div className="space-y-1 text-sm">
-                <p className="font-medium text-amber-800">Passer sans importer les disponibilites ?</p>
+                <p className="font-medium text-amber-800">Passer sans importer les disponibilités ?</p>
                 <ul className="text-amber-700 list-disc pl-4 space-y-0.5">
-                  <li>L'attribution macro (etape 4) ne pourra pas attribuer de produits aux grossistes</li>
-                  <li>Les exports grossistes (etape 5) seront vides</li>
+                  <li>La commande initiale (étape 4) ne pourra pas attribuer de produits aux grossistes</li>
+                  <li>Les exports grossistes (étape 5) seront vides</li>
                   <li>Vous pourrez revenir importer les dispos plus tard</li>
                 </ul>
               </div>
             </div>
             <div className="flex justify-end">
               <Button variant="outline" onClick={onNext} className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-100">
-                <SkipForward className="h-4 w-4" /> Passer quand meme
+                <SkipForward className="h-4 w-4" /> Passer quand même
               </Button>
             </div>
           </div>

@@ -344,7 +344,7 @@ export default function AllocationDashboardPage() {
             <div>
               <h2 className="ivory-heading text-xl md:text-2xl">Dashboard Allocation</h2>
               <p className="text-[12px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>
-                Vue consolidee — {monthLabel}
+                Vue consolidée — {monthLabel}
               </p>
             </div>
           </div>
@@ -433,7 +433,7 @@ export default function AllocationDashboardPage() {
           <Card className="h-full">
             <CardContent className="p-5 space-y-3">
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <Truck className="h-4 w-4" /> Repartition par grossiste
+                <Truck className="h-4 w-4" /> Répartition par grossiste
               </h4>
               {wholesalerBreakdown.length > 0 ? (
                 <HorizontalBarChart
@@ -452,7 +452,7 @@ export default function AllocationDashboardPage() {
           <Card className="h-full">
             <CardContent className="p-5 space-y-3">
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <Users className="h-4 w-4" /> Repartition par client
+                <Users className="h-4 w-4" /> Répartition par client
               </h4>
               {customerBreakdown.length > 0 ? (
                 <HorizontalBarChart
@@ -561,7 +561,7 @@ export default function AllocationDashboardPage() {
               <Card>
                 <CardContent className="p-5 space-y-3">
                   <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                    <ShieldCheck className="h-4 w-4" /> Utilisation des disponibilites
+                    <ShieldCheck className="h-4 w-4" /> Utilisation des disponibilités
                   </h4>
                   <div className="space-y-2">
                     {quotaUtilization.map(q => {

@@ -20,9 +20,9 @@ import {
   Package, Euro, BarChart3, Pill, Truck, ClipboardList, Users, CheckCircle2,
 } from 'lucide-react'
 
-const MONTH_NAMES = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
-const MONTH_SHORT = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec']
-const STEP_LABELS = ['Import dispos', 'Import commandes', 'Revue commandes', 'Attribution macro', 'Export grossistes', 'Negociation', 'Re-export', 'Reception stocks', 'Agregation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
+const MONTH_NAMES = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const MONTH_SHORT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+const STEP_LABELS = ['Import dispos', 'Import commandes', 'Revue commandes', 'Commande initiale', 'Export grossistes', 'Négociation', 'Ré-export', 'Réception stocks', 'Agrégation stock', 'Allocation lots', 'Revue allocations', 'Finalisation']
 
 
 function TrendBadge({ current, previous }: { current: number; previous: number }) {
@@ -268,7 +268,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 mb-0.5">
                         <h3 className="ivory-heading text-[15px]">{MONTH_NAMES[activeProcess.month - 1]} {activeProcess.year}</h3>
                         <span className="ivory-badge" style={{ background: 'rgba(13,148,136,0.08)', color: 'var(--ivory-accent)' }}>
-                          Etape {activeProcess.current_step}/12
+                          Étape {activeProcess.current_step}/12
                         </span>
                       </div>
                       <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>
@@ -618,7 +618,7 @@ export default function DashboardPage() {
                               variant={isCompleted ? 'default' : 'secondary'}
                               className="text-[10px] rounded-lg"
                             >
-                              {isCompleted ? 'Cloture' : 'En cours'}
+                              {isCompleted ? 'Clôturé' : 'En cours'}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -733,9 +733,9 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { name: 'Processus mensuel', desc: 'Allocations & suivi', href: '/monthly-processes', icon: CalendarRange, color: 'var(--ivory-accent)' },
-            { name: 'Produits', desc: 'Catalogue medicaments', href: '/products', icon: Pill, color: '#0D9488' },
+            { name: 'Produits', desc: 'Catalogue médicaments', href: '/products', icon: Pill, color: '#0D9488' },
             { name: 'Grossistes', desc: 'Partenaires fournisseurs', href: '/wholesalers', icon: Truck, color: '#3B82F6' },
-            { name: 'Disponibilites', desc: 'Dispos grossistes', href: '/disponibilites', icon: ClipboardList, color: '#F59E0B' },
+            { name: 'Disponibilités', desc: 'Dispos grossistes', href: '/disponibilites', icon: ClipboardList, color: '#F59E0B' },
           ].map((action, i) => (
             <Link key={action.href} to={action.href}>
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 + i * 0.05 }}>

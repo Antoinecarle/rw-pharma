@@ -168,9 +168,9 @@ export default function StockAggregationStep({ process, onNext, onBack }: StockA
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold">Aggregation du Stock Collecte</h3>
+        <h3 className="text-lg font-semibold">Agrégation du Stock Collecté</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Vue consolidee du stock recu des grossistes. Verifiez les quantites et les dates avant l'allocation.
+          Vue consolidée du stock reçu des grossistes. Vérifiez les quantités et les dates avant l'allocation.
         </p>
       </div>
 
@@ -316,7 +316,7 @@ export default function StockAggregationStep({ process, onNext, onBack }: StockA
                         <TableHead>Expiry</TableHead>
                         <TableHead>Fabrication</TableHead>
                         <TableHead>Grossiste</TableHead>
-                        <TableHead className="text-right">Quantite</TableHead>
+                        <TableHead className="text-right">Quantité</TableHead>
                       </>
                     )}
                     {groupBy === 'wholesaler' && (
@@ -419,12 +419,12 @@ export default function StockAggregationStep({ process, onNext, onBack }: StockA
             <Card className="ivory-card-empty">
               <CardContent className="p-8 text-center">
                 <Layers className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-                <p className="font-medium">Aucun stock collecte</p>
-                <p className="text-sm text-muted-foreground mt-1">Importez le stock recu a l'etape precedente.</p>
+                <p className="font-medium">Aucun stock collecté</p>
+                <p className="text-sm text-muted-foreground mt-1">Importez le stock reçu à l'étape précédente.</p>
                 {onBack && (
                   <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={onBack}>
                     <ArrowLeft className="h-4 w-4" />
-                    Retour a la reception
+                    Retour à la réception
                   </Button>
                 )}
               </CardContent>

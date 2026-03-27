@@ -51,7 +51,7 @@ export default function DemoDataLoader() {
       if (!scenario) throw new Error('Scenario introuvable')
 
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Non authentifie')
+      if (!session) throw new Error('Non authentifié')
 
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/load-demo-data`,
@@ -81,13 +81,13 @@ export default function DemoDataLoader() {
         navigate(`/monthly-processes/${result.process_id}`)
       }
     },
-    onError: (err: Error) => toast.error(`Echec : ${err.message}`),
+    onError: (err: Error) => toast.error(`Échec : ${err.message}`),
   })
 
   const cleanupMut = useMutation({
     mutationFn: async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Non authentifie')
+      if (!session) throw new Error('Non authentifié')
 
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/load-demo-data`,
@@ -110,7 +110,7 @@ export default function DemoDataLoader() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
-      toast.success(`Donnees demo nettoyees (${result.cleaned ?? 0} processus supprimes)`)
+      toast.success(`Données démo nettoyées (${result.cleaned ?? 0} processus supprimés)`)
     },
     onError: (err: Error) => toast.error(`Echec nettoyage : ${err.message}`),
   })
@@ -157,7 +157,7 @@ export default function DemoDataLoader() {
           ) : (
             <FlaskConical className="h-3.5 w-3.5" />
           )}
-          Charger Donnees Demo
+          Charger Données Démo
         </Button>
 
         <Button
@@ -182,8 +182,8 @@ export default function DemoDataLoader() {
         </p>
       )}
       <p className="text-[11px] text-muted-foreground">
-        Charge un jeu de donnees complet (quotas, commandes, lots, stock, min_lot clients) issu du process Notion.
-        Les donnees precedentes marquees [DEMO] seront automatiquement nettoyees avant chargement.
+        Charge un jeu de données complet (quotas, commandes, lots, stock, min_lot clients) issu du process Notion.
+        Les données précédentes marquées [DEMO] seront automatiquement nettoyées avant chargement.
       </p>
     </div>
   )

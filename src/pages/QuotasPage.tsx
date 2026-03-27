@@ -89,13 +89,13 @@ export default function QuotasPage() {
 
   const upsert = useMutation({
     mutationFn: async (q: WholesalerQuotaInsert & { id?: string }) => { if (q.id) { const { id, ...rest } = q; const { error } = await supabase.from('wholesaler_quotas').update(rest).eq('id', id); if (error) throw error } else { const { error } = await supabase.from('wholesaler_quotas').insert(q); if (error) throw error } },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotas'] }); setDialogOpen(false); toast.success(editing ? 'Disponibilite modifiee' : 'Disponibilite creee') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotas'] }); setDialogOpen(false); toast.success(editing ? 'Disponibilité modifiée' : 'Disponibilité créée') },
     onError: (err: Error) => toast.error(err.message),
   })
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('wholesaler_quotas').delete().eq('id', id); if (error) throw error },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotas'] }); toast.success('Disponibilite supprimee') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotas'] }); toast.success('Disponibilité supprimée') },
     onError: (err: Error) => toast.error(err.message),
   })
 
@@ -119,8 +119,8 @@ export default function QuotasPage() {
               <ClipboardList className="h-5 w-5 text-amber-500" />
             </div>
             <div>
-              <h2 className="ivory-heading text-xl md:text-2xl">Disponibilites grossistes</h2>
-              <p className="text-[12px] mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}><Calendar className="h-3 w-3" />{currentMonthLabel} &middot; {quotas?.count ?? 0} disponibilites</p>
+              <h2 className="ivory-heading text-xl md:text-2xl">Disponibilités grossistes</h2>
+              <p className="text-[12px] mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--ivory-text-muted)' }}><Calendar className="h-3 w-3" />{currentMonthLabel} &middot; {quotas?.count ?? 0} disponibilités</p>
             </div>
           </div>
           <Button size="sm" onClick={openCreate} className="gap-1.5 text-[13px] h-9 rounded-xl shadow-sm" style={{ background: 'linear-gradient(180deg, var(--ivory-accent), var(--ivory-accent-hover))', color: 'white' }}><Plus className="h-3.5 w-3.5" /> Ajouter</Button>
@@ -160,7 +160,7 @@ export default function QuotasPage() {
               <TableHead className="ivory-table-head py-3.5 text-right">Dispo</TableHead>
               <TableHead className="ivory-table-head py-3.5 text-right">Extra</TableHead>
               <TableHead className="ivory-table-head py-3.5 text-right">Total</TableHead>
-              <TableHead className="ivory-table-head py-3.5 text-right">Utilise</TableHead>
+              <TableHead className="ivory-table-head py-3.5 text-right">Utilisé</TableHead>
               <TableHead className="w-20"></TableHead>
             </TableRow>
           </TableHeader>
@@ -169,8 +169,8 @@ export default function QuotasPage() {
               <TableRow><TableCell colSpan={8} className="text-center py-20">
                 <motion.div className="flex flex-col items-center gap-3" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
                   <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.06)' }}><Package className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} /></div>
-                  <p className="ivory-heading text-[14px]">Aucune disponibilite pour {currentMonthLabel}</p>
-                  <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Ajoutez des disponibilites</p>
+                  <p className="ivory-heading text-[14px]">Aucune disponibilité pour {currentMonthLabel}</p>
+                  <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Ajoutez des disponibilités</p>
                   <Button size="sm" onClick={openCreate} className="mt-2 gap-1.5 text-[12px] h-8 rounded-xl" style={{ background: 'var(--ivory-accent)', color: 'white' }}><Plus className="h-3 w-3" /> Ajouter</Button>
                 </motion.div>
               </TableCell></TableRow>
@@ -203,7 +203,7 @@ export default function QuotasPage() {
         <div className="flex items-center justify-between relative z-10">
           <p className="text-[12px]" style={{ color: 'var(--ivory-text-muted)' }}>Page <span className="font-semibold" style={{ color: 'var(--ivory-text-heading)' }}>{page + 1}</span> / {totalPages}</p>
           <div className="flex gap-1">
-            <Button variant="outline" size="sm" className="h-8 text-[12px] rounded-lg" disabled={page === 0} onClick={() => setPage(page - 1)}>Precedent</Button>
+            <Button variant="outline" size="sm" className="h-8 text-[12px] rounded-lg" disabled={page === 0} onClick={() => setPage(page - 1)}>Précédent</Button>
             {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => { const p = totalPages <= 7 ? i : page <= 3 ? i : page >= totalPages - 4 ? totalPages - 7 + i : page - 3 + i; return <Button key={p} variant={p === page ? 'default' : 'ghost'} size="sm" className="w-8 h-8 p-0 text-[12px] rounded-lg" style={p === page ? { background: 'var(--ivory-accent)', color: 'white' } : {}} onClick={() => setPage(p)}>{p + 1}</Button> })}
             <Button variant="outline" size="sm" className="h-8 text-[12px] rounded-lg" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>Suivant</Button>
           </div>
@@ -213,15 +213,15 @@ export default function QuotasPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base"><div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.08)' }}><ClipboardList className="h-4 w-4 text-amber-500" /></div>{editing ? 'Modifier la disponibilite' : 'Nouvelle disponibilite'}</DialogTitle>
-            <DialogDescription className="text-[13px]">{editing ? 'Modifiez la quantite' : 'Definissez une disponibilite mensuelle'}</DialogDescription>
+            <DialogTitle className="flex items-center gap-2.5 ivory-heading text-base"><div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.08)' }}><ClipboardList className="h-4 w-4 text-amber-500" /></div>{editing ? 'Modifier la disponibilité' : 'Nouvelle disponibilité'}</DialogTitle>
+            <DialogDescription className="text-[13px]">{editing ? 'Modifiez la quantité' : 'Définissez une disponibilité mensuelle'}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5"><Label className="text-[13px] font-medium">Grossiste *</Label><Select value={form.wholesaler_id} onValueChange={(v) => setForm({ ...form, wholesaler_id: v })}><SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Selectionner" /></SelectTrigger><SelectContent>{wholesalers?.map((w) => <SelectItem key={w.id} value={w.id}><div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: wholesalerColorMap[w.id] }} />{w.name}</div></SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1.5"><Label className="text-[13px] font-medium">Grossiste *</Label><Select value={form.wholesaler_id} onValueChange={(v) => setForm({ ...form, wholesaler_id: v })}><SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Sélectionner" /></SelectTrigger><SelectContent>{wholesalers?.map((w) => <SelectItem key={w.id} value={w.id}><div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: wholesalerColorMap[w.id] }} />{w.name}</div></SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1.5"><Label className="text-[13px] font-medium">Produit *</Label><ProductCombobox products={products ?? []} value={form.product_id} onValueChange={(v) => setForm({ ...form, product_id: v })} /></div>
             <div className="space-y-1.5"><Label className="text-[13px] font-medium">Mois *</Label><Select value={form.month} onValueChange={(v) => setForm({ ...form, month: v })}><SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger><SelectContent>{monthOptions.map((m) => <SelectItem key={m} value={m}>{new Date(m).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</SelectItem>)}</SelectContent></Select></div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><Label className="text-[13px] font-medium">Quantite *</Label><StepperInput value={form.quota_quantity} onChange={(v) => setForm({ ...form, quota_quantity: v ?? 0 })} min={0} max={9999} step={10} presets={[{ label: '50', value: 50 }, { label: '100', value: 100 }, { label: '500', value: 500 }]} /></div>
+              <div className="space-y-1.5"><Label className="text-[13px] font-medium">Quantité *</Label><StepperInput value={form.quota_quantity} onChange={(v) => setForm({ ...form, quota_quantity: v ?? 0 })} min={0} max={9999} step={10} presets={[{ label: '50', value: 50 }, { label: '100', value: 100 }, { label: '500', value: 500 }]} /></div>
               <div className="space-y-1.5"><Label className="text-[13px] font-medium">Extra</Label><StepperInput value={form.extra_available} onChange={(v) => setForm({ ...form, extra_available: v ?? 0 })} min={0} max={9999} step={5} presets={[{ label: '10', value: 10 }, { label: '25', value: 25 }, { label: '50', value: 50 }]} /></div>
             </div>
             {(form.quota_quantity > 0 || form.extra_available > 0) && (
@@ -232,13 +232,13 @@ export default function QuotasPage() {
             )}
             <DialogFooter>
               <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-[13px] rounded-xl">Annuler</Button>
-              <Button type="submit" size="sm" disabled={upsert.isPending || !form.wholesaler_id || !form.product_id} className="text-[13px] rounded-xl" style={{ background: 'var(--ivory-accent)', color: 'white' }}>{upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Creer'}</Button>
+              <Button type="submit" size="sm" disabled={upsert.isPending || !form.wholesaler_id || !form.product_id} className="text-[13px] rounded-xl" style={{ background: 'var(--ivory-accent)', color: 'white' }}>{upsert.isPending ? 'Enregistrement...' : editing ? 'Modifier' : 'Créer'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Supprimer la disponibilite" description="Action irreversible." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
+      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Supprimer la disponibilité" description="Action irréversible." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
     </div>
   )
 }

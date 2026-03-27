@@ -97,7 +97,7 @@ export default function MonthlyProcessesPage() {
   const createMut = useMutation({
     mutationFn: async () => {
       const opt = selectedOption
-      if (!opt) throw new Error('Aucun mois selectionne')
+      if (!opt) throw new Error('Aucun mois sélectionné')
       // date_ouverture = 1er jour du mois, date_cloture = null (set on finalization)
       const dateOuverture = new Date(opt.year, opt.month - 1, 1)
       const { data, error } = await supabase.from('monthly_processes').insert({
@@ -173,19 +173,19 @@ export default function MonthlyProcessesPage() {
       setDialogOpen(false)
       setSelectedMonthKey('')
       if (clonedCount > 0) {
-        toast.success(`Processus cree avec ${clonedCount} disponibilites dupliquees`)
+        toast.success(`Processus créé avec ${clonedCount} disponibilités dupliquées`)
       } else {
-        toast.success('Processus mensuel cree')
+        toast.success('Processus mensuel créé')
       }
       createNotification({
         type: 'info',
-        title: 'Nouveau processus cree',
-        message: `Le processus d'allocation pour ${monthLabel} a ete cree.`,
+        title: 'Nouveau processus créé',
+        message: `Le processus d'allocation pour ${monthLabel} a été créé.`,
       })
     },
     onError: (err: Error) => {
       if (err.message.includes('unique') || err.message.includes('duplicate'))
-        toast.error('Un processus existe deja pour ce mois')
+        toast.error('Un processus existe déjà pour ce mois')
       else toast.error(err.message)
     },
   })
@@ -234,10 +234,10 @@ export default function MonthlyProcessesPage() {
                 <CalendarRange className="h-7 w-7" style={{ color: 'var(--ivory-text-muted)' }} />
               </div>
               <p className="ivory-heading text-[16px]">Aucun processus</p>
-              <p className="text-[13px]" style={{ color: 'var(--ivory-text-muted)' }}>Creez votre premier processus d'allocation mensuelle</p>
+              <p className="text-[13px]" style={{ color: 'var(--ivory-text-muted)' }}>Créez votre premier processus d'allocation mensuelle</p>
               <Button onClick={() => setDialogOpen(true)} className="mt-2 gap-2 text-[13px] h-9 rounded-xl"
                 style={{ background: 'var(--ivory-accent)', color: 'white' }}>
-                <Plus className="h-4 w-4" /> Creer un processus
+                <Plus className="h-4 w-4" /> Créer un processus
               </Button>
             </div>
           </div>
@@ -255,7 +255,7 @@ export default function MonthlyProcessesPage() {
               Nouveau processus
             </DialogTitle>
             <DialogDescription className="text-[13px]">
-              Selectionnez le mois pour la nouvelle allocation.
+              Sélectionnez le mois pour la nouvelle allocation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -319,11 +319,11 @@ export default function MonthlyProcessesPage() {
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center gap-1.5 font-medium" style={{ color: cloneQuotas ? 'var(--ivory-accent)' : 'var(--ivory-text)' }}>
                       <Copy className="h-3 w-3" />
-                      Copier les disponibilites du mois precedent
+                      Copier les disponibilités du mois précédent
                     </div>
                     <p style={{ color: 'var(--ivory-text-muted)' }}>
-                      {lastProcessQuotaCount} disponibilites de {MONTH_NAMES[lastCompletedProcess.month - 1]} {lastCompletedProcess.year} seront copiees.
-                      Les quantites restent identiques, vous pourrez les ajuster ensuite.
+                      {lastProcessQuotaCount} disponibilités de {MONTH_NAMES[lastCompletedProcess.month - 1]} {lastCompletedProcess.year} seront copiées.
+                      Les quantités restent identiques, vous pourrez les ajuster ensuite.
                     </p>
                   </div>
                 </div>
@@ -339,7 +339,7 @@ export default function MonthlyProcessesPage() {
               className="text-[13px] rounded-xl"
               style={{ background: 'var(--ivory-accent)', color: 'white' }}
             >
-              {createMut.isPending ? (cloneQuotas && lastCompletedProcess ? 'Creation & duplication...' : 'Creation...') : 'Creer'}
+              {createMut.isPending ? (cloneQuotas && lastCompletedProcess ? 'Création & duplication...' : 'Création...') : 'Créer'}
             </Button>
           </DialogFooter>
         </DialogContent>

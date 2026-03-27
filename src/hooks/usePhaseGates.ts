@@ -85,9 +85,9 @@ function computePhase1Gate(data: ReturnType<typeof usePhaseGates>['gateData'] ex
   const blockers: string[] = []
   const warnings: string[] = []
 
-  if (data.quotasCount === 0) blockers.push('Aucun quota importe')
-  if (data.validatedOrdersCount === 0) blockers.push('Aucune commande validee')
-  if (data.rejectedOrdersCount > 0) warnings.push(`${data.rejectedOrdersCount} commande(s) rejetee(s)`)
+  if (data.quotasCount === 0) blockers.push('Aucun quota importé')
+  if (data.validatedOrdersCount === 0) blockers.push('Aucune commande validée')
+  if (data.rejectedOrdersCount > 0) warnings.push(`${data.rejectedOrdersCount} commande(s) rejetée(s)`)
   if (data.ordersCount > 0 && data.validatedOrdersCount < data.ordersCount - data.rejectedOrdersCount) {
     warnings.push('Des commandes sont encore en attente de validation')
   }
@@ -112,10 +112,10 @@ function computePhase3Gate(data: ReturnType<typeof usePhaseGates>['gateData'] ex
   const blockers: string[] = []
   const warnings: string[] = []
 
-  if (data.stockCount === 0) blockers.push('Aucun stock importe')
-  if (data.allocationsCount === 0) blockers.push('Aucune allocation generee')
+  if (data.stockCount === 0) blockers.push('Aucun stock importé')
+  if (data.allocationsCount === 0) blockers.push('Aucune allocation générée')
   if (data.allocationsCount > 0 && data.confirmedAllocationsCount === 0) {
-    warnings.push('Aucune allocation confirmee')
+    warnings.push('Aucune allocation confirmée')
   }
 
   return { phase: 3, canProceed: blockers.length === 0, warnings, blockers }
@@ -127,10 +127,10 @@ function computePhase4Gate(data: ReturnType<typeof usePhaseGates>['gateData'] ex
   const blockers: string[] = []
   const warnings: string[] = []
 
-  if (data.confirmedAllocationsCount === 0) blockers.push('Aucune allocation confirmee')
+  if (data.confirmedAllocationsCount === 0) blockers.push('Aucune allocation confirmée')
   if (data.allocationsCount > 0 && data.confirmedAllocationsCount < data.allocationsCount) {
     const pending = data.allocationsCount - data.confirmedAllocationsCount
-    warnings.push(`${pending} allocation(s) non confirmee(s)`)
+    warnings.push(`${pending} allocation(s) non confirmée(s)`)
   }
 
   return { phase: 4, canProceed: blockers.length === 0, warnings, blockers }

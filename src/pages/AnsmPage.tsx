@@ -182,9 +182,9 @@ export default function AnsmPage() {
       queryClient.invalidateQueries({ queryKey: ['ansm-blocked-stats'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       if (result.success) {
-        toast.success('Synchronisation ANSM terminee')
+        toast.success('Synchronisation ANSM terminée')
       } else {
-        toast.error(`Echec: ${result.message}`)
+        toast.error(`Échec: ${result.message}`)
       }
     },
     onError: (err) => {
@@ -231,7 +231,7 @@ export default function AnsmPage() {
           <div>
             <h2 className="ivory-display text-2xl md:text-3xl">Liste ANSM</h2>
             <p className="text-[13px] mt-1" style={{ color: 'var(--ivory-text-muted)' }}>
-              Produits interdits a l'export — Ruptures de stock ANSM
+              Produits interdits à l'export — Ruptures de stock ANSM
             </p>
           </div>
           <Button
@@ -261,10 +261,10 @@ export default function AnsmPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-[13px]" style={{ color: 'var(--ivory-text-heading)' }}>
-                Telecharger la liste ANSM
+                Télécharger la liste ANSM
               </p>
               <p className="text-[11px] mt-0.5" style={{ color: 'var(--ivory-text-muted)' }}>
-                Telechargez le fichier CSV depuis le site officiel ANSM, puis importez-le avec le bouton ci-dessus.
+                Téléchargez le fichier CSV depuis le site officiel ANSM, puis importez-le avec le bouton ci-dessus.
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
@@ -272,7 +272,7 @@ export default function AnsmPage() {
                 <Button variant="outline" size="sm" className="gap-1.5 text-[12px] h-8 rounded-lg"
                   style={{ borderColor: 'rgba(59,130,246,0.2)', color: '#3B82F6' }}>
                   <Download className="h-3 w-3" />
-                  Telecharger CSV
+                  Télécharger CSV
                 </Button>
               </a>
               <a href={ANSM_PAGE_URL} target="_blank" rel="noopener noreferrer">
@@ -325,7 +325,7 @@ export default function AnsmPage() {
           <div className="ivory-glass p-5">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ivory-text-muted)' }}>
-                Derniere sync
+                Dernière sync
               </span>
               <div className="h-9 w-9 rounded-xl flex items-center justify-center"
                 style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.10), rgba(13,148,136,0.03))' }}>
@@ -408,7 +408,7 @@ export default function AnsmPage() {
                   </p>
                   <div className="flex gap-1.5">
                     <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}
-                      className="h-7 text-[11px] rounded-lg">Precedent</Button>
+                      className="h-7 text-[11px] rounded-lg">Précédent</Button>
                     <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
                       className="h-7 text-[11px] rounded-lg">Suivant</Button>
                   </div>
@@ -422,7 +422,7 @@ export default function AnsmPage() {
                 <Shield className="h-5 w-5" style={{ color: 'var(--ivory-text-muted)' }} />
               </div>
               <p className="text-[13px]" style={{ color: 'var(--ivory-text-muted)' }}>
-                {search ? 'Aucun resultat pour cette recherche' : 'Aucun produit bloque. Importez un fichier ANSM.'}
+                {search ? 'Aucun résultat pour cette recherche' : 'Aucun produit bloqué. Importez un fichier ANSM.'}
               </p>
             </div>
           )}
@@ -495,7 +495,7 @@ export default function AnsmPage() {
           <DialogHeader>
             <DialogTitle className="ivory-heading text-[16px]">Import ANSM</DialogTitle>
             <DialogDescription className="text-[12px]">
-              Mise a jour de la liste des produits interdits a l'export.
+              Mise à jour de la liste des produits interdits à l'export.
             </DialogDescription>
           </DialogHeader>
 
@@ -508,7 +508,7 @@ export default function AnsmPage() {
                   <FileUp className="h-7 w-7" style={{ color: '#3B82F6' }} />
                 </div>
                 <div className="text-center">
-                  <p className="ivory-heading text-[14px]">Fichier selectionne</p>
+                  <p className="ivory-heading text-[14px]">Fichier sélectionné</p>
                   <p className="text-[12px] mt-1 font-mono px-3 py-1 rounded-lg inline-block"
                     style={{ background: 'rgba(0,0,0,0.03)', color: 'var(--ivory-text-muted)' }}>
                     {selectedFile.name}
@@ -547,7 +547,7 @@ export default function AnsmPage() {
                 <div className="text-center">
                   <p className="ivory-heading text-[14px]">Import en cours...</p>
                   <p className="text-[12px] mt-1" style={{ color: 'var(--ivory-text-muted)' }}>
-                    Analyse du fichier et mise a jour des produits
+                    Analyse du fichier et mise à jour des produits
                   </p>
                 </div>
               </div>
@@ -571,7 +571,7 @@ export default function AnsmPage() {
 
                 <div className="text-center">
                   <p className="ivory-heading text-[14px]">
-                    {syncResult.success ? 'Import reussi' : 'Echec de l\'import'}
+                    {syncResult.success ? 'Import réussi' : 'Échec de l\'import'}
                   </p>
                   <p className="text-[12px] mt-1 max-w-sm" style={{ color: 'var(--ivory-text-muted)' }}>
                     {syncResult.message}

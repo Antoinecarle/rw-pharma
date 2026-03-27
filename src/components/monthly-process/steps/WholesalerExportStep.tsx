@@ -39,7 +39,7 @@ interface WholesalerNeed {
   totalProducts: number
 }
 
-type SourceFilter = 'all' | 'MACRO' | 'MANUEL'
+type SourceFilter = 'all' | 'INITIALE' | 'MANUEL'
 
 interface WholesalerExportStepProps {
   process: MonthlyProcess
@@ -205,7 +205,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
       return ws.items.map(item => ({
         cip13: item.cip13, productName: item.productName, client: 'TOUS',
         requestedQty: item.totalDemand, supplierQty: item.toCollect,
-        source: 'MACRO' as const, editedAt: today,
+        source: 'INITIALE' as const, editedAt: today,
       }))
     }
     const macroItems = ws.items.map(item => ({
@@ -219,19 +219,19 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
     const merged = getMergedRows(ws)
     const rows = merged.map(row => ({
       'CIP13': row.cip13, 'Produit': row.productName, 'Client': row.client,
-      'Qte demandee': row.requestedQty, 'Qte fournisseur': row.supplierQty,
-      'Source': row.source, 'Date edition': row.editedAt,
+      'Qté fournisseur': row.supplierQty,
+      'Date edition': row.editedAt,
     }))
     const worksheet = XLSX.utils.json_to_sheet(rows)
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Besoins')
     worksheet['!cols'] = [
-      { wch: 16 }, { wch: 40 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 18 },
+      { wch: 16 }, { wch: 40 }, { wch: 12 }, { wch: 14 }, { wch: 18 },
     ]
     const monthStr = `${process.year}-${String(process.month).padStart(2, '0')}`
     XLSX.writeFile(workbook, `besoins_${ws.wholesalerCode}_${monthStr}.xlsx`)
     setExportedWholesalers(prev => new Set([...prev, ws.wholesalerId]))
-    toast.success(`Export ${ws.wholesalerCode} telecharge`)
+    toast.success(`Export ${ws.wholesalerCode} téléchargé`)
   }
 
   const handleExportAll = () => { if (needs) needs.forEach(ws => handleExportExcel(ws)) }
@@ -245,10 +245,10 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
   }
 
   const handleAddManual = (wholesalerId: string) => {
-    if (!addSelectedProduct || !addSelectedCustomer) { toast.error('Selectionnez un produit et un client'); return }
+    if (!addSelectedProduct || !addSelectedCustomer) { toast.error('Sélectionnez un produit et un client'); return }
     const req = parseInt(addReqQty, 10) || 0
     const sup = parseInt(addSupQty, 10) || 0
-    if (sup <= 0) { toast.error('Quantite fournisseur requise'); return }
+    if (sup <= 0) { toast.error('Quantité fournisseur requise'); return }
     upsert({
       productId: addSelectedProduct.id,
       customerId: addSelectedCustomer.id,
@@ -302,7 +302,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
         <div>
           <h3 className="text-lg font-semibold">Export vers Grossistes</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Aucun quota trouve pour ce mois, ou aucune commande validee ne correspond aux quotas disponibles.
+            Aucun quota trouvé pour ce mois, ou aucune commande validée ne correspond aux quotas disponibles.
           </p>
         </div>
         <div className="flex justify-end">
@@ -365,10 +365,10 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
             {/* Source filter */}
             <div className="flex items-center gap-1">
               <Filter className="h-3 w-3 text-muted-foreground" />
-              {(['all', 'MACRO', 'MANUEL'] as SourceFilter[]).map(f => (
+              {(['all', 'INITIALE', 'MANUEL'] as SourceFilter[]).map(f => (
                 <button key={f} type="button" onClick={() => setSourceFilter(f)}>
                   <Badge variant={sourceFilter === f ? 'default' : 'outline'} className="text-[9px] cursor-pointer">
-                    {f === 'all' ? 'Tout' : f}
+                    {f === 'all' ? 'Tout' : f === 'INITIALE' ? 'Initiale' : 'Manuel'}
                   </Badge>
                 </button>
               ))}
@@ -423,7 +423,7 @@ export default function WholesalerExportStep({ process, onNext }: WholesalerExpo
                     </Button>
                     <Button variant={isExported ? 'outline' : 'default'} size="sm" className="gap-1.5 shrink-0" onClick={() => handleExportExcel(ws)}>
                       {isExported ? <FileSpreadsheet className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-                      {isExported ? 'Re-telecharger' : 'Exporter'}
+                      {isExported ? 'Re-télécharger' : 'Exporter'}
                     </Button>
                   </div>
                 </div>

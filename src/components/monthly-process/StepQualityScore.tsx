@@ -52,7 +52,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
 
     // When process is completed, all steps that were passed are implicitly done
     if (process.status === 'completed' && step <= (process.current_step ?? 12)) {
-      return { score: 100, label: 'Excellent', details: ['Etape completee'] }
+      return { score: 100, label: 'Excellent', details: ['Étape complétée'] }
     }
 
     switch (step) {
@@ -61,16 +61,16 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         const count = process.quotas_count ?? 0
         if (count === 0) {
           score = 0
-          details.push('Aucune disponibilite importee')
+          details.push('Aucune disponibilité importée')
         } else if (count < 100) {
           score = 40
           details.push(`${count} quotas (faible volume)`)
         } else if (count < 500) {
           score = 70
-          details.push(`${count} quotas importes`)
+          details.push(`${count} quotas importés`)
         } else {
           score = 100
-          details.push(`${count} quotas importes`)
+          details.push(`${count} quotas importés`)
         }
         break
       }
@@ -79,16 +79,16 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         const count = process.orders_count ?? 0
         if (count === 0) {
           score = 0
-          details.push('Aucune commande importee')
+          details.push('Aucune commande importée')
         } else if (count < 50) {
           score = 40
           details.push(`${count} commandes (faible volume)`)
         } else if (count < 200) {
           score = 70
-          details.push(`${count} commandes importees`)
+          details.push(`${count} commandes importées`)
         } else {
           score = 100
-          details.push(`${count} commandes importees`)
+          details.push(`${count} commandes importées`)
         }
         break
       }
@@ -96,7 +96,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         // Review step: validated vs total
         if (!orders || orders.length === 0) {
           score = 0
-          details.push('Aucune commande a valider')
+          details.push('Aucune commande à valider')
           break
         }
         const validated = orders.filter(o => o.status === 'validated').length
@@ -107,8 +107,8 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
 
         score = Math.round(ratio * 100)
         if (pending > 0) details.push(`${pending} en attente de revue`)
-        if (validated > 0) details.push(`${validated} validees`)
-        if (rejected > 0) details.push(`${rejected} rejetees`)
+        if (validated > 0) details.push(`${validated} validées`)
+        if (rejected > 0) details.push(`${rejected} rejetées`)
         break
       }
       case 4: {
@@ -117,13 +117,13 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         const hasMacro = process.metadata && (process.metadata as Record<string, unknown>).macro_attributions
         if (validatedForAttrib === 0) {
           score = 0
-          details.push('Aucune commande validee')
+          details.push('Aucune commande validée')
         } else if (hasMacro) {
           score = 80
-          details.push('Attribution macro effectuee')
+          details.push('Commande initiale effectuée')
         } else {
           score = 30
-          details.push(`${validatedForAttrib} commandes a attribuer`)
+          details.push(`${validatedForAttrib} commandes à attribuer`)
         }
         break
       }
@@ -132,10 +132,10 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         const validatedOrders = orders?.filter(o => o.status === 'validated').length ?? 0
         if (validatedOrders === 0) {
           score = 0
-          details.push('Aucune commande validee a exporter')
+          details.push('Aucune commande validée à exporter')
         } else {
           score = 70
-          details.push(`${validatedOrders} commandes validees a exporter`)
+          details.push(`${validatedOrders} commandes validées à exporter`)
         }
         break
       }
@@ -148,7 +148,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
       case 7: {
         // Stock aggregation
         score = 50
-        details.push('Verification du stock collecte')
+        details.push('Vérification du stock collecté')
         break
       }
       case 8: {
@@ -164,7 +164,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         score = Math.round(rate)
         details.push(`Couverture: ${rate.toFixed(1)}%`)
         const zeros = allocations.filter(a => a.allocated_quantity === 0).length
-        if (zeros > 0) details.push(`${zeros} produits a 0`)
+        if (zeros > 0) details.push(`${zeros} produits à 0`)
         break
       }
       case 9: {
@@ -178,9 +178,9 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         const ratio = confirmed / allocations.length
         score = Math.round(ratio * 100)
         if (confirmed === allocations.length) {
-          details.push('Toutes confirmees')
+          details.push('Toutes confirmées')
         } else {
-          details.push(`${confirmed}/${allocations.length} confirmees`)
+          details.push(`${confirmed}/${allocations.length} confirmées`)
         }
         const partial = allocations.filter(a => a.allocated_quantity < a.requested_quantity).length
         if (partial > 0) details.push(`${partial} allocations partielles`)
@@ -190,11 +190,11 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         // Finalization: process completed
         if (process.status === 'completed') {
           score = 100
-          details.push('Processus termine')
+          details.push('Processus terminé')
         } else {
           score = 50
           details.push('En attente de finalisation')
-          if (process.allocations_count > 0) details.push(`${process.allocations_count} allocations a exporter`)
+          if (process.allocations_count > 0) details.push(`${process.allocations_count} allocations à exporter`)
         }
         break
       }
@@ -202,7 +202,7 @@ function useStepQuality(process: MonthlyProcess, step: number): QualityResult {
         score = 0
     }
 
-    const label = score >= 90 ? 'Excellent' : score >= 70 ? 'Bon' : score >= 40 ? 'En cours' : 'A faire'
+    const label = score >= 90 ? 'Excellent' : score >= 70 ? 'Bon' : score >= 40 ? 'En cours' : 'À faire'
     return { score, label, details }
   }, [step, process, orders, allocations])
 }
@@ -273,7 +273,7 @@ export default function StepQualityScore({ process, step }: StepQualityScoreProp
             </div>
           </div>
           <div className="hidden sm:flex flex-col">
-            <span className="text-[10px] font-semibold text-muted-foreground leading-tight">Qualite</span>
+            <span className="text-[10px] font-semibold text-muted-foreground leading-tight">Qualité</span>
             <span className="text-xs font-medium leading-tight flex items-center gap-1" style={{ color }}>
               <Icon className="h-3 w-3" />
               {label}
@@ -282,7 +282,7 @@ export default function StepQualityScore({ process, step }: StepQualityScoreProp
         </motion.div>
       </TooltipTrigger>
       <TooltipContent side="bottom" className="max-w-xs">
-        <p className="font-semibold text-sm mb-1">Score qualite: {score}%</p>
+        <p className="font-semibold text-sm mb-1">Score qualité: {score}%</p>
         <ul className="text-xs space-y-0.5">
           {details.map((d, i) => (
             <li key={i} className="text-muted-foreground">- {d}</li>

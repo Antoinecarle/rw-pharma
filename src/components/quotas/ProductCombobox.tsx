@@ -16,7 +16,7 @@ interface ProductComboboxProps {
 }
 
 export default function ProductCombobox({
-  products, value, onValueChange, placeholder = 'Selectionner un produit...',
+  products, value, onValueChange, placeholder = 'Sélectionner un produit...',
 }: ProductComboboxProps) {
   const [open, setOpen] = useState(false)
 

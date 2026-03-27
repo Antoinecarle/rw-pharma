@@ -99,13 +99,13 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         .eq('id', allocId)
         .select('id')
       if (error) throw error
-      if (!data || data.length === 0) throw new Error('Echec de la mise a jour — verifiez vos permissions')
+      if (!data || data.length === 0) throw new Error('Échec de la mise à jour — vérifiez vos permissions')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allocations', process.id] })
       setEditState(null)
       setPendingEdits(prev => prev + 1)
-      toast.success('Quantite mise a jour')
+      toast.success('Quantité mise à jour')
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -118,13 +118,13 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
         .eq('id', allocId)
         .select('id')
       if (error) throw error
-      if (!data || data.length === 0) throw new Error('Echec de la mise a jour — verifiez vos permissions')
+      if (!data || data.length === 0) throw new Error('Échec de la mise à jour — vérifiez vos permissions')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allocations', process.id] })
       setEditState(null)
       setPendingEdits(prev => prev + 1)
-      toast.success('Grossiste mis a jour')
+      toast.success('Grossiste mis à jour')
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -148,7 +148,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
       queryClient.invalidateQueries({ queryKey: ['allocations', process.id] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes'] })
       queryClient.invalidateQueries({ queryKey: ['monthly-processes', process.id] })
-      toast.success('Allocations confirmees')
+      toast.success('Allocations confirmées')
       onNext()
     },
     onError: (err: Error) => toast.error(err.message),
@@ -341,7 +341,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
     if (!editState) return
     if (editState.field === 'quantity') {
       const newQty = parseInt(editState.value, 10)
-      if (isNaN(newQty) || newQty <= 0) { toast.error('Quantite invalide (doit etre > 0)'); return }
+      if (isNaN(newQty) || newQty <= 0) { toast.error('Quantité invalide (doit être > 0)'); return }
 
       // Validate against stock quantity if allocation is linked to a lot
       const alloc = allocations?.find((a: any) => a.id === editState.allocId)
@@ -352,7 +352,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
           .eq('id', (alloc as any).stock_id)
           .maybeSingle()
         if (stock && newQty > stock.quantity) {
-          toast.error(`Quantite depasse le stock du lot (max ${stock.quantity})`)
+          toast.error(`Quantité dépasse le stock du lot (max ${stock.quantity})`)
           return
         }
       }
@@ -379,7 +379,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
       <div>
         <h3 className="text-lg font-semibold">Revue des Allocations</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Verifiez et ajustez la repartition proposee avant confirmation.
+          Vérifiez et ajustez la répartition proposée avant confirmation.
           {pendingEdits > 0 && (
             <Badge variant="secondary" className="ml-2 gap-1">
               <Pencil className="h-3 w-3" /> {pendingEdits} modifications
@@ -463,15 +463,15 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-red-600" />
-                <p className="text-sm font-semibold text-red-800">Aucune quantite allouee</p>
+                <p className="text-sm font-semibold text-red-800">Aucune quantité allouée</p>
               </div>
               <p className="text-xs text-red-700">
-                Les allocations existent mais toutes les quantites sont a zero. Cela peut signifier que les CIP13 des stocks ne correspondent pas aux commandes importees. Verifiez vos fichiers de stock/quotas ou relancez l'allocation a l'etape precedente.
+                Les allocations existent mais toutes les quantités sont à zéro. Cela peut signifier que les CIP13 des stocks ne correspondent pas aux commandes importées. Vérifiez vos fichiers de stock/quotas ou relancez l'allocation à l'étape précédente.
               </p>
               {onBack && (
                 <Button variant="outline" size="sm" className="mt-2 gap-1.5 text-red-700 border-red-200" onClick={onBack}>
                   <ArrowRight className="h-4 w-4 rotate-180" />
-                  Retour a l'allocation
+                  Retour à l'allocation
                 </Button>
               )}
             </CardContent>
@@ -568,7 +568,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
           {[
             { value: 'all' as ViewMode, label: `Toutes (${allocations?.length ?? 0})` },
             { value: 'by_lot' as ViewMode, label: `Par lot (${lotConsolidated.length})` },
-            { value: 'partial' as ViewMode, label: `Sous-allouees (${allocations?.filter(a => a.allocated_quantity < a.requested_quantity).length ?? 0})` },
+            { value: 'partial' as ViewMode, label: `Sous-allouées (${allocations?.filter(a => a.allocated_quantity < a.requested_quantity).length ?? 0})` },
           ].map(opt => (
             <button
               key={opt.value}
@@ -612,8 +612,8 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
                 <TableHead>Produit</TableHead>
                 <TableHead>Exp</TableHead>
                 <TableHead>Grossistes</TableHead>
-                <TableHead className="text-right">Alloue</TableHead>
-                <TableHead>Repartition clients</TableHead>
+                <TableHead className="text-right">Alloué</TableHead>
+                <TableHead>Répartition clients</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -835,7 +835,7 @@ export default function AllocationReviewStep({ process, onNext, onBack }: Alloca
           <CardContent className="p-8 text-center">
             <AlertTriangle className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
             <p className="font-medium">Aucune allocation</p>
-            <p className="text-sm text-muted-foreground mt-1">Lancez l'allocation a l'etape precedente.</p>
+            <p className="text-sm text-muted-foreground mt-1">Lancez l'allocation à l'étape précédente.</p>
             {onBack && (
               <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={onBack}>
                 <ArrowRight className="h-4 w-4 rotate-180" />

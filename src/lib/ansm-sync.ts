@@ -43,7 +43,7 @@ function parseAnsmCsv(csvText: string): AnsmRow[] {
         return parseWithIndices(lines, col, nameIdx !== -1 ? nameIdx : -1)
       }
     }
-    throw new Error('Impossible de trouver la colonne CIP13 dans le fichier. Verifiez que c\'est bien un export CSV ANSM (separateur point-virgule).')
+    throw new Error('Impossible de trouver la colonne CIP13 dans le fichier. Vérifiez que c\'est bien un export CSV ANSM (séparateur point-virgule).')
   }
 
   return parseWithIndices(lines, cip13Idx, nameIdx)
@@ -113,7 +113,7 @@ export async function runAnsmSyncFromFile(file: File): Promise<SyncResult> {
     const ansmProducts = parseAnsmCsv(csvText)
 
     if (ansmProducts.length === 0) {
-      throw new Error('Aucun produit CIP13 trouve dans le fichier. Verifiez le format (CSV avec separateur point-virgule).')
+      throw new Error('Aucun produit CIP13 trouvé dans le fichier. Vérifiez le format (CSV avec séparateur point-virgule).')
     }
 
     // 3. Get current blocked products to compute diff
@@ -160,7 +160,7 @@ export async function runAnsmSyncFromFile(file: File): Promise<SyncResult> {
     }
 
     // 6. Update sync log — success
-    const message = `Import "${file.name}" termine. ${ansmProducts.length} produits ANSM. ${newlyBlocked.length} nouveaux blocages, ${unblockedCips.length} deblocages.`
+    const message = `Import "${file.name}" terminé. ${ansmProducts.length} produits ANSM. ${newlyBlocked.length} nouveaux blocages, ${unblockedCips.length} déblocages.`
     await supabase
       .from('ansm_sync_logs')
       .update({
